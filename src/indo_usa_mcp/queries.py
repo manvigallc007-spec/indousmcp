@@ -12,10 +12,13 @@ _PUBLIC_COLS = [
     "id", "name", "address_full", "city", "state", "country", "lat", "lng",
     "phone", "website", "menu_url", "hours_json", "cuisine_type", "region_tag",
     "dietary_tags", "price_range", "delivery_partners", "festival_specials",
-    "is_active", "is_featured", "is_claimed", "confidence_score", "version",
+    "is_active", "is_claimed", "confidence_score", "version",
     "source_name", "source_url", "last_seen_at",
 ]
-_COLS_SQL = ", ".join(_PUBLIC_COLS)
+# A listing is *effectively* featured while flagged AND within its paid window.
+_FEATURED = "(is_featured AND (featured_until IS NULL OR featured_until > now()))"
+# Always return the effective featured flag (not the raw column).
+_COLS_SQL = ", ".join(_PUBLIC_COLS) + f", {_FEATURED} AS is_featured"
 
 
 def _haversine_miles(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
@@ -60,7 +63,7 @@ def get_indian_restaurants(
         where.append("dietary_tags @> %s")
         params.append(dietary_tags)
     if featured_only:
-        where.append("is_featured = true")
+        where.append(_FEATURED)
 
     # Coarse bbox prefilter when a point is given (radius later refined exactly).
     if lat is not None and lng is not None:
@@ -70,7 +73,7 @@ def get_indian_restaurants(
 
     sql = (
         f"SELECT {_COLS_SQL} FROM restaurants WHERE {' AND '.join(where)} "
-        f"ORDER BY is_featured DESC, confidence_score DESC LIMIT %s"
+        f"ORDER BY {_FEATURED} DESC, confidence_score DESC LIMIT %s"
     )
     params.append(max(limit * 4, limit))  # over-fetch; radius filter trims below
     rows = db.query(sql, params)
@@ -141,7 +144,7 @@ def _search_semantic(query_text, filters, geo, limit) -> dict[str, Any]:
     sql = (
         f"SELECT {_COLS_SQL}, 1 - (embedding <=> %s::vector) AS match_score "
         f"FROM restaurants WHERE {where} "
-        f"ORDER BY is_featured DESC, embedding <=> %s::vector LIMIT %s"
+        f"ORDER BY {_FEATURED} DESC, embedding <=> %s::vector LIMIT %s"
     )
     rows = db.query(sql, [qvec, *geo, qvec, limit])
     # Fall back to trigram if no embedded rows matched the filters yet.
@@ -155,7 +158,7 @@ def _search_trigram(query_text, filters, geo, limit) -> dict[str, Any]:
     sql = (
         f"SELECT {_COLS_SQL}, similarity(name, %s) AS match_score "
         f"FROM restaurants WHERE {where} "
-        f"ORDER BY is_featured DESC, match_score DESC, confidence_score DESC LIMIT %s"
+        f"ORDER BY {_FEATURED} DESC, match_score DESC, confidence_score DESC LIMIT %s"
     )
     rows = db.query(sql, [query_text, *geo, limit])
     return {"count": len(rows), "query": query_text, "ranking": "trigram", "results": rows}

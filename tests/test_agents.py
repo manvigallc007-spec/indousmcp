@@ -5,7 +5,8 @@ from indo_usa_mcp.agents.scheduler import DEFAULT_SCHEDULE, _RUN_ORDER
 
 
 def test_expected_agents_registered():
-    expected = {"discovery", "scraper", "cleaner", "outreach", "submission", "monitoring"}
+    expected = {"discovery", "scraper", "cleaner", "enrichment",
+                "outreach", "submission", "monitoring"}
     assert expected <= set(AGENTS)
 
 

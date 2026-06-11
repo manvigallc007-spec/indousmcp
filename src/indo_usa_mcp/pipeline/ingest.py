@@ -24,7 +24,7 @@ from .scrapers import SCRAPERS
 # Canonical columns the pipeline writes (id/version/timestamps handled separately).
 _CANONICAL_FIELDS = [
     "natural_key", "name", "address_full", "city", "state", "country", "lat", "lng",
-    "phone", "website", "menu_url", "hours_json", "cuisine_type", "region_tag",
+    "phone", "email", "website", "menu_url", "hours_json", "cuisine_type", "region_tag",
     "dietary_tags", "price_range", "delivery_partners", "festival_specials",
     "source_name", "source_url", "source_id", "confidence_score",
 ]
@@ -171,6 +171,65 @@ def apply_approval(approval_id: int, reviewed_by: str = "human") -> None:
         "UPDATE approval_queue SET status='approved', reviewed_at=now(), reviewed_by=%s WHERE id=%s",
         (reviewed_by, approval_id),
     )
+
+
+def enrich_existing() -> dict[str, int]:
+    """Re-apply cultural inference (region_tag, dietary_tags) to canonical rows.
+
+    Lets the expanded keyword set fill in restaurants that were scraped before, without
+    re-scraping. Only fills gaps — never clears an existing region/dietary value.
+    """
+    rows = db.query(
+        "SELECT * FROM restaurants WHERE deleted_at IS NULL "
+        "AND (region_tag IS NULL OR dietary_tags = '{}')"
+    )
+    updated = 0
+    for row in rows:
+        text = " ".join(
+            str(row.get(f) or "") for f in ("name", "cuisine_type", "address_full", "city")
+        )
+        diff: dict[str, Any] = {}
+        if row.get("region_tag") is None:
+            region = clean.infer_region(text)
+            if region:
+                diff["region_tag"] = region
+        if not row.get("dietary_tags"):
+            dietary = clean.infer_dietary(text)
+            if dietary:
+                diff["dietary_tags"] = dietary
+        if diff:
+            _update_canonical(row, {**row, **diff}, diff, change_reason="enrichment")
+            updated += 1
+    return {"scanned": len(rows), "enriched": updated}
+
+
+def set_featured(restaurant_id: int, days: int | None = 30) -> dict[str, Any]:
+    """Mark a restaurant as a paid featured listing for `days` (None = permanent)."""
+    if days is None:
+        row = db.query_one(
+            "UPDATE restaurants SET is_featured = true, featured_until = NULL, "
+            "updated_at = now() WHERE id = %s AND deleted_at IS NULL "
+            "RETURNING id, name, is_featured, featured_until",
+            (restaurant_id,),
+        )
+    else:
+        row = db.query_one(
+            "UPDATE restaurants SET is_featured = true, "
+            "featured_until = now() + (%s || ' days')::interval, updated_at = now() "
+            "WHERE id = %s AND deleted_at IS NULL "
+            "RETURNING id, name, is_featured, featured_until",
+            (days, restaurant_id),
+        )
+    return row or {"error": "not_found", "id": restaurant_id}
+
+
+def unset_featured(restaurant_id: int) -> dict[str, Any]:
+    row = db.query_one(
+        "UPDATE restaurants SET is_featured = false, featured_until = NULL, "
+        "updated_at = now() WHERE id = %s RETURNING id, name, is_featured",
+        (restaurant_id,),
+    )
+    return row or {"error": "not_found", "id": restaurant_id}
 
 
 def backfill_embeddings(only_missing: bool = True) -> dict[str, int]:

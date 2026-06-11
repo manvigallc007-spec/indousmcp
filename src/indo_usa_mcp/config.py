@@ -42,5 +42,18 @@ class Settings(BaseSettings):
     # Don't re-contact the same restaurant within this many days (anti-spam).
     outreach_cooldown_days: int = 21
 
+    # Email delivery (optional). Leave smtp_host blank to keep outreach in draft-only mode.
+    # Works with free providers (e.g. Gmail SMTP + an app password): no cost.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""           # defaults to outreach_contact_email if blank
+    smtp_use_tls: bool = True
+
+    @property
+    def email_enabled(self) -> bool:
+        return bool(self.smtp_host and self.smtp_user and self.smtp_password)
+
 
 settings = Settings()

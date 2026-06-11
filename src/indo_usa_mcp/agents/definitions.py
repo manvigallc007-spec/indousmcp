@@ -66,6 +66,15 @@ class CleanerAgent(Agent):
         return ingest.process_raw()
 
 
+class EnrichmentAgent(Agent):
+    name = "enrichment"
+    description = "Backfills cultural tags (region, dietary) on under-tagged restaurants."
+    default_interval_s = 43200
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        return ingest.enrich_existing()
+
+
 class OutreachAgent(Agent):
     name = "outreach"
     description = "Drafts claim outreach for eligible unclaimed restaurants."
@@ -149,6 +158,7 @@ ALL_AGENTS = [
     DiscoveryAgent(),
     ScraperAgent(),
     CleanerAgent(),
+    EnrichmentAgent(),
     OutreachAgent(),
     SubmissionAgent(),
     MonitoringAgent(),

@@ -75,6 +75,7 @@ class OverpassScraper:
             "lat": lat,
             "lng": lng,
             "phone": tags.get("phone") or tags.get("contact:phone"),
+            "email": tags.get("email") or tags.get("contact:email"),
             "website": tags.get("website") or tags.get("contact:website"),
             "menu_url": tags.get("menu") or tags.get("website:menu"),
             "hours_json": {"raw": tags["opening_hours"]} if tags.get("opening_hours") else None,

@@ -9,18 +9,22 @@ from __future__ import annotations
 import re
 import unicodedata
 
-# Regional cuisine keywords -> region_tag. First match wins.
+# Regional cuisine keywords -> region_tag. First match wins. Includes signature
+# dishes/terms so generically-named restaurants still get a cultural tag.
 _REGION_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
-    ("Gujarati", ("gujarati", "kathiyawadi", "surti")),
-    ("Punjabi", ("punjabi", "amritsar", "dhaba")),
-    ("South Indian", ("south indian", "udupi", "dosa", "idli", "madras", "chettinad")),
-    ("Telugu", ("telugu", "andhra", "hyderabad", "hyderabadi")),
-    ("Tamil", ("tamil", "chettinad")),
-    ("Bengali", ("bengali", "kolkata", "calcutta")),
-    ("Kerala", ("kerala", "malabar", "mallu")),
-    ("Indo-Chinese", ("indo chinese", "indo-chinese", "hakka")),
-    ("Mughlai", ("mughlai", "mughal", "awadhi", "lucknow")),
+    ("Gujarati", ("gujarati", "kathiyawadi", "surti", "kathiawadi", "dhokla", "thali house")),
+    ("Punjabi", ("punjabi", "amritsar", "amritsari", "dhaba", "sardar", "pind", "lassi")),
+    ("South Indian", ("south indian", "udupi", "dosa", "idli", "sambar", "uttapam",
+                       "vada", "madras", "saravana", "tiffin", "woodlands")),
+    ("Telugu", ("telugu", "andhra", "hyderabad", "hyderabadi", "godavari")),
+    ("Tamil", ("tamil", "chettinad", "ponnusamy")),
+    ("Bengali", ("bengali", "kolkata", "calcutta", "bengal")),
+    ("Kerala", ("kerala", "malabar", "mallu", "thattukada")),
+    ("Indo-Chinese", ("indo chinese", "indo-chinese", "hakka", "schezwan", "manchurian")),
+    ("Mughlai", ("mughlai", "mughal", "awadhi", "lucknow", "nawab", "kebab", "biryani")),
     ("Rajasthani", ("rajasthani", "marwari")),
+    ("North Indian", ("north indian", "tandoor", "tandoori", "curry house", "chaat",
+                       "butter chicken", "naan", "masala")),
 ]
 
 _DIETARY_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
@@ -58,16 +62,23 @@ def natural_key(name: str, lat: float | None, lng: float | None) -> str:
     return base
 
 
-def _infer_region(text: str) -> str | None:
+def infer_region(text: str) -> str | None:
+    text = (text or "").lower()
     for tag, keywords in _REGION_KEYWORDS:
         if any(k in text for k in keywords):
             return tag
     return None
 
 
-def _infer_dietary(text: str) -> list[str]:
+def infer_dietary(text: str) -> list[str]:
+    text = (text or "").lower()
     tags = [tag for tag, keywords in _DIETARY_KEYWORDS if any(k in text for k in keywords)]
     return sorted(set(tags))
+
+
+# Back-compat internal aliases.
+_infer_region = infer_region
+_infer_dietary = infer_dietary
 
 
 def clean(candidate: dict) -> dict:
@@ -91,6 +102,7 @@ def clean(candidate: dict) -> dict:
         "lat": lat,
         "lng": lng,
         "phone": normalize_phone(candidate.get("phone")),
+        "email": (candidate.get("email") or "").strip().lower() or None,
         "website": candidate.get("website"),
         "menu_url": candidate.get("menu_url"),
         "hours_json": candidate.get("hours_json"),

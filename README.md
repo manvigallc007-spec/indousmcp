@@ -71,9 +71,26 @@ python -m indo_usa_mcp.server
 | `agents` | List the registered autonomous agents. |
 | `agent <name>` | Run one agent now (audited in `agent_runs`). |
 | `agents-loop [--once]` | Run the scheduler (worker loop over due agents). |
+| `query [--city/--text/--lat --lng/--id/...]` | Call the MCP tool functions from the terminal. |
 | `seed` | Load fictional seed restaurants for local testing (no scrape needed). |
+| `enrich` | Backfill region/dietary cultural tags on under-tagged restaurants. |
+| `feature --id N [--days 30 \| --permanent]` | Mark a paid featured listing. |
+| `unfeature --id N` | Remove a featured listing. |
 | `backfill-embeddings [--all]` | (Re)compute embeddings for canonical rows. |
 | `stats` | Row counts and coverage summary. |
+
+## Monetization & delivery
+
+- **Featured listings** (`feature`/`unfeature`) — a paid tier; effectively-featured rows
+  (flagged and within their `featured_until` window) surface first in every tool result.
+- **Outreach email delivery** — optional and zero-cost: set Gmail SMTP + an app password in
+  `.env` (see `.env.example`) and the Outreach Agent will auto-send claim emails to
+  restaurants that have a public email; otherwise it stays draft-only.
+- **Enrichment agent** — strengthens the cultural "data moat" by inferring region/dietary
+  tags from restaurant names (free, keyword-based).
+
+Coverage spans 15 metros (Bay Area, NYC/NJ, Dallas, Houston, Chicago, LA, Seattle, Atlanta,
+Phoenix, Austin, Boston, Philadelphia, Raleigh, Detroit, Central NJ).
 
 ## Trying it without a live scrape
 

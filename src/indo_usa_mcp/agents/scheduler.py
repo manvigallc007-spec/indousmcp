@@ -20,8 +20,10 @@ from .runner import run_agent
 # Sensible default cadence (seconds). Cleaner runs often; scrapers/outreach daily.
 DEFAULT_SCHEDULE = {name: agent.default_interval_s for name, agent in AGENTS.items()}
 
-# Order matters within a tick: scrape -> clean -> monitor.
-_RUN_ORDER = ["scraper", "cleaner", "discovery", "outreach", "monitoring", "submission"]
+# Order matters within a tick: scrape -> clean -> enrich -> monitor.
+_RUN_ORDER = [
+    "scraper", "cleaner", "enrichment", "discovery", "outreach", "monitoring", "submission",
+]
 
 # How often the loop wakes to check what's due.
 TICK_SECONDS = 60

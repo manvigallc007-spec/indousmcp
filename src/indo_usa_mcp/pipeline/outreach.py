@@ -16,6 +16,9 @@ Guardrails honoured:
 from __future__ import annotations
 
 import secrets
+import smtplib
+import ssl
+from email.message import EmailMessage
 from typing import Any
 from urllib.parse import urlencode
 
@@ -59,7 +62,12 @@ def find_unclaimed(limit: int = 20, min_confidence: float = 0.5) -> list[dict[st
 
 
 def _pick_channel(restaurant: dict) -> str | None:
-    """Choose the best available outreach channel from known contact fields."""
+    """Choose the best available outreach channel from known contact fields.
+
+    Email is preferred when present (it's the only channel we can auto-deliver).
+    """
+    if restaurant.get("email"):
+        return "email"
     if restaurant.get("phone"):
         return "whatsapp"
     if restaurant.get("website"):
@@ -161,6 +169,31 @@ def draft_message(restaurant: dict, claim_link_url: str, channel: str) -> str:
     )
 
 
+def send_email(to_address: str, subject: str, body: str) -> bool:
+    """Send one email via SMTP. Returns False (no-op) when SMTP isn't configured.
+
+    Designed for free providers (e.g. Gmail SMTP + an app password). No cost.
+    """
+    if not settings.email_enabled:
+        return False
+    msg = EmailMessage()
+    msg["From"] = settings.smtp_from or settings.outreach_contact_email
+    msg["To"] = to_address
+    msg["Subject"] = subject
+    msg.set_content(body)
+
+    if settings.smtp_use_tls:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as s:
+            s.starttls(context=ssl.create_default_context())
+            s.login(settings.smtp_user, settings.smtp_password)
+            s.send_message(msg)
+    else:
+        with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=30) as s:
+            s.login(settings.smtp_user, settings.smtp_password)
+            s.send_message(msg)
+    return True
+
+
 def record_outreach(
     restaurant_id: int,
     claim_id: int | None,
@@ -168,19 +201,28 @@ def record_outreach(
     contact_target: str | None,
     message: str,
     requires_human: bool,
+    status: str = "drafted",
 ) -> int:
     row = db.query_one(
         """
         INSERT INTO outreach_log
             (restaurant_id, claim_id, channel, contact_target, message, status, requires_human)
-        VALUES (%s, %s, %s, %s, %s, 'drafted', %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         RETURNING id
         """,
-        (restaurant_id, claim_id, channel, contact_target, message, requires_human),
+        (restaurant_id, claim_id, channel, contact_target, message, status, requires_human),
     )
     if claim_id is not None:
         db.execute("UPDATE claims SET status='sent' WHERE id=%s", (claim_id,))
     return row["id"]
+
+
+def _target_for(restaurant: dict, channel: str) -> str | None:
+    return {
+        "email": restaurant.get("email"),
+        "whatsapp": restaurant.get("phone"),
+        "form": restaurant.get("website"),
+    }.get(channel)
 
 
 # ---------------------------------------------------------------- orchestration
@@ -190,20 +232,32 @@ def run_outreach(limit: int = 20, min_confidence: float = 0.5) -> dict[str, Any]
     Drafts for high-value/chain targets are flagged `requires_human` and left for a
     person to review/send; the rest are ready for an automated channel to deliver.
     """
-    drafted, flagged = [], 0
+    items, flagged, sent_count = [], 0, 0
+    subject = f"Claim your free listing on {settings.platform_name}"
     for r in find_unclaimed(limit=limit, min_confidence=min_confidence):
         channel = r["_channel"]
         if channel is None:
             continue
-        target = r.get("phone") if channel == "whatsapp" else r.get("website")
+        target = _target_for(r, channel)
         claim = create_claim(r["id"], channel, target)
         message = draft_message(r, claim["claim_link"], channel)
         requires_human = r["_requires_human"]
         flagged += int(requires_human)
+
+        # Auto-deliver only via email, only to non-human targets, only if SMTP is set up.
+        sent = False
+        if channel == "email" and target and not requires_human and settings.email_enabled:
+            try:
+                sent = send_email(target, subject, message)
+            except Exception:  # delivery failure shouldn't abort the batch
+                sent = False
+        sent_count += int(sent)
+
         outreach_id = record_outreach(
-            r["id"], claim["id"], channel, target, message, requires_human
+            r["id"], claim["id"], channel, target, message, requires_human,
+            status="sent" if sent else "drafted",
         )
-        drafted.append(
+        items.append(
             {
                 "outreach_id": outreach_id,
                 "restaurant_id": r["id"],
@@ -211,8 +265,15 @@ def run_outreach(limit: int = 20, min_confidence: float = 0.5) -> dict[str, Any]
                 "channel": channel,
                 "contact_target": target,
                 "requires_human": requires_human,
+                "sent": sent,
                 "claim_link": claim["claim_link"],
                 "message": message,
             }
         )
-    return {"drafted": len(drafted), "requires_human": flagged, "items": drafted}
+    return {
+        "drafted": len(items),
+        "sent": sent_count,
+        "email_enabled": settings.email_enabled,
+        "requires_human": flagged,
+        "items": items,
+    }

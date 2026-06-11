@@ -100,6 +100,19 @@ def cmd_backfill_embeddings(args: argparse.Namespace) -> None:
     _print(ingest.backfill_embeddings(only_missing=not args.all))
 
 
+def cmd_enrich(_: argparse.Namespace) -> None:
+    _print(ingest.enrich_existing())
+
+
+def cmd_feature(args: argparse.Namespace) -> None:
+    days = None if args.permanent else args.days
+    _print(ingest.set_featured(args.id, days=days))
+
+
+def cmd_unfeature(args: argparse.Namespace) -> None:
+    _print(ingest.unset_featured(args.id))
+
+
 def cmd_query(args: argparse.Namespace) -> None:
     """Call the same functions the MCP tools use, so terminal == agent's view."""
     if args.id is not None:
@@ -175,6 +188,20 @@ def build_parser() -> argparse.ArgumentParser:
     be = sub.add_parser("backfill-embeddings", help="(Re)compute embeddings for canonical rows")
     be.add_argument("--all", action="store_true", help="Recompute all, not just missing")
     be.set_defaults(func=cmd_backfill_embeddings)
+
+    sub.add_parser("enrich", help="Backfill region/dietary tags on under-tagged rows").set_defaults(
+        func=cmd_enrich
+    )
+
+    ft = sub.add_parser("feature", help="Mark a restaurant as a paid featured listing")
+    ft.add_argument("--id", type=int, required=True)
+    ft.add_argument("--days", type=int, default=30, help="featured window length (default 30)")
+    ft.add_argument("--permanent", action="store_true", help="no expiry")
+    ft.set_defaults(func=cmd_feature)
+
+    uf = sub.add_parser("unfeature", help="Remove a featured listing")
+    uf.add_argument("--id", type=int, required=True)
+    uf.set_defaults(func=cmd_unfeature)
 
     q = sub.add_parser("query", help="Query restaurants exactly as the MCP tools do")
     q.add_argument("--city")
