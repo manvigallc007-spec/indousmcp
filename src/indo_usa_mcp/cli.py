@@ -104,6 +104,10 @@ def cmd_enrich(_: argparse.Namespace) -> None:
     _print(ingest.enrich_existing())
 
 
+def cmd_deactivate_stale(args: argparse.Namespace) -> None:
+    _print(ingest.deactivate_stale(days=args.days))
+
+
 def cmd_approval_digest(_: argparse.Namespace) -> None:
     _print(ingest.summarize_approvals())
 
@@ -202,6 +206,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("enrich", help="Backfill region/dietary tags on under-tagged rows").set_defaults(
         func=cmd_enrich
     )
+
+    ds = sub.add_parser("deactivate-stale", help="Mark unclaimed listings not seen recently inactive")
+    ds.add_argument("--days", type=int, default=60)
+    ds.set_defaults(func=cmd_deactivate_stale)
 
     sub.add_parser("approval-digest", help="Human-readable summary of pending approvals").set_defaults(
         func=cmd_approval_digest

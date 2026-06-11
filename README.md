@@ -74,6 +74,7 @@ python -m indo_usa_mcp.server
 | `query [--city/--text/--lat --lng/--id/...]` | Call the MCP tool functions from the terminal. |
 | `seed` | Load fictional seed restaurants for local testing (no scrape needed). |
 | `enrich` | Backfill region/dietary cultural tags on under-tagged restaurants. |
+| `deactivate-stale [--days 60]` | Mark unclaimed listings not seen recently as inactive. |
 | `approval-digest` | Human-readable summary of the pending approval queue. |
 | `feedback --id N --field F --value V` | Submit a field correction (applied by the feedback agent). |
 | `scrape --metro usa` | Nationwide sweep (occasional; slower than a single metro). |
@@ -138,6 +139,12 @@ python -m indo_usa_mcp.cli outreach --limit 10
 # Later, an owner verifies their claim token (normally via the claim web page)
 python -m indo_usa_mcp.cli verify-claim <token> --email owner@example.com
 ```
+
+After claiming, owners get an **edit page** (`/manage?token=...`) to update their phone,
+hours, menu, price, dietary tags, etc. — changes go live immediately and are protected from
+scraper overwrites (scraper updates to claimed listings route to the approval queue).
+**Stale listings** not re-seen for 60 days are auto-deactivated (`is_active=false`) and
+reactivated if they reappear in a later scrape.
 
 The Outreach Agent finds unclaimed restaurants (skipping anything with an open claim or
 contacted within `OUTREACH_COOLDOWN_DAYS`), creates a single-use claim token + link, and

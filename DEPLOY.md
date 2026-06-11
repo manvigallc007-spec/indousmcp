@@ -83,8 +83,11 @@ then bring up the optional Caddy proxy:
 ```bash
 docker compose -f docker-compose.prod.yml --profile tls up -d
 ```
-Caddy gets a free Let's Encrypt cert automatically. Your MCP endpoint becomes
-`https://yourdomain.com/mcp`.
+Caddy gets a free Let's Encrypt cert automatically and routes `/mcp*` to the MCP server and
+everything else (claim/manage/upgrade pages, `/stripe/webhook`) to the web app. With a
+domain, also set in `.env`: `PUBLIC_WEB_URL=https://yourdomain.com` and
+`CLAIM_BASE_URL=https://yourdomain.com/claim`. Endpoints become `https://yourdomain.com/mcp`
+(agents) and `https://yourdomain.com/claim` (owners).
 
 **No domain yet?** Skip Caddy. The server is on `http://YOUR_VPS_IP:8000/mcp`. Lock it down
 with the firewall (next step) — allow `:8000` only from IPs you trust, or only expose it

@@ -19,7 +19,16 @@ from starlette.routing import Route
 
 from . import payments
 from .config import settings
-from .pipeline import outreach
+from .pipeline import ingest, outreach
+
+# Text fields shown on the owner edit form (label, restaurant field).
+_EDIT_FIELDS = [
+    ("Phone", "phone"), ("Email", "email"), ("Website", "website"),
+    ("Menu URL", "menu_url"), ("Address", "address_full"), ("City", "city"),
+    ("State", "state"), ("Cuisine", "cuisine_type"), ("Region", "region_tag"),
+    ("Price range ($, $$, $$$)", "price_range"), ("Festival specials", "festival_specials"),
+]
+_DIETARY_OPTIONS = ["vegetarian", "vegan", "halal", "jain"]
 
 _BRAND = "#c1440e"
 
@@ -117,11 +126,13 @@ async def claim_post(request: Request) -> HTMLResponse:
                 f"<a href='/upgrade?id={rid}'><button>Get Featured — {price}"
                 f"/{settings.featured_days} days</button></a>"
             )
+        manage = (f"<p><a href='/manage?token={html.escape(token)}'>"
+                  f"<button>Edit your listing</button></a></p>")
         return _page(
             "Listing claimed",
             "<h2 class='ok'>&#10003; Listing claimed</h2>"
-            "<p>Thank you — you now own this listing. We'll follow up to help you update "
-            "hours, menu, photos and more.</p>" + upgrade,
+            "<p>Thank you — you now own this listing. Keep your details accurate below.</p>"
+            + manage + upgrade,
         )
 
     reasons = {
@@ -132,6 +143,68 @@ async def claim_post(request: Request) -> HTMLResponse:
     }
     msg = reasons.get(result.get("error", ""), "Something went wrong. Please try again.")
     return _page("Could not claim", f"<h2 class='err'>Couldn't claim</h2><p>{msg}</p>", status=400)
+
+
+def _esc(value) -> str:
+    return html.escape(str(value)) if value not in (None, "") else ""
+
+
+def manage_get(request: Request) -> HTMLResponse:
+    token = request.query_params.get("token", "")
+    r = outreach.owner_listing(token) if token else None
+    if r is None:
+        return _page("Not found",
+                     "<h2>Listing not found</h2><p class='muted'>This management link is "
+                     "invalid, or the listing hasn't been claimed yet.</p>", status=404)
+
+    rows = "".join(
+        f"<label>{html.escape(label)}</label>"
+        f"<input name='{field}' value='{_esc(r.get(field))}'>"
+        for label, field in _EDIT_FIELDS
+    )
+    current = set(r.get("dietary_tags") or [])
+    checks = "".join(
+        f"<label style='font-weight:400'><input type='checkbox' style='width:auto' "
+        f"name='dietary' value='{d}'{' checked' if d in current else ''}> {d}</label> "
+        for d in _DIETARY_OPTIONS
+    )
+    hours_raw = (r.get("hours_json") or {}).get("raw", "") if isinstance(r.get("hours_json"), dict) else ""
+    body = (
+        f"<h2>Manage {html.escape(r['name'])}</h2>"
+        f"<p class='muted'>Update your details below — changes go live immediately.</p>"
+        f"<form method='post' action='/manage'>"
+        f"<input type='hidden' name='token' value='{html.escape(token)}'>"
+        f"{rows}"
+        f"<label>Opening hours</label>"
+        f"<input name='hours' value='{_esc(hours_raw)}' placeholder='Mo-Su 11:00-22:00'>"
+        f"<label>Dietary</label><div style='margin:6px 0 16px'>{checks}</div>"
+        f"<button type='submit'>Save changes</button></form>"
+    )
+    return _page(f"Manage {r['name']}", body)
+
+
+async def manage_post(request: Request) -> HTMLResponse:
+    form = await request.form()
+    token = (form.get("token") or "").strip()
+    r = outreach.owner_listing(token) if token else None
+    if r is None:
+        return _page("Not found", "<h2>Listing not found</h2>", status=404)
+
+    edits: dict = {}
+    for _, field in _EDIT_FIELDS:
+        if field in form:
+            edits[field] = (form.get(field) or "").strip() or None
+    if "hours" in form:
+        hours = (form.get("hours") or "").strip()
+        edits["hours_json"] = {"raw": hours} if hours else None
+    edits["dietary_tags"] = sorted(set(form.getlist("dietary")))
+
+    result = ingest.apply_owner_edits(r["id"], edits)
+    n = result.get("updated", 0)
+    msg = (f"Saved {n} change(s)." if n else "No changes to save.")
+    body = (f"<h2 class='ok'>&#10003; {msg}</h2>"
+            f"<p><a href='/manage?token={html.escape(token)}'>Back to your listing</a></p>")
+    return _page("Saved", body)
 
 
 def upgrade_get(request: Request) -> HTMLResponse:
@@ -176,6 +249,8 @@ routes = [
     Route("/", home, methods=["GET"]),
     Route("/claim", claim_get, methods=["GET"]),
     Route("/claim", claim_post, methods=["POST"]),
+    Route("/manage", manage_get, methods=["GET"]),
+    Route("/manage", manage_post, methods=["POST"]),
     Route("/upgrade", upgrade_get, methods=["GET"]),
     Route("/upgrade/success", upgrade_success, methods=["GET"]),
     Route("/upgrade/cancel", upgrade_cancel, methods=["GET"]),

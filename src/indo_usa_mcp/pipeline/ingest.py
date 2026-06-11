@@ -95,6 +95,13 @@ def _reconcile(record: dict, raw_id: int | None) -> str:
         _enqueue("insert", record, raw_id=raw_id, risk=risk, diff=None)
         return "queued"
 
+    # Re-seen after being auto-deactivated -> it's back; reactivate (unless owner-controlled).
+    if not existing["is_active"] and not existing["is_claimed"]:
+        db.execute(
+            "UPDATE restaurants SET is_active = true, updated_at = now() WHERE id = %s",
+            (existing["id"],))
+        existing["is_active"] = True
+
     diff = _diff(existing, record)
     if not diff:
         # Still a fresh sighting: refresh last_seen_at without a version bump.
@@ -201,6 +208,62 @@ def enrich_existing() -> dict[str, int]:
             _update_canonical(row, {**row, **diff}, diff, change_reason="enrichment")
             updated += 1
     return {"scanned": len(rows), "enriched": updated}
+
+
+# Fields an owner may edit on their own listing (after claiming).
+OWNER_EDITABLE = {
+    "phone", "email", "website", "menu_url", "address_full", "city", "state",
+    "price_range", "cuisine_type", "region_tag", "festival_specials",
+    "dietary_tags", "hours_json",
+}
+
+
+def apply_owner_edits(restaurant_id: int, edits: dict) -> dict[str, Any]:
+    """Apply a verified owner's edits to their listing (trusted, versioned, immediate).
+
+    Owner edits are protected from being silently overwritten: scraper updates to a
+    claimed listing are routed to the approval queue, not auto-applied.
+    """
+    r = db.query_one(
+        "SELECT * FROM restaurants WHERE id = %s AND deleted_at IS NULL", (restaurant_id,))
+    if r is None:
+        return {"ok": False, "error": "not_found"}
+    diff = {}
+    for k, v in edits.items():
+        if k in OWNER_EDITABLE and _normalize(r.get(k)) != _normalize(v):
+            diff[k] = v
+    if not diff:
+        return {"ok": True, "updated": 0}
+    _update_canonical(r, {**r, **diff}, diff, change_reason="owner edit")
+    return {"ok": True, "updated": len(diff), "fields": sorted(diff)}
+
+
+def deactivate_stale(days: int = 60) -> dict[str, int]:
+    """Mark unclaimed listings not re-seen in `days` as inactive (likely closed/gone).
+
+    Claimed listings are left alone (the owner controls them). Reappearing in a later
+    scrape reactivates a listing (handled in _reconcile).
+    """
+    rows = db.query(
+        "SELECT * FROM restaurants WHERE deleted_at IS NULL AND is_active "
+        "AND NOT is_claimed AND last_seen_at < now() - (%s || ' days')::interval",
+        (days,),
+    )
+    for r in rows:
+        new_version = r["version"] + 1
+        db.execute(
+            "UPDATE restaurants SET is_active = false, version = %s, updated_at = now() "
+            "WHERE id = %s",
+            (new_version, r["id"]),
+        )
+        db.execute(
+            "INSERT INTO restaurant_versions (restaurant_id, version, data, change_reason) "
+            "VALUES (%s, %s, %s, %s)",
+            (r["id"], new_version,
+             Jsonb(_jsonable({**r, "is_active": False, "version": new_version})),
+             f"auto-deactivated: not seen in {days}d"),
+        )
+    return {"deactivated": len(rows)}
 
 
 def summarize_approvals(limit: int = 100) -> dict[str, Any]:

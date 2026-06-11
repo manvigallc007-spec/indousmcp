@@ -122,6 +122,15 @@ def whatsapp_link(phone: str | None, message: str) -> str | None:
     return f"https://wa.me/{digits}?{urlencode({'text': message})}"
 
 
+def owner_listing(token: str) -> dict | None:
+    """Full restaurant row for a *claimed* token — the owner's listing to manage."""
+    return db.query_one(
+        "SELECT r.* FROM claims c JOIN restaurants r ON r.id = c.restaurant_id "
+        "WHERE c.token = %s AND c.status = 'claimed' AND r.deleted_at IS NULL",
+        (token,),
+    )
+
+
 def claim_status(token: str) -> dict | None:
     """Look up a claim by token, joined to its restaurant (for the claim web page)."""
     return db.query_one(

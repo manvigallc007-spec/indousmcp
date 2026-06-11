@@ -1,5 +1,12 @@
-# Caddy auto-provisions a free Let's Encrypt TLS cert for $DOMAIN and reverse-proxies
-# HTTPS traffic to the MCP server container. Requires a domain pointed at the VPS IP.
+# Caddy auto-provisions a free Let's Encrypt TLS cert for $DOMAIN and reverse-proxies:
+#   /mcp*  -> MCP server (agents)        :8000
+#   else   -> claim/manage/upgrade web   :8080  (incl. /stripe/webhook)
+# Requires a domain pointed at the VPS IP.
 {$DOMAIN} {
-	reverse_proxy server:8000
+	handle /mcp* {
+		reverse_proxy server:8000
+	}
+	handle {
+		reverse_proxy web:8080
+	}
 }

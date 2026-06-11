@@ -59,11 +59,13 @@ class ScraperAgent(Agent):
 
 class CleanerAgent(Agent):
     name = "cleaner"
-    description = "Processes raw rows into canonical via clean/score/approval."
+    description = "Processes raw rows into canonical; deactivates stale (gone) listings."
     default_interval_s = 3600
 
     def run(self, **params: Any) -> dict[str, Any]:
-        return ingest.process_raw()
+        result = ingest.process_raw()
+        result.update(ingest.deactivate_stale(days=params.get("stale_days", 60)))
+        return result
 
 
 class EnrichmentAgent(Agent):

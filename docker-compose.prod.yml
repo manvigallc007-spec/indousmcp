@@ -121,6 +121,7 @@ services:
       - caddy_config:/config
     depends_on:
       - server
+      - web
 
 volumes:
   diaspora_pgdata:
