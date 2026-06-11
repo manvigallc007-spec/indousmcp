@@ -22,3 +22,25 @@ def bbox(metro: str) -> tuple[float, float, float, float]:
         raise ValueError(
             f"Unknown metro '{metro}'. Known: {', '.join(sorted(METROS))}"
         ) from None
+
+
+# Dominant US state per metro, used to backfill `state` when a source omits it.
+_METRO_STATE: dict[str, str] = {
+    "bay_area": "CA",
+    "dallas": "TX",
+    "houston": "TX",
+    "chicago": "IL",
+}
+
+
+def state_for(metro: str, lat: float | None = None, lng: float | None = None) -> str | None:
+    """Best-effort state for a point within a metro (used only when the source lacks it).
+
+    The NYC/NJ metro straddles two states, so it's split at the Hudson River
+    (longitude ~ -74.02): west of it is NJ, east is NY.
+    """
+    if metro == "nyc_nj":
+        if lng is None:
+            return None
+        return "NJ" if lng < -74.02 else "NY"
+    return _METRO_STATE.get(metro)

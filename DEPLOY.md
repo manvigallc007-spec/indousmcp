@@ -96,10 +96,14 @@ once you add a domain + HTTPS.
 ufw allow OpenSSH
 ufw allow 80
 ufw allow 443
-# If running WITHOUT Caddy and you must reach :8000 directly, also: ufw allow 8000
+# Direct (no Caddy): MCP server on 8000, claim web page on 8080
+ufw allow 8000
+ufw allow 8080
 ufw enable
 ```
-With Caddy/HTTPS, do **not** open 8000 publicly — only 80/443.
+With Caddy/HTTPS, do **not** open 8000/8080 publicly — only 80/443, and route them via the
+proxy. The owner-facing **claim page** runs on `:8080` (`/claim?...`); the agent MCP endpoint
+is on `:8000` (`/mcp`).
 
 ## Backups
 

@@ -49,6 +49,23 @@ services:
     # Scheduler loop runs the agents (scrape -> clean -> monitor ...) on their intervals.
     command: python -m indo_usa_mcp.agents.scheduler
 
+  # Owner-facing claim web page (blueprint §7), served on :8080.
+  web:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://diaspora:${POSTGRES_PASSWORD:-diaspora}@db:5432/diaspora
+      CLAIM_BASE_URL: ${CLAIM_BASE_URL:-https://yourdomain.com/claim}
+      PLATFORM_NAME: ${PLATFORM_NAME:-Indian Eats Directory}
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      server:
+        condition: service_started
+    command: python -m indo_usa_mcp.web
+
   # Daily pg_dump to ./backups (gzipped), keeping the 14 most recent. Always on.
   backup:
     image: pgvector/pgvector:pg16

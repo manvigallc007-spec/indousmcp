@@ -101,6 +101,17 @@ def claim_link(restaurant_id: int, token: str) -> str:
     return f"{settings.claim_base_url}?{qs}"
 
 
+def claim_status(token: str) -> dict | None:
+    """Look up a claim by token, joined to its restaurant (for the claim web page)."""
+    return db.query_one(
+        "SELECT c.id, c.token, c.status, c.expires_at, "
+        "r.id AS restaurant_id, r.name AS restaurant_name, r.city, r.state "
+        "FROM claims c JOIN restaurants r ON r.id = c.restaurant_id "
+        "WHERE c.token = %s",
+        (token,),
+    )
+
+
 def verify_claim(token: str, owner_email: str | None = None, owner_phone: str | None = None) -> dict:
     """Owner-facing: verify a token and grant ownership of the restaurant.
 

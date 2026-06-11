@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     scraper_user_agent: str = "indo-usa-diaspora-mcp/0.1"
     scraper_timeout_seconds: int = 180
 
+    # Public claim web page (owner-facing)
+    web_host: str = "0.0.0.0"
+    web_port: int = 8080
+
     # MCP server transport
     # "stdio" for local clients (Claude Desktop), "streamable-http" for a hosted service.
     mcp_transport: str = "stdio"

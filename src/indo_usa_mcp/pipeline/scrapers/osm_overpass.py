@@ -12,7 +12,7 @@ from typing import Iterator
 import httpx
 
 from ...config import settings
-from .metros import bbox
+from .metros import bbox, state_for
 
 # Overpass QL: restaurants whose cuisine tag contains "indian" (case-insensitive),
 # as nodes, ways and relations, within the bbox. `out center` gives ways a point.
@@ -45,11 +45,11 @@ class OverpassScraper:
         )
         resp.raise_for_status()
         for element in resp.json().get("elements", []):
-            candidate = self._element_to_candidate(element)
+            candidate = self._element_to_candidate(element, region)
             if candidate is not None:
                 yield candidate
 
-    def _element_to_candidate(self, element: dict) -> dict | None:
+    def _element_to_candidate(self, element: dict, region: str) -> dict | None:
         tags = element.get("tags", {})
         name = tags.get("name")
         if not name:
@@ -69,7 +69,8 @@ class OverpassScraper:
             "name": name,
             "address_full": address_full,
             "city": tags.get("addr:city"),
-            "state": tags.get("addr:state"),
+            # Fall back to the metro's state when OSM omits addr:state.
+            "state": tags.get("addr:state") or state_for(region, lat, lng),
             "country": "USA",
             "lat": lat,
             "lng": lng,

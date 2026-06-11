@@ -13,7 +13,7 @@ from typing import Iterator
 import httpx
 
 from ...config import settings
-from .metros import bbox
+from .metros import bbox, state_for
 
 _ENDPOINT = "https://query.wikidata.org/sparql"
 
@@ -50,11 +50,11 @@ class WikidataScraper:
         )
         resp.raise_for_status()
         for binding in resp.json().get("results", {}).get("bindings", []):
-            candidate = self._binding_to_candidate(binding, bbox_=(s, w, n, e))
+            candidate = self._binding_to_candidate(binding, region, bbox_=(s, w, n, e))
             if candidate is not None:
                 yield candidate
 
-    def _binding_to_candidate(self, b: dict, bbox_: tuple) -> dict | None:
+    def _binding_to_candidate(self, b: dict, region: str, bbox_: tuple) -> dict | None:
         name = b.get("itemLabel", {}).get("value")
         coord = b.get("coord", {}).get("value")  # "Point(lng lat)"
         if not name or not coord:
@@ -74,6 +74,7 @@ class WikidataScraper:
             "name": name,
             "lat": lat,
             "lng": lng,
+            "state": state_for(region, lat, lng),
             "country": "USA",
             "website": b.get("website", {}).get("value"),
             "phone": b.get("phone", {}).get("value"),
