@@ -26,22 +26,39 @@ _QUERY_TEMPLATE = """
 out center tags;
 """
 
+# Nationwide: every Indian restaurant in the USA (admin area), no bbox. Larger + slower;
+# meant for an occasional manual run, not the daily agent loop.
+_USA_QUERY = """
+[out:json][timeout:600];
+area["ISO3166-1"="US"][admin_level=2]->.usa;
+(
+  node["amenity"="restaurant"]["cuisine"~"indian",i](area.usa);
+  way["amenity"="restaurant"]["cuisine"~"indian",i](area.usa);
+);
+out center tags;
+"""
+
 
 class OverpassScraper:
     source_name = "osm_overpass"
 
     def scrape(self, region: str) -> Iterator[dict]:
-        s, w, n, e = bbox(region)
-        query = _QUERY_TEMPLATE.format(
-            timeout=settings.scraper_timeout_seconds, s=s, w=w, n=n, e=e
-        )
+        if region == "usa":
+            query = _USA_QUERY
+            read_timeout = 660
+        else:
+            s, w, n, e = bbox(region)
+            query = _QUERY_TEMPLATE.format(
+                timeout=settings.scraper_timeout_seconds, s=s, w=w, n=n, e=e
+            )
+            read_timeout = settings.scraper_timeout_seconds + 30
         # Politeness: single rate-limited request; Overpass throttles heavy use.
         time.sleep(1)
         resp = httpx.post(
             settings.overpass_url,
             data={"data": query},
             headers={"User-Agent": settings.scraper_user_agent},
-            timeout=settings.scraper_timeout_seconds + 30,
+            timeout=read_timeout,
         )
         resp.raise_for_status()
         for element in resp.json().get("elements", []):

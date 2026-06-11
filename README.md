@@ -74,6 +74,8 @@ python -m indo_usa_mcp.server
 | `query [--city/--text/--lat --lng/--id/...]` | Call the MCP tool functions from the terminal. |
 | `seed` | Load fictional seed restaurants for local testing (no scrape needed). |
 | `enrich` | Backfill region/dietary cultural tags on under-tagged restaurants. |
+| `approval-digest` | Human-readable summary of the pending approval queue. |
+| `scrape --metro usa` | Nationwide sweep (occasional; slower than a single metro). |
 | `feature --id N [--days 30 \| --permanent]` | Mark a paid featured listing. |
 | `unfeature --id N` | Remove a featured listing. |
 | `backfill-embeddings [--all]` | (Re)compute embeddings for canonical rows. |
@@ -90,7 +92,11 @@ python -m indo_usa_mcp.server
   tags from restaurant names (free, keyword-based).
 
 Coverage spans 15 metros (Bay Area, NYC/NJ, Dallas, Houston, Chicago, LA, Seattle, Atlanta,
-Phoenix, Austin, Boston, Philadelphia, Raleigh, Detroit, Central NJ).
+Phoenix, Austin, Boston, Philadelphia, Raleigh, Detroit, Central NJ) plus an on-demand
+**nationwide** sweep (`scrape --metro usa`).
+
+WhatsApp outreach is delivered as free **click-to-send `wa.me` links** (message pre-filled);
+true auto-send WhatsApp needs a paid API and is intentionally not used.
 
 ## Trying it without a live scrape
 

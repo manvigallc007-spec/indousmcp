@@ -109,6 +109,19 @@ def claim_link(restaurant_id: int, token: str) -> str:
     return f"{settings.claim_base_url}?{qs}"
 
 
+def whatsapp_link(phone: str | None, message: str) -> str | None:
+    """A free click-to-send wa.me link with the message pre-filled (no paid API).
+
+    Tapping it opens WhatsApp to the restaurant's number with the text ready to send.
+    """
+    if not phone:
+        return None
+    digits = "".join(ch for ch in phone if ch.isdigit())
+    if not digits:
+        return None
+    return f"https://wa.me/{digits}?{urlencode({'text': message})}"
+
+
 def claim_status(token: str) -> dict | None:
     """Look up a claim by token, joined to its restaurant (for the claim web page)."""
     return db.query_one(
@@ -257,19 +270,21 @@ def run_outreach(limit: int = 20, min_confidence: float = 0.5) -> dict[str, Any]
             r["id"], claim["id"], channel, target, message, requires_human,
             status="sent" if sent else "drafted",
         )
-        items.append(
-            {
-                "outreach_id": outreach_id,
-                "restaurant_id": r["id"],
-                "name": r["name"],
-                "channel": channel,
-                "contact_target": target,
-                "requires_human": requires_human,
-                "sent": sent,
-                "claim_link": claim["claim_link"],
-                "message": message,
-            }
-        )
+        item = {
+            "outreach_id": outreach_id,
+            "restaurant_id": r["id"],
+            "name": r["name"],
+            "channel": channel,
+            "contact_target": target,
+            "requires_human": requires_human,
+            "sent": sent,
+            "claim_link": claim["claim_link"],
+            "message": message,
+        }
+        # Free one-tap send link for WhatsApp targets (no paid API).
+        if channel == "whatsapp":
+            item["whatsapp_link"] = whatsapp_link(target, message)
+        items.append(item)
     return {
         "drafted": len(items),
         "sent": sent_count,

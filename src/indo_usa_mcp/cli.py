@@ -23,7 +23,7 @@ from .agents import AGENTS, run_agent
 from .agents.scheduler import run_loop
 from .pipeline import ingest, outreach, seed
 from .pipeline.scrapers import SCRAPERS
-from .pipeline.scrapers.metros import METROS
+from .pipeline.scrapers.metros import SCRAPE_REGIONS
 
 
 def _print(obj) -> None:
@@ -104,6 +104,10 @@ def cmd_enrich(_: argparse.Namespace) -> None:
     _print(ingest.enrich_existing())
 
 
+def cmd_approval_digest(_: argparse.Namespace) -> None:
+    _print(ingest.summarize_approvals())
+
+
 def cmd_feature(args: argparse.Namespace) -> None:
     days = None if args.permanent else args.days
     _print(ingest.set_featured(args.id, days=days))
@@ -138,7 +142,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("init-db", help="Apply SQL migrations").set_defaults(func=cmd_init_db)
 
     sp = sub.add_parser("scrape", help="Run a scraper into restaurant_raw")
-    sp.add_argument("--metro", required=True, choices=sorted(METROS))
+    sp.add_argument("--metro", required=True, choices=SCRAPE_REGIONS,
+                    metavar="REGION", help="a metro or 'usa' for nationwide")
     sp.add_argument("--source", default="osm_overpass", choices=sorted(SCRAPERS))
     sp.set_defaults(func=cmd_scrape)
 
@@ -191,6 +196,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("enrich", help="Backfill region/dietary tags on under-tagged rows").set_defaults(
         func=cmd_enrich
+    )
+
+    sub.add_parser("approval-digest", help="Human-readable summary of pending approvals").set_defaults(
+        func=cmd_approval_digest
     )
 
     ft = sub.add_parser("feature", help="Mark a restaurant as a paid featured listing")

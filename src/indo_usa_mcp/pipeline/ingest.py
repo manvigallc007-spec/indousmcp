@@ -203,6 +203,38 @@ def enrich_existing() -> dict[str, int]:
     return {"scanned": len(rows), "enriched": updated}
 
 
+def summarize_approvals(limit: int = 100) -> dict[str, Any]:
+    """Human-readable digest of the pending approval queue (Approval-Assistant agent).
+
+    Turns raw queue rows into one-line summaries — what's changing, the risk, and (for
+    new inserts) which high-value fields are missing — so a person can review fast.
+    """
+    rows = db.query(
+        "SELECT * FROM approval_queue WHERE status = 'pending' "
+        "ORDER BY risk DESC, confidence ASC, created_at LIMIT %s",
+        (limit,),
+    )
+    items, by_risk, by_change = [], {"high": 0, "low": 0}, {"insert": 0, "update": 0}
+    for a in rows:
+        proposed = _as_dict(a["proposed"])
+        name = proposed.get("name", "?")
+        by_risk[a["risk"]] = by_risk.get(a["risk"], 0) + 1
+        by_change[a["change_type"]] = by_change.get(a["change_type"], 0) + 1
+        if a["change_type"] == "insert":
+            missing = [f for f in ("phone", "website", "address_full") if not proposed.get(f)]
+            tail = f" — missing {', '.join(missing)}" if missing else ""
+            summary = (f"NEW '{name}' in {proposed.get('city') or '?'} "
+                       f"(conf {a['confidence']}, {a['risk']} risk){tail}")
+        else:
+            fields = ", ".join((a.get("diff") or {}).keys()) or "—"
+            summary = f"UPDATE '{name}' fields: {fields} ({a['risk']} risk)"
+        items.append({
+            "id": a["id"], "change_type": a["change_type"],
+            "risk": a["risk"], "confidence": a["confidence"], "summary": summary,
+        })
+    return {"pending": len(rows), "by_risk": by_risk, "by_change": by_change, "items": items}
+
+
 def set_featured(restaurant_id: int, days: int | None = 30) -> dict[str, Any]:
     """Mark a restaurant as a paid featured listing for `days` (None = permanent)."""
     if days is None:

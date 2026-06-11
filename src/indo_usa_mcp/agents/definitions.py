@@ -75,6 +75,15 @@ class EnrichmentAgent(Agent):
         return ingest.enrich_existing()
 
 
+class ApprovalAssistantAgent(Agent):
+    name = "approval_assistant"
+    description = "Summarizes the pending approval queue for fast human review."
+    default_interval_s = 21600
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        return ingest.summarize_approvals(limit=params.get("limit", 100))
+
+
 class OutreachAgent(Agent):
     name = "outreach"
     description = "Drafts claim outreach for eligible unclaimed restaurants."
@@ -159,6 +168,7 @@ ALL_AGENTS = [
     ScraperAgent(),
     CleanerAgent(),
     EnrichmentAgent(),
+    ApprovalAssistantAgent(),
     OutreachAgent(),
     SubmissionAgent(),
     MonitoringAgent(),

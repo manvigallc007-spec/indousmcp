@@ -37,7 +37,8 @@ class WikidataScraper:
     source_name = "wikidata"
 
     def scrape(self, region: str) -> Iterator[dict]:
-        s, w, n, e = bbox(region)
+        # "usa" = nationwide (no bbox filter); otherwise restrict to the metro bbox.
+        bbox_ = None if region == "usa" else bbox(region)
         time.sleep(1)  # politeness
         resp = httpx.get(
             _ENDPOINT,
@@ -50,11 +51,11 @@ class WikidataScraper:
         )
         resp.raise_for_status()
         for binding in resp.json().get("results", {}).get("bindings", []):
-            candidate = self._binding_to_candidate(binding, region, bbox_=(s, w, n, e))
+            candidate = self._binding_to_candidate(binding, region, bbox_)
             if candidate is not None:
                 yield candidate
 
-    def _binding_to_candidate(self, b: dict, region: str, bbox_: tuple) -> dict | None:
+    def _binding_to_candidate(self, b: dict, region: str, bbox_: tuple | None) -> dict | None:
         name = b.get("itemLabel", {}).get("value")
         coord = b.get("coord", {}).get("value")  # "Point(lng lat)"
         if not name or not coord:
@@ -62,9 +63,10 @@ class WikidataScraper:
         lat, lng = self._parse_point(coord)
         if lat is None:
             return None
-        s, w, n, e = bbox_
-        if not (s <= lat <= n and w <= lng <= e):
-            return None  # outside the requested metro
+        if bbox_ is not None:
+            s, w, n, e = bbox_
+            if not (s <= lat <= n and w <= lng <= e):
+                return None  # outside the requested metro
 
         qid = b.get("item", {}).get("value", "").rsplit("/", 1)[-1]
         return {

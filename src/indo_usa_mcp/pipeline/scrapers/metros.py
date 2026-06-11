@@ -27,6 +27,10 @@ METROS: dict[str, tuple[float, float, float, float]] = {
 }
 
 
+# Valid scrape regions: each metro, plus "usa" for an occasional nationwide sweep.
+SCRAPE_REGIONS: list[str] = sorted(METROS) + ["usa"]
+
+
 def bbox(metro: str) -> tuple[float, float, float, float]:
     try:
         return METROS[metro]

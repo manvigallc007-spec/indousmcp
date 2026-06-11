@@ -22,7 +22,8 @@ DEFAULT_SCHEDULE = {name: agent.default_interval_s for name, agent in AGENTS.ite
 
 # Order matters within a tick: scrape -> clean -> enrich -> monitor.
 _RUN_ORDER = [
-    "scraper", "cleaner", "enrichment", "discovery", "outreach", "monitoring", "submission",
+    "scraper", "cleaner", "enrichment", "approval_assistant", "discovery",
+    "outreach", "monitoring", "submission",
 ]
 
 # How often the loop wakes to check what's due.
