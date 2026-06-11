@@ -21,7 +21,7 @@ import sys
 from . import db, queries
 from .agents import AGENTS, run_agent
 from .agents.scheduler import run_loop
-from .pipeline import ingest, outreach, seed
+from .pipeline import feedback, ingest, outreach, seed
 from .pipeline.scrapers import SCRAPERS
 from .pipeline.scrapers.metros import SCRAPE_REGIONS
 
@@ -106,6 +106,11 @@ def cmd_enrich(_: argparse.Namespace) -> None:
 
 def cmd_approval_digest(_: argparse.Namespace) -> None:
     _print(ingest.summarize_approvals())
+
+
+def cmd_feedback(args: argparse.Namespace) -> None:
+    _print(feedback.submit_correction(
+        args.id, args.field, args.value, reason=args.reason or "", source="human"))
 
 
 def cmd_feature(args: argparse.Namespace) -> None:
@@ -201,6 +206,13 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("approval-digest", help="Human-readable summary of pending approvals").set_defaults(
         func=cmd_approval_digest
     )
+
+    fb = sub.add_parser("feedback", help="Submit a field correction (applied by feedback agent)")
+    fb.add_argument("--id", type=int, required=True, help="restaurant id")
+    fb.add_argument("--field", required=True, help="e.g. phone, website, region_tag")
+    fb.add_argument("--value", required=True)
+    fb.add_argument("--reason", default="")
+    fb.set_defaults(func=cmd_feedback)
 
     ft = sub.add_parser("feature", help="Mark a restaurant as a paid featured listing")
     ft.add_argument("--id", type=int, required=True)

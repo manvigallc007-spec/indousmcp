@@ -11,7 +11,7 @@ from mcp.server.fastmcp import FastMCP
 
 from . import queries
 from .config import settings
-from .pipeline import outreach
+from .pipeline import feedback, outreach
 
 mcp = FastMCP("indo-usa-diaspora", host=settings.mcp_host, port=settings.mcp_port)
 
@@ -94,6 +94,18 @@ def draft_claim_outreach(limit: int = 20, min_confidence: float = 0.5) -> dict[s
     targets are flagged `requires_human`. Returns the drafted items for review/delivery.
     """
     return outreach.run_outreach(limit=limit, min_confidence=min_confidence)
+
+
+@mcp.tool()
+def submit_correction(restaurant_id: int, field: str, value: str, reason: str = "") -> dict[str, Any]:
+    """Propose a correction to a restaurant field (agents/users reporting bad data).
+
+    Correctable fields: phone, email, website, menu_url, address_full, city, state,
+    region_tag, price_range, cuisine_type, festival_specials. The correction is stored and
+    applied by the Feedback agent — automatically for unclaimed listings, or routed to a
+    human for claimed/featured ones. Identity fields (name, coordinates) are not correctable.
+    """
+    return feedback.submit_correction(restaurant_id, field, value, reason=reason, source="agent")
 
 
 def main() -> None:

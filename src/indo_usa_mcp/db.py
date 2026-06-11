@@ -23,7 +23,9 @@ def get_conn() -> psycopg.Connection:
     """Return a live connection, opening one on first use."""
     global _conn
     if _conn is None or _conn.closed:
-        _conn = psycopg.connect(settings.database_url, row_factory=dict_row, autocommit=True)
+        _conn = psycopg.connect(
+            settings.effective_database_url, row_factory=dict_row, autocommit=True
+        )
     return _conn
 
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from .. import db
-from ..pipeline import ingest, outreach
+from ..pipeline import feedback, ingest, outreach
 from ..pipeline.scrapers import SCRAPERS
 from ..pipeline.scrapers.metros import METROS
 from .base import Agent
@@ -82,6 +82,15 @@ class ApprovalAssistantAgent(Agent):
 
     def run(self, **params: Any) -> dict[str, Any]:
         return ingest.summarize_approvals(limit=params.get("limit", 100))
+
+
+class FeedbackAgent(Agent):
+    name = "feedback"
+    description = "Applies safe field corrections from agents/users; routes risky ones."
+    default_interval_s = 21600
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        return feedback.apply_pending(limit=params.get("limit", 200))
 
 
 class OutreachAgent(Agent):
@@ -169,6 +178,7 @@ ALL_AGENTS = [
     CleanerAgent(),
     EnrichmentAgent(),
     ApprovalAssistantAgent(),
+    FeedbackAgent(),
     OutreachAgent(),
     SubmissionAgent(),
     MonitoringAgent(),

@@ -5,7 +5,7 @@ restaurants (USA).** This repo is the walking skeleton from the architecture blu
 
 - **MCP server** exposing the 3 core capabilities (`get_indian_restaurants`,
   `get_restaurant_details`, `search_restaurants_by_text`) plus outreach tools
-  (`find_unclaimed_restaurants`, `draft_claim_outreach`).
+  (`find_unclaimed_restaurants`, `draft_claim_outreach`) and `submit_correction`.
 - **Data pipeline**: scrape → raw → clean/enrich/score → approval queue → canonical table →
   versioning.
 - **One real scraper**: OpenStreetMap Overpass (public, ODbL-licensed, no login, ToS-safe).
@@ -75,6 +75,7 @@ python -m indo_usa_mcp.server
 | `seed` | Load fictional seed restaurants for local testing (no scrape needed). |
 | `enrich` | Backfill region/dietary cultural tags on under-tagged restaurants. |
 | `approval-digest` | Human-readable summary of the pending approval queue. |
+| `feedback --id N --field F --value V` | Submit a field correction (applied by the feedback agent). |
 | `scrape --metro usa` | Nationwide sweep (occasional; slower than a single metro). |
 | `feature --id N [--days 30 \| --permanent]` | Mark a paid featured listing. |
 | `unfeature --id N` | Remove a featured listing. |

@@ -2,13 +2,31 @@
 
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str = "postgresql://diaspora:diaspora@localhost:5433/diaspora"
+    # Either set DATABASE_URL directly, or leave it blank and provide the POSTGRES_* parts
+    # below — the parts are URL-encoded, so passwords may contain @ : / # etc. safely.
+    database_url: str = ""
+    postgres_user: str = "diaspora"
+    postgres_password: str = "diaspora"
+    postgres_host: str = "localhost"
+    postgres_port: int = 5433  # dev default (docker maps 5433->5432); prod sets 5432
+    postgres_db: str = "diaspora"
+
+    @property
+    def effective_database_url(self) -> str:
+        if self.database_url:
+            return self.database_url
+        user = quote(self.postgres_user, safe="")
+        pw = quote(self.postgres_password, safe="")
+        return (f"postgresql://{user}:{pw}@{self.postgres_host}:"
+                f"{self.postgres_port}/{self.postgres_db}")
 
     # Pipeline behaviour
     auto_approve_low_risk: bool = True

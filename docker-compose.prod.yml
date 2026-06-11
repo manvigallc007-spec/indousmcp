@@ -24,7 +24,10 @@ services:
     build: .
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://diaspora:${POSTGRES_PASSWORD:-diaspora}@db:5432/diaspora
+      # Password passed as a part (URL-encoded in code) so any characters are safe.
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-diaspora}
       MCP_TRANSPORT: streamable-http
       MCP_HOST: 0.0.0.0
       MCP_PORT: 8000
@@ -40,7 +43,9 @@ services:
     build: .
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://diaspora:${POSTGRES_PASSWORD:-diaspora}@db:5432/diaspora
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-diaspora}
     depends_on:
       db:
         condition: service_healthy
@@ -54,7 +59,9 @@ services:
     build: .
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://diaspora:${POSTGRES_PASSWORD:-diaspora}@db:5432/diaspora
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-diaspora}
       CLAIM_BASE_URL: ${CLAIM_BASE_URL:-https://yourdomain.com/claim}
       PLATFORM_NAME: ${PLATFORM_NAME:-Indian Eats Directory}
     ports:
