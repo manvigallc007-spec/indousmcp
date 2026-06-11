@@ -115,6 +115,32 @@ gunzip -c backups/diaspora_YYYYMMDD_HHMMSS.sql.gz | \
 ```
 Consider copying `backups/` off the VPS periodically (e.g. `scp`) for off-site safety.
 
+## Enabling Stripe payments (featured listings)
+
+Optional — without it, you feature restaurants manually (`cli feature`). With it, owners
+pay via Stripe Checkout and get auto-featured. Stripe charges only per sale (no monthly fee).
+
+1. In the **Stripe Dashboard** → Developers → API keys, copy your **Secret key** (`sk_live_…`).
+2. Set the public URL of your web app and the key in `/opt/diaspora/.env`:
+   ```
+   PUBLIC_WEB_URL=https://yourdomain.com      # or http://YOUR_VPS_IP:8080
+   STRIPE_SECRET_KEY=sk_live_xxx
+   STRIPE_PRICE_CENTS=3000                     # $30 per featured period
+   FEATURED_DAYS=30
+   ```
+3. Create a **webhook** (Stripe → Developers → Webhooks → Add endpoint):
+   - URL: `https://yourdomain.com/stripe/webhook` (must be reachable from the internet)
+   - Event: `checkout.session.completed`
+   - Copy the **Signing secret** (`whsec_…`) into `.env` as `STRIPE_WEBHOOK_SECRET`.
+4. Recreate the web service:
+   ```bash
+   docker compose -f docker-compose.prod.yml up -d --build web
+   ```
+
+Now a claimed owner sees a **"Get Featured"** button → pays → the webhook auto-features them
+(verified by Stripe signature). Test with Stripe **test mode** keys first (`sk_test_…`) and a
+test card `4242 4242 4242 4242`.
+
 ## Day-2 operations
 
 ```bash

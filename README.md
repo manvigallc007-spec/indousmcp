@@ -86,6 +86,9 @@ python -m indo_usa_mcp.server
 
 - **Featured listings** (`feature`/`unfeature`) — a paid tier; effectively-featured rows
   (flagged and within their `featured_until` window) surface first in every tool result.
+- **Stripe checkout** (optional) — claimed owners get a "Get Featured" button → Stripe
+  Checkout → a signature-verified webhook (`/stripe/webhook`) auto-features them. Disabled
+  until `STRIPE_SECRET_KEY` is set (then it's pay-per-sale, no monthly fee). See DEPLOY.md.
 - **Outreach email delivery** — optional and zero-cost: set Gmail SMTP + an app password in
   `.env` (see `.env.example`) and the Outreach Agent will auto-send claim emails to
   restaurants that have a public email; otherwise it stays draft-only.

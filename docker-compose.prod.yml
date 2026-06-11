@@ -64,6 +64,13 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-diaspora}
       CLAIM_BASE_URL: ${CLAIM_BASE_URL:-https://yourdomain.com/claim}
       PLATFORM_NAME: ${PLATFORM_NAME:-Indian Eats Directory}
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:8080}
+      # Stripe (optional): blank = manual featuring; set these to enable paid upgrades.
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_CENTS: ${STRIPE_PRICE_CENTS:-3000}
+      STRIPE_CURRENCY: ${STRIPE_CURRENCY:-usd}
+      FEATURED_DAYS: ${FEATURED_DAYS:-30}
     ports:
       - "8080:8080"
     depends_on:

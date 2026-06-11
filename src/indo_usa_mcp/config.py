@@ -40,6 +40,19 @@ class Settings(BaseSettings):
     # Public claim web page (owner-facing)
     web_host: str = "0.0.0.0"
     web_port: int = 8080
+    # Public base URL of the web app (for Stripe redirect URLs), e.g. https://yourdomain.com
+    public_web_url: str = "http://localhost:8080"
+
+    # Payments (Stripe) — optional. Blank secret key = payments disabled (manual featuring).
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_price_cents: int = 3000      # $30.00 for a featured listing
+    stripe_currency: str = "usd"
+    featured_days: int = 30
+
+    @property
+    def payments_enabled(self) -> bool:
+        return bool(self.stripe_secret_key)
 
     # MCP server transport
     # "stdio" for local clients (Claude Desktop), "streamable-http" for a hosted service.

@@ -14,9 +14,10 @@ import html
 
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import HTMLResponse
+from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Route
 
+from . import payments
 from .config import settings
 from .pipeline import outreach
 
@@ -105,11 +106,22 @@ async def claim_post(request: Request) -> HTMLResponse:
 
     result = outreach.verify_claim(token, owner_email=email, owner_phone=phone)
     if result.get("ok"):
+        upgrade = ""
+        if payments.enabled():
+            rid = result["restaurant_id"]
+            price = f"${settings.stripe_price_cents / 100:.0f}"
+            upgrade = (
+                f"<hr style='margin:20px 0;border:0;border-top:1px solid #eee'>"
+                f"<p><b>Want more customers?</b> Featured listings appear first when AI "
+                f"assistants recommend Indian restaurants in your area.</p>"
+                f"<a href='/upgrade?id={rid}'><button>Get Featured — {price}"
+                f"/{settings.featured_days} days</button></a>"
+            )
         return _page(
             "Listing claimed",
             "<h2 class='ok'>&#10003; Listing claimed</h2>"
             "<p>Thank you — you now own this listing. We'll follow up to help you update "
-            "hours, menu, photos and more.</p>",
+            "hours, menu, photos and more.</p>" + upgrade,
         )
 
     reasons = {
@@ -122,10 +134,52 @@ async def claim_post(request: Request) -> HTMLResponse:
     return _page("Could not claim", f"<h2 class='err'>Couldn't claim</h2><p>{msg}</p>", status=400)
 
 
+def upgrade_get(request: Request) -> HTMLResponse:
+    """Start a Stripe Checkout for a featured-listing purchase."""
+    if not payments.enabled():
+        return _page("Unavailable",
+                     "<h2>Featured upgrades aren't enabled yet</h2>"
+                     "<p class='muted'>Please check back soon.</p>", status=503)
+    try:
+        rid = int(request.query_params.get("id", ""))
+    except ValueError:
+        return _page("Bad request", "<h2>Missing restaurant id</h2>", status=400)
+    result = payments.create_checkout_session(rid)
+    if not result.get("ok"):
+        return _page("Error", "<h2 class='err'>Could not start checkout</h2>", status=502)
+    return RedirectResponse(result["url"], status_code=303)
+
+
+def upgrade_success(request: Request) -> HTMLResponse:
+    return _page(
+        "Featured!",
+        "<h2 class='ok'>&#10003; You're featured</h2>"
+        "<p>Payment received — your listing now ranks first in AI recommendations. "
+        "Thank you for supporting the directory!</p>",
+    )
+
+
+def upgrade_cancel(request: Request) -> HTMLResponse:
+    return _page("Checkout cancelled",
+                 "<h2>Checkout cancelled</h2><p class='muted'>No charge was made.</p>")
+
+
+async def stripe_webhook(request: Request) -> HTMLResponse:
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+    result = payments.handle_webhook(payload, sig)
+    status = 200 if result.get("ok") else 400
+    return HTMLResponse('{"received": true}', status_code=status, media_type="application/json")
+
+
 routes = [
     Route("/", home, methods=["GET"]),
     Route("/claim", claim_get, methods=["GET"]),
     Route("/claim", claim_post, methods=["POST"]),
+    Route("/upgrade", upgrade_get, methods=["GET"]),
+    Route("/upgrade/success", upgrade_success, methods=["GET"]),
+    Route("/upgrade/cancel", upgrade_cancel, methods=["GET"]),
+    Route("/stripe/webhook", stripe_webhook, methods=["POST"]),
 ]
 
 app = Starlette(routes=routes)
