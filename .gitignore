@@ -13,6 +13,9 @@ dist/
 # Backups (produced by the prod backup service)
 backups/
 
+# Test / tooling caches
+.pytest_cache/
+
 # IDE / OS
 .vscode/
 .idea/

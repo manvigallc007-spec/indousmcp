@@ -1,0 +1,8 @@
+# Normalize to LF in the repo and on checkout so files run correctly on the Linux VPS
+# (CRLF can break shell scripts embedded in the Dockerfile / compose backup service).
+* text=auto eol=lf
+
+# Windows-only scripts keep CRLF.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
