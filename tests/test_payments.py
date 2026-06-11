@@ -11,6 +11,7 @@ def test_payments_disabled_by_default():
     assert payments.enabled() is False
     assert payments.create_checkout_session(1)["error"] == "payments_disabled"
     assert payments.handle_webhook(b"{}", "sig")["error"] == "payments_disabled"
+    assert payments.fulfill_session("cs_test_x")["error"] == "payments_disabled"
 
 
 def test_payment_routes_registered():

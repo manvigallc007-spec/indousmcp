@@ -49,6 +49,35 @@ def create_checkout_session(restaurant_id: int, days: int | None = None) -> dict
     return {"ok": True, "url": session.url, "id": session.id}
 
 
+def _fulfill(restaurant_id: int, days: int) -> dict[str, Any]:
+    from .pipeline import ingest  # lazy to avoid import cycle at module load
+
+    ingest.set_featured(restaurant_id, days=days)
+    return {"ok": True, "featured": restaurant_id, "days": days}
+
+
+def fulfill_session(session_id: str) -> dict[str, Any]:
+    """Fulfill a paid Checkout session by its id (used on the success redirect).
+
+    Lets the flow work without a webhook (handy for test mode / no HTTPS). The webhook
+    remains the robust path for production; both are idempotent enough (set the flag).
+    """
+    if not enabled():
+        return {"ok": False, "error": "payments_disabled"}
+    if not session_id:
+        return {"ok": False, "error": "no_session"}
+    try:
+        s = _stripe().checkout.Session.retrieve(session_id)
+    except Exception as exc:
+        return {"ok": False, "error": "lookup_failed", "detail": str(exc)}
+    if s.get("payment_status") != "paid":
+        return {"ok": False, "error": "not_paid"}
+    meta = s.get("metadata") or {}
+    rid = int(meta.get("restaurant_id", 0) or 0)
+    days = int(meta.get("days", settings.featured_days) or settings.featured_days)
+    return _fulfill(rid, days) if rid else {"ok": False, "error": "no_restaurant"}
+
+
 def handle_webhook(payload: bytes, sig_header: str) -> dict[str, Any]:
     """Verify a Stripe webhook and fulfill featured-listing purchases (idempotent)."""
     if not enabled():
@@ -61,11 +90,8 @@ def handle_webhook(payload: bytes, sig_header: str) -> dict[str, Any]:
 
     if event["type"] == "checkout.session.completed":
         meta = (event["data"]["object"].get("metadata") or {})
-        restaurant_id = int(meta.get("restaurant_id", 0) or 0)
+        rid = int(meta.get("restaurant_id", 0) or 0)
         days = int(meta.get("days", settings.featured_days) or settings.featured_days)
-        if restaurant_id:
-            from .pipeline import ingest  # lazy to avoid import cycle at module load
-
-            ingest.set_featured(restaurant_id, days=days)
-            return {"ok": True, "featured": restaurant_id, "days": days}
+        if rid:
+            return _fulfill(rid, days)
     return {"ok": True, "ignored": event["type"]}

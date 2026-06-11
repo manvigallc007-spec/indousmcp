@@ -224,6 +224,10 @@ def upgrade_get(request: Request) -> HTMLResponse:
 
 
 def upgrade_success(request: Request) -> HTMLResponse:
+    # Fulfill on the redirect too, so featuring works even without a webhook (test mode).
+    session_id = request.query_params.get("session_id", "")
+    if session_id and payments.enabled():
+        payments.fulfill_session(session_id)
     return _page(
         "Featured!",
         "<h2 class='ok'>&#10003; You're featured</h2>"
