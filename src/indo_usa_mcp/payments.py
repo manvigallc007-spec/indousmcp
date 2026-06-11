@@ -49,11 +49,24 @@ def create_checkout_session(restaurant_id: int, days: int | None = None) -> dict
     return {"ok": True, "url": session.url, "id": session.id}
 
 
+def _attr(obj: Any, key: str, default: Any = None) -> Any:
+    """Read a field from a Stripe object (attribute access; v15 dropped dict .get())."""
+    val = getattr(obj, key, default)
+    return default if val is None else val
+
+
 def _fulfill(restaurant_id: int, days: int) -> dict[str, Any]:
     from .pipeline import ingest  # lazy to avoid import cycle at module load
 
     ingest.set_featured(restaurant_id, days=days)
     return {"ok": True, "featured": restaurant_id, "days": days}
+
+
+def _fulfill_from_metadata(metadata: Any) -> dict[str, Any]:
+    meta = metadata or {}
+    rid = int(_attr(meta, "restaurant_id", 0) or 0)
+    days = int(_attr(meta, "days", settings.featured_days) or settings.featured_days)
+    return _fulfill(rid, days) if rid else {"ok": False, "error": "no_restaurant"}
 
 
 def fulfill_session(session_id: str) -> dict[str, Any]:
@@ -70,12 +83,9 @@ def fulfill_session(session_id: str) -> dict[str, Any]:
         s = _stripe().checkout.Session.retrieve(session_id)
     except Exception as exc:
         return {"ok": False, "error": "lookup_failed", "detail": str(exc)}
-    if s.get("payment_status") != "paid":
+    if _attr(s, "payment_status") != "paid":
         return {"ok": False, "error": "not_paid"}
-    meta = s.get("metadata") or {}
-    rid = int(meta.get("restaurant_id", 0) or 0)
-    days = int(meta.get("days", settings.featured_days) or settings.featured_days)
-    return _fulfill(rid, days) if rid else {"ok": False, "error": "no_restaurant"}
+    return _fulfill_from_metadata(_attr(s, "metadata"))
 
 
 def handle_webhook(payload: bytes, sig_header: str) -> dict[str, Any]:
@@ -89,9 +99,5 @@ def handle_webhook(payload: bytes, sig_header: str) -> dict[str, Any]:
         return {"ok": False, "error": "invalid_signature", "detail": str(exc)}
 
     if event["type"] == "checkout.session.completed":
-        meta = (event["data"]["object"].get("metadata") or {})
-        rid = int(meta.get("restaurant_id", 0) or 0)
-        days = int(meta.get("days", settings.featured_days) or settings.featured_days)
-        if rid:
-            return _fulfill(rid, days)
+        return _fulfill_from_metadata(_attr(event["data"]["object"], "metadata"))
     return {"ok": True, "ignored": event["type"]}
