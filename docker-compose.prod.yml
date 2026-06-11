@@ -1,0 +1,97 @@
+# Full hosted stack (blueprint §10): Postgres + MCP server (HTTP) + agent worker.
+# Usage:  docker compose -f docker-compose.prod.yml up -d --build
+#
+# Postgres stays on the internal network (not published); the MCP server is exposed
+# on :8000 over streamable-http. Put a TLS-terminating reverse proxy in front for HTTPS.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: diaspora
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-diaspora}
+      POSTGRES_DB: diaspora
+    volumes:
+      - diaspora_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U diaspora -d diaspora"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://diaspora:${POSTGRES_PASSWORD:-diaspora}@db:5432/diaspora
+      MCP_TRANSPORT: streamable-http
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: 8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    # Apply migrations (idempotent) then serve.
+    command: sh -c "python -m indo_usa_mcp.cli init-db && python -m indo_usa_mcp.server"
+
+  worker:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://diaspora:${POSTGRES_PASSWORD:-diaspora}@db:5432/diaspora
+    depends_on:
+      db:
+        condition: service_healthy
+      server:
+        condition: service_started
+    # Scheduler loop runs the agents (scrape -> clean -> monitor ...) on their intervals.
+    command: python -m indo_usa_mcp.agents.scheduler
+
+  # Daily pg_dump to ./backups (gzipped), keeping the 14 most recent. Always on.
+  backup:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-diaspora}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backups:/backups
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        while true; do
+          ts=$$(date +%Y%m%d_%H%M%S)
+          pg_dump -h db -U diaspora -d diaspora | gzip > /backups/diaspora_$$ts.sql.gz \
+            && echo "backup written: diaspora_$$ts.sql.gz" \
+            || echo "backup FAILED at $$ts"
+          ls -1t /backups/diaspora_*.sql.gz 2>/dev/null | tail -n +15 | xargs -r rm -f
+          sleep 86400
+        done
+
+  # Opt-in HTTPS reverse proxy (free Let's Encrypt). Enable with: --profile tls
+  # Requires DOMAIN set to a hostname pointed at this VPS. Without it, the MCP server
+  # is reachable on :8000 over plain HTTP (restrict via firewall).
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    profiles: ["tls"]
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN to your hostname to use the tls profile}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - server
+
+volumes:
+  diaspora_pgdata:
+  caddy_data:
+  caddy_config:

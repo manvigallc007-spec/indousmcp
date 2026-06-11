@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# Env / secrets
+.env
+
+# Backups (produced by the prod backup service)
+backups/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
