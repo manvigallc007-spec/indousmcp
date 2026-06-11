@@ -225,14 +225,20 @@ def upgrade_get(request: Request) -> HTMLResponse:
 
 def upgrade_success(request: Request) -> HTMLResponse:
     # Fulfill on the redirect too, so featuring works even without a webhook (test mode).
+    # Never 500 here: surface any problem on the page instead.
     session_id = request.query_params.get("session_id", "")
+    note = ""
     if session_id and payments.enabled():
-        payments.fulfill_session(session_id)
+        try:
+            res = payments.fulfill_session(session_id)
+            if not res.get("ok"):
+                note = f"<p class='muted'>(fulfillment: {html.escape(str(res))})</p>"
+        except Exception as exc:  # show the cause instead of a blank 500
+            note = f"<p class='err'>Fulfillment error: {html.escape(type(exc).__name__)}: {html.escape(str(exc))}</p>"
     return _page(
         "Featured!",
-        "<h2 class='ok'>&#10003; You're featured</h2>"
-        "<p>Payment received — your listing now ranks first in AI recommendations. "
-        "Thank you for supporting the directory!</p>",
+        "<h2 class='ok'>&#10003; Payment received</h2>"
+        "<p>Thank you! Your listing now ranks first in AI recommendations.</p>" + note,
     )
 
 
