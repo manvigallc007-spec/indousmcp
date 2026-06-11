@@ -100,6 +100,20 @@ def cmd_backfill_embeddings(args: argparse.Namespace) -> None:
     _print(ingest.backfill_embeddings(only_missing=not args.all))
 
 
+def cmd_query(args: argparse.Namespace) -> None:
+    """Call the same functions the MCP tools use, so terminal == agent's view."""
+    if args.id is not None:
+        _print(queries.get_restaurant_details(args.id) or {"error": "not_found", "id": args.id})
+    elif args.text:
+        _print(queries.search_restaurants_by_text(
+            args.text, city=args.city, state=args.state, limit=args.limit))
+    else:
+        _print(queries.get_indian_restaurants(
+            lat=args.lat, lng=args.lng, radius_miles=args.radius,
+            city=args.city, state=args.state, region_tag=args.region,
+            dietary_tags=args.dietary, featured_only=args.featured, limit=args.limit))
+
+
 def cmd_stats(_: argparse.Namespace) -> None:
     _print(queries.stats())
 
@@ -161,6 +175,20 @@ def build_parser() -> argparse.ArgumentParser:
     be = sub.add_parser("backfill-embeddings", help="(Re)compute embeddings for canonical rows")
     be.add_argument("--all", action="store_true", help="Recompute all, not just missing")
     be.set_defaults(func=cmd_backfill_embeddings)
+
+    q = sub.add_parser("query", help="Query restaurants exactly as the MCP tools do")
+    q.add_argument("--city")
+    q.add_argument("--state")
+    q.add_argument("--region", help="region_tag, e.g. 'Punjabi', 'South Indian'")
+    q.add_argument("--dietary", nargs="+", help="e.g. --dietary vegetarian jain")
+    q.add_argument("--lat", type=float)
+    q.add_argument("--lng", type=float)
+    q.add_argument("--radius", type=float, default=10.0, help="miles (with --lat/--lng)")
+    q.add_argument("--featured", action="store_true")
+    q.add_argument("--text", help="free-text/semantic search")
+    q.add_argument("--id", type=int, help="fetch one restaurant + version history")
+    q.add_argument("--limit", type=int, default=10)
+    q.set_defaults(func=cmd_query)
 
     sub.add_parser("stats", help="Show row counts & coverage").set_defaults(func=cmd_stats)
     return p
