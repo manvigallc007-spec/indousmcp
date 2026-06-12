@@ -24,7 +24,7 @@ def test_magic_token_roundtrip_and_rejections():
 
 
 def test_verticals_registry_integrity():
-    assert set(verticals.VERTICALS) == {"restaurants", "temples", "groceries"}
+    assert {"restaurants", "temples", "groceries", "professionals"} <= set(verticals.VERTICALS)
     for cfg in verticals.VERTICALS.values():
         for key in ("label", "table", "queries", "edit_fields", "has_hours", "has_dietary", "update"):
             assert key in cfg

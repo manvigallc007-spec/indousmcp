@@ -13,6 +13,7 @@ from . import queries
 from .config import settings
 from .groceries import queries as grocery_queries
 from .pipeline import feedback, outreach
+from .professionals import queries as professional_queries
 from .temples import queries as temple_queries
 
 mcp = FastMCP("indo-usa-diaspora", host=settings.mcp_host, port=settings.mcp_port)
@@ -187,6 +188,50 @@ def search_groceries_by_text(
 ) -> dict[str, Any]:
     """Free-text/semantic search over Indian grocery stores (name/region/store type)."""
     return grocery_queries.search_groceries_by_text(query, city=city, state=state, limit=limit)
+
+
+# -------------------------------------------------------- professionals (Phase 2)
+@mcp.tool()
+def get_indian_professionals(
+    lat: float | None = None,
+    lng: float | None = None,
+    radius_miles: float = 15.0,
+    city: str | None = None,
+    state: str | None = None,
+    profession_type: str | None = None,
+    speciality: str | None = None,
+    tag: str | None = None,
+    open_now: bool = False,
+    limit: int = 25,
+) -> dict[str, Any]:
+    """Find Indian-American healthcare professionals (doctors, dentists, clinics, pharmacies).
+
+    Provide a point (`lat`+`lng`, optional `radius_miles`) or `city`/`state`. Filter by
+    `profession_type` ("doctors", "dentist", "clinic", "pharmacy"), `speciality` (e.g.
+    "pediatrics", "cardiology", "ayurveda"), `tag`, or `open_now`. Note: these are matched
+    from public data via an Indian-name signal, so a `confidence_score` is included.
+    """
+    return professional_queries.get_indian_professionals(
+        lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
+        profession_type=profession_type, speciality=speciality, tag=tag, open_now=open_now,
+        limit=limit)
+
+
+@mcp.tool()
+def get_professional_details(professional_id: int) -> dict[str, Any]:
+    """Full canonical record for one professional/practice, plus its version history."""
+    record = professional_queries.get_professional_details(professional_id)
+    if record is None:
+        return {"error": "not_found", "professional_id": professional_id}
+    return record
+
+
+@mcp.tool()
+def search_professionals_by_text(
+    query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+) -> dict[str, Any]:
+    """Free-text/semantic search over Indian-American healthcare professionals."""
+    return professional_queries.search_professionals_by_text(query, city=city, state=state, limit=limit)
 
 
 def main() -> None:

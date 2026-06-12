@@ -7,7 +7,9 @@ restaurants (USA).** This repo is the walking skeleton from the architecture blu
   `get_restaurant_details`, `search_restaurants_by_text`, `find_unclaimed_restaurants`,
   `draft_claim_outreach`, `submit_correction`), **temple** capabilities
   (`get_indian_temples`, `get_temple_details`, `search_temples_by_text`) and **grocery**
-  capabilities (`get_indian_groceries`, `get_grocery_details`, `search_groceries_by_text`).
+  capabilities (`get_indian_groceries`, `get_grocery_details`, `search_groceries_by_text`)
+  and **professional** capabilities (`get_indian_professionals`, `get_professional_details`,
+  `search_professionals_by_text`).
 - **Data pipeline**: scrape → raw → clean/enrich/score → approval queue → canonical table →
   versioning.
 - **One real scraper**: OpenStreetMap Overpass (public, ODbL-licensed, no login, ToS-safe).
@@ -247,6 +249,21 @@ Run on demand with `python -m indo_usa_mcp.cli report`.
 
 > Security: enable HTTPS (the Caddy `tls` profile) and set a strong `ADMIN_PASSWORD` +
 > random `SECRET_KEY` before exposing `/admin` publicly.
+
+## Phase 2: Professionals vertical (doctors/health)
+
+Indian-American healthcare professionals — doctors, dentists, clinics, pharmacies — found
+from OSM healthcare amenities + an Indian-name signal (surnames / Ayurveda). Same recipe as
+the other verticals: own `professionals` table, scraper, agents (`professional_scraper`,
+`professional_cleaner`), 3 MCP tools, plus `profession_type`/`speciality` filters. Because
+name-matching is heuristic, each record carries a `confidence_score` and the admin Quality
+view helps curate false positives.
+
+```powershell
+python -m indo_usa_mcp.cli professionals-scrape --metro bay_area
+python -m indo_usa_mcp.cli professionals-process
+python -m indo_usa_mcp.cli professionals-query --type dentist --city "San Jose"
+```
 
 ## Connecting an MCP client
 

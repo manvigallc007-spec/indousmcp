@@ -60,7 +60,18 @@ def _grocery(rec: dict) -> str:
     return s + _hours(rec)
 
 
-_BUILDERS = {"restaurants": _restaurant, "temples": _temple, "groceries": _grocery}
+def _professional(rec: dict) -> str:
+    ptype = (rec.get("profession_type") or "healthcare provider").replace("_", " ")
+    kind = {"doctors": "doctor", "dentist": "dentist", "clinic": "clinic",
+            "pharmacy": "pharmacy"}.get(ptype, ptype)
+    s = f"{rec.get('name', 'This practice')} is {_a(kind)} {kind} (Indian-American){_loc(rec)}."
+    if rec.get("speciality"):
+        s += f" Speciality: {rec['speciality'].replace('_', ' ')}."
+    return s + _hours(rec)
+
+
+_BUILDERS = {"restaurants": _restaurant, "temples": _temple, "groceries": _grocery,
+             "professionals": _professional}
 
 
 def describe(vertical: str, rec: dict) -> str:

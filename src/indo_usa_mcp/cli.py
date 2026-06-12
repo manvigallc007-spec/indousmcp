@@ -26,6 +26,8 @@ from .pipeline.scrapers import SCRAPERS
 from .pipeline.scrapers.metros import SCRAPE_REGIONS
 from .groceries import pipeline as groceries
 from .groceries import queries as grocery_queries
+from .professionals import pipeline as professionals
+from .professionals import queries as professional_queries
 from .temples import pipeline as temples
 from .temples import queries as temple_queries
 
@@ -214,6 +216,30 @@ def cmd_enhance_data(args: argparse.Namespace) -> None:
     _print([verticals.enhance_existing(v) for v in targets])
 
 
+def cmd_professionals_scrape(args: argparse.Namespace) -> None:
+    print(f"Scraping professionals for region={args.metro} ...")
+    n = professionals.scrape_to_raw(args.metro)
+    print(f"Upserted {n} raw professional observation(s).")
+
+
+def cmd_professionals_process(_: argparse.Namespace) -> None:
+    _print(professionals.process_raw())
+
+
+def cmd_professionals_stats(_: argparse.Namespace) -> None:
+    _print(professional_queries.stats())
+
+
+def cmd_professionals_query(args: argparse.Namespace) -> None:
+    if args.text:
+        _print(professional_queries.search_professionals_by_text(
+            args.text, city=args.city, state=args.state, limit=args.limit))
+    else:
+        _print(professional_queries.get_indian_professionals(
+            lat=args.lat, lng=args.lng, radius_miles=args.radius, city=args.city,
+            state=args.state, profession_type=args.type, limit=args.limit))
+
+
 def cmd_stats(_: argparse.Namespace) -> None:
     _print(queries.stats())
 
@@ -371,6 +397,27 @@ def build_parser() -> argparse.ArgumentParser:
     ed = sub.add_parser("enhance-data", help="Backfill descriptions + geocode + embeddings (search quality)")
     ed.add_argument("--vertical", choices=("restaurants", "temples", "groceries"))
     ed.set_defaults(func=cmd_enhance_data)
+    # ---- Phase 2: professionals vertical ----
+    ps = sub.add_parser("professionals-scrape", help="Scrape Indian doctors/dentists/clinics")
+    ps.add_argument("--metro", required=True, choices=SCRAPE_REGIONS, metavar="REGION")
+    ps.set_defaults(func=cmd_professionals_scrape)
+
+    sub.add_parser("professionals-process", help="Process raw professionals -> canonical").set_defaults(
+        func=cmd_professionals_process)
+    sub.add_parser("professionals-stats", help="Professional row counts & coverage").set_defaults(
+        func=cmd_professionals_stats)
+
+    pq = sub.add_parser("professionals-query", help="Query professionals as the MCP tools do")
+    pq.add_argument("--city")
+    pq.add_argument("--state")
+    pq.add_argument("--type", help="doctors | dentist | clinic | pharmacy")
+    pq.add_argument("--text", help="semantic search")
+    pq.add_argument("--lat", type=float)
+    pq.add_argument("--lng", type=float)
+    pq.add_argument("--radius", type=float, default=15.0)
+    pq.add_argument("--limit", type=int, default=10)
+    pq.set_defaults(func=cmd_professionals_query)
+
     sub.add_parser("stats", help="Show row counts & coverage").set_defaults(func=cmd_stats)
     return p
 

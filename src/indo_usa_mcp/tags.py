@@ -45,6 +45,9 @@ def extract(vertical: str, rec: dict) -> list[str]:
         # Temples: religious facets are the useful "tags".
         out = [rec.get("religion"), rec.get("denomination"), rec.get("deity"), rec.get("region_tag")]
         return sorted({str(x).lower() for x in out if x})
+    if vertical == "professionals":
+        out = [rec.get("profession_type"), rec.get("speciality")]
+        return sorted({str(x).lower() for x in out if x})
 
     text = " ".join(str(rec.get(f) or "") for f in (
         "name", "description", "cuisine_type", "store_type", "region_tag")).lower()

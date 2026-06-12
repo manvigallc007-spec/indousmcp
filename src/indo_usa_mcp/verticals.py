@@ -13,6 +13,7 @@ from typing import Any, Callable
 from . import db, queries as r_queries
 from .groceries import pipeline as g_pipeline, queries as g_queries
 from .pipeline import clean, ingest
+from .professionals import pipeline as p_pipeline, queries as p_queries
 from .temples import pipeline as t_pipeline, queries as t_queries
 
 
@@ -26,6 +27,10 @@ def _update_temple(existing: dict, diff: dict) -> None:
 
 def _update_grocery(existing: dict, diff: dict) -> None:
     g_pipeline._update(existing, {**existing, **diff}, diff)
+
+
+def _update_professional(existing: dict, diff: dict) -> None:
+    p_pipeline._update(existing, {**existing, **diff}, diff)
 
 
 # label, queries module, stats fn, scalar edit fields, has_hours, has_dietary, update fn
@@ -49,6 +54,13 @@ VERTICALS: dict[str, dict[str, Any]] = {
         "edit_fields": ["phone", "email", "website", "address_full", "city", "state",
                         "store_type", "region_tag", "festival_specials"],
         "has_hours": True, "has_dietary": True, "update": _update_grocery,
+        "supports_claims": False,
+    },
+    "professionals": {
+        "label": "Professionals", "table": "professionals", "queries": p_queries,
+        "edit_fields": ["phone", "email", "website", "address_full", "city", "state",
+                        "profession_type", "speciality", "region_tag", "festival_specials"],
+        "has_hours": True, "has_dietary": False, "update": _update_professional,
         "supports_claims": False,
     },
 }
