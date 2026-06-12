@@ -27,8 +27,10 @@ def home(request: Request) -> HTMLResponse:
     return _page(
         settings.platform_name,
         f"<h2>{html.escape(settings.platform_name)}</h2>"
-        "<p class='muted'>An agent-first directory of Indian restaurants in the USA. "
-        "Owners can <a href='/portal/login'>sign in</a> to manage their listing.</p>",
+        "<p class='muted'>An agent-first directory of Indian-American businesses, temples and "
+        "events across the USA.</p>"
+        "<p><a href='/chat'><button>Ask the assistant &rarr;</button></a></p>"
+        "<p class='muted'>Own a listing? <a href='/portal/login'>Sign in</a> to manage it.</p>",
     )
 
 

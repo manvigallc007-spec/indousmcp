@@ -63,6 +63,20 @@ class Settings(BaseSettings):
     def payments_enabled(self) -> bool:
         return bool(self.stripe_secret_key)
 
+    # Human chatbot front-end (/chat). Pluggable LLM via the OpenAI-compatible chat API:
+    #   llm_provider = "search"  -> no LLM, templated semantic-search replies (free, default)
+    #   llm_provider = "llm"     -> real tool-calling chatbot against llm_base_url
+    # For self-hosted Ollama (free): llm_provider=llm, llm_base_url=http://localhost:11434/v1,
+    #   llm_api_key=ollama, llm_model=llama3.1 (run `ollama serve` + `ollama pull llama3.1`).
+    # For a hosted API: set llm_base_url + a real llm_api_key + llm_model (it meters/bills).
+    chat_enabled: bool = True
+    llm_provider: str = "search"
+    llm_base_url: str = "http://localhost:11434/v1"
+    llm_api_key: str = "ollama"
+    llm_model: str = "llama3.1"
+    llm_timeout_s: int = 60
+    chat_rate_per_min: int = 20            # per-IP request cap on the chat API (abuse guard)
+
     # MCP server transport
     # "stdio" for local clients (Claude Desktop), "streamable-http" for a hosted service.
     mcp_transport: str = "stdio"

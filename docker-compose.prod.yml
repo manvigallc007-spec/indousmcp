@@ -83,6 +83,13 @@ services:
       CLAIM_BASE_URL: ${CLAIM_BASE_URL:-https://yourdomain.com/claim}
       PLATFORM_NAME: ${PLATFORM_NAME:-Indian Eats Directory}
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:8080}
+      # Human chatbot (/chat). Default = free no-LLM semantic search. For a real conversational
+      # bot set LLM_PROVIDER=llm and point at Ollama (free, self-hosted) or a hosted API key.
+      CHAT_ENABLED: ${CHAT_ENABLED:-true}
+      LLM_PROVIDER: ${LLM_PROVIDER:-search}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://localhost:11434/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-ollama}
+      LLM_MODEL: ${LLM_MODEL:-llama3.1}
       # Admin dashboard + owner portal sessions (set these to enable /admin).
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       SECRET_KEY: ${SECRET_KEY:-dev-insecure-change-me}

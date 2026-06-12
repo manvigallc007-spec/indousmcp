@@ -7,9 +7,9 @@ from starlette.middleware import Middleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from ..config import settings
-from . import admin, portal, public
+from . import admin, chat, portal, public
 
-routes = [*public.routes, *admin.routes, *portal.routes]
+routes = [*public.routes, *chat.routes, *admin.routes, *portal.routes]
 
 middleware = [Middleware(SessionMiddleware, secret_key=settings.secret_key, https_only=False)]
 
