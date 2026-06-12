@@ -10,7 +10,7 @@ from .. import db, embeddings
 _PUBLIC_COLS = [
     "id", "name", "address_full", "city", "state", "country", "lat", "lng",
     "phone", "email", "website", "hours_json", "religion", "denomination", "deity",
-    "region_tag", "festival_specials", "is_active", "is_claimed", "confidence_score",
+    "region_tag", "festival_specials", "description", "is_active", "is_claimed", "confidence_score",
     "version", "source_name", "source_url", "last_seen_at",
 ]
 _FEATURED = "(is_featured AND (featured_until IS NULL OR featured_until > now()))"

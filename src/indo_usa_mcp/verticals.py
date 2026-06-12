@@ -177,6 +177,34 @@ def apply_edits(vertical: str, rec_id: int, edits: dict) -> dict:
     return {"ok": True, "updated": len(diff), "fields": sorted(diff)}
 
 
+def enhance_existing(vertical: str) -> dict[str, Any]:
+    """Backfill search quality on existing rows: geocode-fill city/state, (re)generate the
+    description, and (re)compute the embedding from it. Run after enabling a new embedder."""
+    from . import describe, embeddings
+    from .pipeline import clean as rclean
+    table = _table(vertical)
+    changed = embedded = 0
+    for r in db.query(f"SELECT * FROM {table} WHERE deleted_at IS NULL"):
+        city, state = rclean.fill_location(r.get("city"), r.get("state"), r.get("lat"), r.get("lng"))
+        desc = describe.describe(vertical, {**r, "city": city, "state": state})
+        sets, params = [], []
+        if city != r.get("city"):
+            sets.append("city = %s"); params.append(city)
+        if state != r.get("state"):
+            sets.append("state = %s"); params.append(state)
+        if desc != r.get("description"):
+            sets.append("description = %s"); params.append(desc)
+        if sets:
+            db.execute(f"UPDATE {table} SET {', '.join(sets)}, updated_at = now() WHERE id = %s",
+                       params + [r["id"]])
+            changed += 1
+        if embeddings.enabled():
+            db.execute(f"UPDATE {table} SET embedding = %s::vector WHERE id = %s",
+                       (embeddings.to_vector_literal(embeddings.embed(desc)), r["id"]))
+            embedded += 1
+    return {"vertical": vertical, "changed": changed, "embedded": embedded}
+
+
 def featured_summary() -> dict[str, Any]:
     """Active (effective) featured counts per vertical — the live paid placements."""
     out, total = {}, 0

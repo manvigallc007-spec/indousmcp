@@ -41,6 +41,29 @@ class HashingEmbedder:
         return _l2_normalize(vec)
 
 
+class FastEmbedEmbedder:
+    """Real semantic embeddings via fastembed (ONNX, no torch). BAAI/bge-small-en = 384-dim."""
+
+    def __init__(self, model_name: str, dim: int) -> None:
+        self.model_name = model_name
+        self.dim = dim
+        self._model = None
+
+    def _load(self):
+        if self._model is None:
+            try:
+                from fastembed import TextEmbedding
+            except ImportError as exc:  # pragma: no cover - optional install
+                raise RuntimeError(
+                    "EMBEDDING_PROVIDER=fastembed requires `pip install fastembed`.") from exc
+            self._model = TextEmbedding(self.model_name)
+        return self._model
+
+    def embed(self, text: str) -> list[float]:
+        vec = next(iter(self._load().embed([text or ""])))
+        return [float(x) for x in vec]
+
+
 class SentenceTransformerEmbedder:
     """Real semantic embeddings. Lazily loads the model on first use."""
 
@@ -99,6 +122,8 @@ def _get_embedder():
     provider = settings.embedding_provider.lower()
     if provider == "none":
         return None
+    if provider == "fastembed":
+        return FastEmbedEmbedder(settings.fastembed_model, settings.embedding_dim)
     if provider == "sentence_transformers":
         return SentenceTransformerEmbedder(settings.embedding_model, settings.embedding_dim)
     return HashingEmbedder(settings.embedding_dim)
@@ -117,7 +142,9 @@ def embed(text: str) -> list[float]:
 
 
 def text_for(record: dict) -> str:
-    """Build the text blob that represents a restaurant for embedding."""
+    """Text to embed: the natural-language description if present, else a field blob."""
+    if record.get("description"):
+        return record["description"]
     parts: list[str] = []
     for field in _TEXT_FIELDS:
         value = record.get(field)

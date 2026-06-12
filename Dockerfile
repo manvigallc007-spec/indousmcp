@@ -11,7 +11,8 @@ WORKDIR /app
 # SQL migrations live under src/indo_usa_mcp/sql and ship as package data.
 COPY pyproject.toml README.md ./
 COPY src ./src
-RUN pip install .
+# Include the `semantic` extra (fastembed) so EMBEDDING_PROVIDER=fastembed works without a rebuild.
+RUN pip install ".[semantic]"
 
 # Default: stdio. The compose service overrides env + command for HTTP / worker.
 CMD ["python", "-m", "indo_usa_mcp.server"]

@@ -13,10 +13,12 @@ dependencies = [
     "python-dotenv>=1.0",
     "stripe>=7.0",
     "itsdangerous>=2.0",
+    "reverse_geocoder>=1.5",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+semantic = ["fastembed>=0.3"]  # real 384-dim semantic embeddings (EMBEDDING_PROVIDER=fastembed)
 
 [project.scripts]
 diaspora = "indo_usa_mcp.cli:main"

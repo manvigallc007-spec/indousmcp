@@ -25,7 +25,7 @@ from .scrapers import SCRAPERS
 _CANONICAL_FIELDS = [
     "natural_key", "name", "address_full", "city", "state", "country", "lat", "lng",
     "phone", "email", "website", "menu_url", "hours_json", "cuisine_type", "region_tag",
-    "dietary_tags", "price_range", "delivery_partners", "festival_specials",
+    "dietary_tags", "price_range", "delivery_partners", "festival_specials", "description",
     "source_name", "source_url", "source_id", "confidence_score",
 ]
 # Fields compared when deciding whether an update is a no-op.

@@ -208,6 +208,12 @@ def cmd_normalize_geo(_: argparse.Namespace) -> None:
     _print([verticals.normalize_geography(v) for v in verticals.VERTICALS])
 
 
+def cmd_enhance_data(args: argparse.Namespace) -> None:
+    from . import verticals
+    targets = [args.vertical] if args.vertical else list(verticals.VERTICALS)
+    _print([verticals.enhance_existing(v) for v in targets])
+
+
 def cmd_stats(_: argparse.Namespace) -> None:
     _print(queries.stats())
 
@@ -362,6 +368,9 @@ def build_parser() -> argparse.ArgumentParser:
         func=cmd_quality)
     sub.add_parser("normalize-geo", help="Backfill city/state normalization across verticals").set_defaults(
         func=cmd_normalize_geo)
+    ed = sub.add_parser("enhance-data", help="Backfill descriptions + geocode + embeddings (search quality)")
+    ed.add_argument("--vertical", choices=("restaurants", "temples", "groceries"))
+    ed.set_defaults(func=cmd_enhance_data)
     sub.add_parser("stats", help="Show row counts & coverage").set_defaults(func=cmd_stats)
     return p
 

@@ -116,21 +116,28 @@ python -m indo_usa_mcp.cli stats
 Then exercise the MCP tools (e.g. `get_indian_restaurants` near the Bay Area, or
 `search_restaurants_by_text "vegetarian dosa"`).
 
-## Semantic search
+## Search quality (for LLM agents)
 
-`search_restaurants_by_text` ranks by embedding cosine distance (pgvector `<=>`) when an
-embedding provider is configured, falling back to trigram otherwise. Providers
-(`EMBEDDING_PROVIDER`):
+Records are optimized for agent retrieval:
+- **Natural-language `description`** per record (e.g. *"Saffron House is a Gujarati Indian
+  restaurant in Edison, NJ. Offers vegetarian, jain options. Price: $$."*) — generated from
+  the structured fields, returned to agents, and used as the text that gets embedded.
+- **Reverse-geocoded location** — missing `city`/`state` are filled offline from coordinates
+  (`reverse_geocoder`), so "near me / in <city>" queries work for every record.
 
-- **`hashing`** (default) — deterministic feature-hashing, **zero extra dependencies**.
-  Lexical similarity; good enough to exercise the full vector path anywhere.
-- **`sentence_transformers`** — real semantics via `all-MiniLM-L6-v2` (384-dim).
-  Opt-in: `pip install sentence-transformers` (pulls torch), then
-  `python -m indo_usa_mcp.cli backfill-embeddings --all`.
-- **`none`** — disable; search uses trigram only.
+`search_*_by_text` ranks by embedding cosine distance (pgvector `<=>`), falling back to
+trigram. Providers (`EMBEDDING_PROVIDER`):
 
-Embeddings are written automatically on every canonical insert/update; `backfill-embeddings`
-repopulates existing rows after changing providers.
+- **`hashing`** (default) — feature-hashing, zero extra deps; lexical.
+- **`fastembed`** (recommended) — real semantic embeddings via `BAAI/bge-small-en-v1.5`
+  (384-dim, ONNX, **no torch**). Install the extra: `pip install -e ".[semantic]"`
+  (the Docker image already includes it), set `EMBEDDING_PROVIDER=fastembed`, then
+  `python -m indo_usa_mcp.cli enhance-data` to (re)embed.
+- **`sentence_transformers`** — `all-MiniLM-L6-v2` (heavier, pulls torch).
+- **`none`** — trigram only.
+
+`enhance-data` (re)generates descriptions, fills geocoding, and re-embeds existing rows —
+run it after enabling a new embedder. New records get all of this automatically on ingest.
 
 ## Outreach & claiming (blueprint §7)
 

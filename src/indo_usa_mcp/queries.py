@@ -11,7 +11,7 @@ from . import db, embeddings
 _PUBLIC_COLS = [
     "id", "name", "address_full", "city", "state", "country", "lat", "lng",
     "phone", "website", "menu_url", "hours_json", "cuisine_type", "region_tag",
-    "dietary_tags", "price_range", "delivery_partners", "festival_specials",
+    "dietary_tags", "price_range", "delivery_partners", "festival_specials", "description",
     "is_active", "is_claimed", "confidence_score", "version",
     "source_name", "source_url", "last_seen_at",
 ]

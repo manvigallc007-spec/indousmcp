@@ -125,13 +125,14 @@ def clean(candidate: dict) -> dict:
         str(candidate.get(f) or "")
         for f in ("name", "cuisine_type", "address_full", "description")
     ).lower()
+    city, state = fill_location(candidate.get("city"), candidate.get("state"), lat, lng)
 
     record = {
         "natural_key": natural_key(name, lat, lng),
         "name": name,
         "address_full": (candidate.get("address_full") or "").strip() or None,
-        "city": normalize_city(candidate.get("city")),
-        "state": normalize_state(candidate.get("state")),
+        "city": city,
+        "state": state,
         "country": candidate.get("country") or "USA",
         "lat": lat,
         "lng": lng,
@@ -150,8 +151,21 @@ def clean(candidate: dict) -> dict:
         "source_url": candidate.get("source_url"),
         "source_id": candidate.get("source_id"),
     }
+    from .. import describe
+    record["description"] = describe.describe("restaurants", record)
     record["confidence_score"] = score(record)
     return record
+
+
+def fill_location(city, state, lat, lng) -> tuple:
+    """Normalize city/state; reverse-geocode from coordinates to fill any gaps."""
+    city, state = normalize_city(city), normalize_state(state)
+    if (not city or not state) and lat is not None and lng is not None:
+        from .. import geocode
+        gc, gs = geocode.city_state(lat, lng)
+        city = city or normalize_city(gc)
+        state = state or normalize_state(gs)
+    return city, state
 
 
 def score(record: dict) -> float:

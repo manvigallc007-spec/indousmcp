@@ -14,10 +14,10 @@ from .scraper import GroceryOverpassScraper
 _CANONICAL_FIELDS = [
     "natural_key", "name", "address_full", "city", "state", "country", "lat", "lng",
     "phone", "email", "website", "hours_json", "store_type", "region_tag", "dietary_tags",
-    "festival_specials", "source_name", "source_url", "source_id", "confidence_score",
+    "festival_specials", "description", "source_name", "source_url", "source_id",
+    "confidence_score",
 ]
 _DIFF_FIELDS = [f for f in _CANONICAL_FIELDS if f != "natural_key"]
-_EMBED_FIELDS = ("name", "store_type", "region_tag", "city", "state")
 
 _REGION_RULES: list[tuple[str, tuple[str, ...]]] = [
     ("Gujarati", ("patel", "gujarat", "swad", "surti")),
@@ -47,12 +47,13 @@ def clean_grocery(c: dict) -> dict:
     name = (c.get("name") or "").strip()
     lat, lng = c.get("lat"), c.get("lng")
     haystack = " ".join(str(c.get(f) or "") for f in ("name", "address_full")).lower()
+    city, state = rclean.fill_location(c.get("city"), c.get("state"), lat, lng)
     rec = {
         "natural_key": rclean.natural_key(name, lat, lng),
         "name": name,
         "address_full": (c.get("address_full") or "").strip() or None,
-        "city": rclean.normalize_city(c.get("city")),
-        "state": rclean.normalize_state(c.get("state")),
+        "city": city,
+        "state": state,
         "country": c.get("country") or "USA",
         "lat": lat,
         "lng": lng,
@@ -68,6 +69,8 @@ def clean_grocery(c: dict) -> dict:
         "source_url": c.get("source_url"),
         "source_id": c.get("source_id"),
     }
+    from .. import describe
+    rec["description"] = describe.describe("groceries", rec)
     rec["confidence_score"] = _score(rec)
     return rec
 
@@ -151,7 +154,7 @@ def _snapshot(row: dict, reason: str) -> None:
         (row["id"], row["version"], Jsonb(_jsonable(row)), reason),
     )
     if embeddings.enabled():
-        text = " ".join(str(row.get(f) or "") for f in _EMBED_FIELDS)
+        text = embeddings.text_for(row)
         db.execute("UPDATE groceries SET embedding = %s::vector WHERE id = %s",
                    (embeddings.to_vector_literal(embeddings.embed(text)), row["id"]))
 

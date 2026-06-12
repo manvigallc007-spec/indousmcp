@@ -67,10 +67,12 @@ class Settings(BaseSettings):
     mcp_port: int = 8000
 
     # Embeddings (semantic search)
-    # Provider: "hashing" (zero-dep default), "sentence_transformers" (opt-in, heavy), "none".
+    # Provider: "hashing" (zero-dep default), "fastembed" (real semantic, ONNX, no torch,
+    # ~130MB model, recommended), "sentence_transformers" (heavier), "none".
     embedding_provider: str = "hashing"
-    embedding_model: str = "all-MiniLM-L6-v2"  # used only by sentence_transformers
-    embedding_dim: int = 384                    # must match restaurants.embedding vector(N)
+    embedding_model: str = "all-MiniLM-L6-v2"          # sentence_transformers only
+    fastembed_model: str = "BAAI/bge-small-en-v1.5"    # fastembed (384-dim, matches column)
+    embedding_dim: int = 384                            # must match the embedding vector(N) columns
 
     # Outreach & claiming
     platform_name: str = "Indian Eats Directory"

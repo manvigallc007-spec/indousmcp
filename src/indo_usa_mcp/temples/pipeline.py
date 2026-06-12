@@ -18,11 +18,10 @@ from .scraper import TempleOverpassScraper
 _CANONICAL_FIELDS = [
     "natural_key", "name", "address_full", "city", "state", "country", "lat", "lng",
     "phone", "email", "website", "hours_json", "religion", "denomination", "deity",
-    "region_tag", "festival_specials", "source_name", "source_url", "source_id",
-    "confidence_score",
+    "region_tag", "festival_specials", "description", "source_name", "source_url",
+    "source_id", "confidence_score",
 ]
 _DIFF_FIELDS = [f for f in _CANONICAL_FIELDS if f != "natural_key"]
-_EMBED_FIELDS = ("name", "religion", "denomination", "deity", "region_tag", "city", "state")
 
 # Signature terms -> region_tag (culturally meaningful, conservative).
 _REGION_RULES: list[tuple[str, tuple[str, ...]]] = [
@@ -66,12 +65,13 @@ def clean_temple(c: dict) -> dict:
     haystack = " ".join(
         str(c.get(f) or "") for f in ("name", "denomination", "religion", "address_full")
     ).lower()
+    city, state = rclean.fill_location(c.get("city"), c.get("state"), lat, lng)
     rec = {
         "natural_key": rclean.natural_key(name, lat, lng),
         "name": name,
         "address_full": (c.get("address_full") or "").strip() or None,
-        "city": rclean.normalize_city(c.get("city")),
-        "state": rclean.normalize_state(c.get("state")),
+        "city": city,
+        "state": state,
         "country": c.get("country") or "USA",
         "lat": lat,
         "lng": lng,
@@ -88,6 +88,8 @@ def clean_temple(c: dict) -> dict:
         "source_url": c.get("source_url"),
         "source_id": c.get("source_id"),
     }
+    from .. import describe
+    rec["description"] = describe.describe("temples", rec)
     rec["confidence_score"] = _score(rec)
     return rec
 
@@ -172,7 +174,7 @@ def _snapshot(row: dict, reason: str) -> None:
         (row["id"], row["version"], Jsonb(_jsonable(row)), reason),
     )
     if embeddings.enabled():
-        text = " ".join(str(row.get(f) or "") for f in _EMBED_FIELDS)
+        text = embeddings.text_for(row)
         db.execute("UPDATE temples SET embedding = %s::vector WHERE id = %s",
                    (embeddings.to_vector_literal(embeddings.embed(text)), row["id"]))
 
