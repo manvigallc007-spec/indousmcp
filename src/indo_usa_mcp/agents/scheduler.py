@@ -28,6 +28,7 @@ _RUN_ORDER = [
     "professional_scraper", "professional_cleaner",
     "salon_scraper", "salon_cleaner",
     "event_feed_discovery", "event_scraper", "event_cleaner",
+    "web_enrichment",
     "discovery", "outreach", "reporting", "monitoring", "submission",
 ]
 

@@ -230,6 +230,14 @@ def cmd_enhance_data(args: argparse.Namespace) -> None:
     _print([verticals.enhance_existing(v) for v in targets])
 
 
+def cmd_web_enrich(args: argparse.Namespace) -> None:
+    from . import web_enrich
+    if args.vertical:
+        _print(web_enrich.enrich_vertical(args.vertical, limit=args.limit, max_age_days=args.max_age_days))
+    else:
+        _print(web_enrich.enrich_all(limit_per_vertical=args.limit, max_age_days=args.max_age_days))
+
+
 def cmd_professionals_scrape(args: argparse.Namespace) -> None:
     print(f"Scraping professionals for region={args.metro} ...")
     n = professionals.scrape_to_raw(args.metro)
@@ -484,6 +492,14 @@ def build_parser() -> argparse.ArgumentParser:
     ed = sub.add_parser("enhance-data", help="Backfill descriptions + geocode + embeddings (search quality)")
     ed.add_argument("--vertical", choices=("restaurants", "temples", "groceries"))
     ed.set_defaults(func=cmd_enhance_data)
+    we = sub.add_parser("web-enrich",
+                        help="Scrape listings' own websites for rating/price/cuisine/photo/socials")
+    we.add_argument("--vertical", choices=("restaurants", "temples", "groceries",
+                                           "professionals", "salons", "events"))
+    we.add_argument("--limit", type=int, default=40, help="Max sites per vertical per run")
+    we.add_argument("--max-age-days", type=int, default=90, dest="max_age_days",
+                    help="Re-enrich a listing only if older than this")
+    we.set_defaults(func=cmd_web_enrich)
     # ---- Phase 2: professionals vertical ----
     ps = sub.add_parser("professionals-scrape", help="Scrape Indian doctors/dentists/clinics")
     ps.add_argument("--metro", required=True, choices=SCRAPE_REGIONS, metavar="REGION")

@@ -266,6 +266,20 @@ class EventCleanerAgent(Agent):
         return result
 
 
+class WebEnrichmentAgent(Agent):
+    name = "web_enrichment"
+    description = ("Reads each listing's own website (schema.org + Open Graph) for rating, "
+                   "price, cuisine, photo, email and social links; refreshes search data.")
+    default_interval_s = 86400  # daily; each run rotates through a polite batch per vertical
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from .. import web_enrich
+        return web_enrich.enrich_all(
+            limit_per_vertical=params.get("limit_per_vertical", 40),
+            max_age_days=params.get("max_age_days", 90),
+        )
+
+
 class ReportingAgent(Agent):
     name = "reporting"
     description = "Computes the daily health & growth report and emails it."
@@ -349,6 +363,7 @@ ALL_AGENTS = [
     EventFeedDiscoveryAgent(),
     EventScraperAgent(),
     EventCleanerAgent(),
+    WebEnrichmentAgent(),
     ReportingAgent(),
     MonitoringAgent(),
 ]

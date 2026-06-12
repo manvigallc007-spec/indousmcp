@@ -112,6 +112,14 @@ _BUILDERS = {"restaurants": _restaurant, "temples": _temple, "groceries": _groce
              "professionals": _professional, "salons": _salon, "events": _event}
 
 
+def _rating(rec: dict) -> str:
+    r = rec.get("rating")
+    if not r:
+        return ""
+    n = rec.get("rating_count")
+    return f" Rated {r}/5 from {n} reviews." if n else f" Rated {r}/5."
+
+
 def describe(vertical: str, rec: dict) -> str:
     builder = _BUILDERS.get(vertical, _restaurant)
-    return " ".join(builder(rec).split())
+    return " ".join((builder(rec) + _rating(rec)).split())
