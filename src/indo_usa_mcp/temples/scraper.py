@@ -11,6 +11,7 @@ from typing import Iterator
 
 import httpx
 
+from .. import osm as _osm
 from ..config import settings
 from ..pipeline.scrapers.metros import bbox, state_for
 
@@ -86,6 +87,7 @@ class TempleOverpassScraper:
             "hours_json": {"raw": tags["opening_hours"]} if tags.get("opening_hours") else None,
             "religion": (tags.get("religion") or "").lower() or None,
             "denomination": (tags.get("denomination") or "").lower() or None,
+            "extra_tags": _osm.attribute_tags(tags),
         }
 
     @staticmethod

@@ -127,8 +127,10 @@ Records are optimized for agent retrieval:
   the structured fields, returned to agents, and used as the text that gets embedded.
 - **Reverse-geocoded location** — missing `city`/`state` are filled offline from coordinates
   (`reverse_geocoder`), so "near me / in <city>" queries work for every record.
-- **Keyword `tags`** (e.g. `biryani`, `dosa`, `halal`, `catering`) — extracted from
-  name/description; agents can filter with `tag=...`, and they boost embedding recall.
+- **Keyword + attribute `tags`** (e.g. `biryani`, `dosa`, `halal`, `delivery`, `takeout`,
+  `outdoor-seating`, `wheelchair-accessible`, `wifi`, `cards-accepted`, `organic`) — derived
+  from names and rich OSM attributes; agents filter with `tag=...`, and they boost embedding
+  recall + appear in the description ("Amenities: …").
 - **`open_now`** — `opening_hours` are parsed into structured per-day intervals; each result
   carries an `open_now` flag (true/false/null) and the tools accept an `open_now=true` filter,
   enabling "what's open near me right now".

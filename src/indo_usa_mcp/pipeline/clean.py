@@ -152,8 +152,9 @@ def clean(candidate: dict) -> dict:
         "source_id": candidate.get("source_id"),
     }
     from .. import describe, tags as tagmod
+    record["tags"] = sorted(set(tagmod.extract("restaurants", record))
+                            | set(candidate.get("extra_tags") or []))
     record["description"] = describe.describe("restaurants", record)
-    record["tags"] = tagmod.extract("restaurants", record)
     record["confidence_score"] = score(record)
     return record
 

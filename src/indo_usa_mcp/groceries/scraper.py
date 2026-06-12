@@ -12,6 +12,7 @@ from typing import Iterator
 
 import httpx
 
+from .. import osm as _osm
 from ..config import settings
 from ..pipeline.scrapers.metros import bbox, state_for
 
@@ -88,6 +89,7 @@ class GroceryOverpassScraper:
             "website": tags.get("website") or tags.get("contact:website"),
             "hours_json": {"raw": tags["opening_hours"]} if tags.get("opening_hours") else None,
             "store_type": tags.get("shop"),
+            "extra_tags": _osm.attribute_tags(tags),
         }
 
     @staticmethod

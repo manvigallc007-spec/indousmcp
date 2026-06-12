@@ -89,8 +89,8 @@ def clean_temple(c: dict) -> dict:
         "source_id": c.get("source_id"),
     }
     from .. import describe, tags as tagmod
+    rec["tags"] = sorted(set(tagmod.extract("temples", rec)) | set(c.get("extra_tags") or []))
     rec["description"] = describe.describe("temples", rec)
-    rec["tags"] = tagmod.extract("temples", rec)
     rec["confidence_score"] = _score(rec)
     return rec
 

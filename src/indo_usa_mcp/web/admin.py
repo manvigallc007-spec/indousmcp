@@ -510,21 +510,30 @@ def payments_page(request: Request) -> HTMLResponse:
                     for k, n in fs["by_vertical"].items())
     cards += (f"<div class='kpi'><b>${est:,.0f}</b><span>Est. monthly revenue</span>"
               f"<div class='muted'>{fs['total']} × ${price:.0f}</div></div>")
-    pay_tbl = ""
+    pay_tbl = "<p class='muted'>Stripe not configured — showing internal featured placements only.</p>"
     if payments.enabled():
-        rows = payments.recent_payments(20)
-        trs = "".join(
-            f"<tr><td>{esc(p['id'][:24])}</td>"
-            f"<td>${(p['amount'] or 0)/100:.2f} {esc((p['currency'] or '').upper())}</td>"
-            f"<td>{esc(p['status'])}</td>"
-            f"<td class='muted'>{dt.datetime.utcfromtimestamp(p['created']).isoformat() if p['created'] else ''}</td></tr>"
-            for p in rows)
-        pay_tbl = (f"<h3>Recent Stripe payments</h3><table><tr><th>Session</th><th>Amount</th>"
-                   f"<th>Status</th><th>Created (UTC)</th></tr>{trs}</table>") if rows else \
-            "<p class='muted'>No Stripe payments yet.</p>"
-    else:
-        pay_tbl = "<p class='muted'>Stripe not configured — showing internal featured placements only.</p>"
+        try:
+            rows = payments.recent_payments(20)
+            trs = "".join(
+                f"<tr><td>{esc(str(p.get('id') or '')[:24])}</td>"
+                f"<td>${(p.get('amount') or 0) / 100:.2f} {esc((p.get('currency') or '').upper())}</td>"
+                f"<td>{esc(p.get('status'))}</td>"
+                f"<td class='muted'>{_ts(p.get('created'))}</td></tr>"
+                for p in rows)
+            pay_tbl = (f"<h3>Recent Stripe payments</h3><table><tr><th>Session</th><th>Amount</th>"
+                       f"<th>Status</th><th>Created (UTC)</th></tr>{trs}</table>") if rows else \
+                "<p class='muted'>Stripe connected — no payments yet.</p>"
+        except Exception as exc:  # never 500 the page; show the cause
+            pay_tbl = (f"<p class='err'>Couldn't load Stripe payments: "
+                       f"{esc(type(exc).__name__)}: {esc(str(exc))}</p>")
     return admin_page("Payments", f"<div class='cards'>{cards}</div>" + pay_tbl, active="Payments")
+
+
+def _ts(epoch) -> str:
+    try:
+        return dt.datetime.fromtimestamp(int(epoch), tz=dt.timezone.utc).isoformat() if epoch else ""
+    except (ValueError, TypeError, OSError):
+        return ""
 
 
 # ----------------------------------------------------------------------- traffic

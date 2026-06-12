@@ -70,8 +70,8 @@ def clean_grocery(c: dict) -> dict:
         "source_id": c.get("source_id"),
     }
     from .. import describe, tags as tagmod
+    rec["tags"] = sorted(set(tagmod.extract("groceries", rec)) | set(c.get("extra_tags") or []))
     rec["description"] = describe.describe("groceries", rec)
-    rec["tags"] = tagmod.extract("groceries", rec)
     rec["confidence_score"] = _score(rec)
     return rec
 

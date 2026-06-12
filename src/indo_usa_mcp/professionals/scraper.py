@@ -12,6 +12,7 @@ from typing import Iterator
 
 import httpx
 
+from .. import osm as _osm
 from ..config import settings
 from ..pipeline.scrapers.metros import bbox, state_for
 
@@ -91,6 +92,7 @@ class ProfessionalOverpassScraper:
             "hours_json": {"raw": tags["opening_hours"]} if tags.get("opening_hours") else None,
             "profession_type": ptype,
             "speciality": tags.get("healthcare:speciality") or tags.get("speciality"),
+            "extra_tags": _osm.attribute_tags(tags),
         }
 
     @staticmethod

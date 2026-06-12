@@ -45,7 +45,7 @@ def clean_salon(c: dict) -> dict:
         "source_id": c.get("source_id"),
     }
     from .. import describe, tags as tagmod
-    rec["tags"] = tagmod.extract("salons", rec)
+    rec["tags"] = sorted(set(tagmod.extract("salons", rec)) | set(c.get("extra_tags") or []))
     rec["description"] = describe.describe("salons", rec)
     rec["confidence_score"] = _score(rec)
     return rec

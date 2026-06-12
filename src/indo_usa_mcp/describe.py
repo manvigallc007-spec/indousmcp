@@ -16,6 +16,19 @@ def _loc(rec: dict) -> str:
     return " in " + ", ".join(parts) if parts else ""
 
 
+_AMENITY_LABELS = {
+    "delivery": "delivery", "takeout": "takeout", "outdoor-seating": "outdoor seating",
+    "wheelchair-accessible": "wheelchair accessible", "wifi": "free wifi",
+    "cards-accepted": "cards accepted", "drive-thru": "drive-thru",
+    "reservations": "reservations", "organic": "organic",
+}
+
+
+def _amenities(rec: dict) -> str:
+    present = [lab for tag, lab in _AMENITY_LABELS.items() if tag in (rec.get("tags") or [])]
+    return f" Amenities: {', '.join(present)}." if present else ""
+
+
 def _hours(rec: dict) -> str:
     h = rec.get("hours_json")
     raw = h.get("raw") if isinstance(h, dict) else None
@@ -35,7 +48,7 @@ def _restaurant(rec: dict) -> str:
         s += f" Price: {rec['price_range']}."
     if rec.get("festival_specials"):
         s += f" Festival specials: {rec['festival_specials']}."
-    return s + _hours(rec)
+    return s + _amenities(rec) + _hours(rec)
 
 
 def _temple(rec: dict) -> str:
@@ -57,7 +70,7 @@ def _grocery(rec: dict) -> str:
     diet = rec.get("dietary_tags") or []
     if diet:
         s += f" Carries {', '.join(diet)} products."
-    return s + _hours(rec)
+    return s + _amenities(rec) + _hours(rec)
 
 
 def _professional(rec: dict) -> str:
@@ -77,7 +90,7 @@ def _salon(rec: dict) -> str:
     s = f"{rec.get('name', 'This salon')} is an Indian beauty salon{_loc(rec)}."
     if services:
         s += f" Services: {', '.join(services)}."
-    return s + _hours(rec)
+    return s + _amenities(rec) + _hours(rec)
 
 
 def _event(rec: dict) -> str:

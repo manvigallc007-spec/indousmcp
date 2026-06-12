@@ -11,6 +11,7 @@ from typing import Iterator
 
 import httpx
 
+from ... import osm as _osm
 from ...config import settings
 from .metros import bbox, state_for
 
@@ -98,6 +99,7 @@ class OverpassScraper:
             "hours_json": {"raw": tags["opening_hours"]} if tags.get("opening_hours") else None,
             "cuisine_type": tags.get("cuisine", "indian").replace(";", ", "),
             "dietary_tags": self._dietary_from_tags(tags),
+            "extra_tags": _osm.attribute_tags(tags),
         }
 
     @staticmethod
