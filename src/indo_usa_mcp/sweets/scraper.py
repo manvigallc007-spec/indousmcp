@@ -16,26 +16,40 @@ from ..config import settings
 from ..pipeline.scrapers.metros import bbox, state_for
 
 _SHOPS = "confectionery|pastry|bakery"
-_NAMES = ("Mithai|Sweet|Sweets|Mishtan|Misthan|Mishthan|Halwa|Halwai|Bikaner|Bikanervala|"
-          "Haldiram|Ganga|Anand|Royal Sweets|Nirala|Ambala|Rasoi|Gupta|Saini|Maya|Bombay|"
-          "Indian|Desi|Punjab|Gulab|Jalebi|Rasmalai|Laddu|Ladoo|Barfi|Kaju|Chandni|Annapurna|"
-          "Sukhadia|Surati|Madras|Adyar|Grand Sweets|Saravana")
+# Indian-specific only — bare "Sweet/Sweets" matches every candy shop (Sockerbit Swedish,
+# Sweets & Such), and "Desi" substring-matches "Design"/"Desire". So we require mithai/dish
+# words, known Indian sweet brands, or an "Indian/Desi Sweets" phrase. Precision over recall;
+# admin can add Indian-owned shops with non-obvious names by hand.
+_NAMES = ("Mithai|Mishtan|Misthan|Mishthan|Halwai|Indian Sweets|Desi Sweets|India Sweets|"
+          "Bombay Sweets|Maharaja|Rajbhog|Aggarwal|Brijwasi|Nathu|Kailash|Janta|Chandni|"
+          "Patel|Bikaner|Bikanervala|Haldiram|Royal Sweets|Nirala|Ambala|Sukhadia|Surati|"
+          "Saravana|Grand Sweets|Annapurna|Anand Bhavan|Adyar|Mysore|Gulab Jamun|Jalebi|"
+          "Rasmalai|Rasgulla|Rasagulla|Laddu|Ladoo|Barfi|Burfi|Kaju|Soan Papdi|Peda|"
+          "Gujarat|Punjab")
 
-_QUERY_TEMPLATE = """
-[out:json][timeout:{timeout}];
-(
-  node["shop"~"{shops}"]["name"~"{names}",i]({s},{w},{n},{e});
-  way["shop"~"{shops}"]["name"~"{names}",i]({s},{w},{n},{e});
-);
-out center tags;
-"""
+# Indian sweets in OSM are mapped two ways, so we use two arms:
+#   1) a confectionery/bakery shop with an Indian-specific NAME (above), and
+#   2) an Indian-CUISINE eatery/shop named like a sweet/mithai shop (catches the many mithai
+#      counters tagged as restaurants/cafes — where the name+cuisine together are safe).
+_CUISINE = "indian|bangladeshi|pakistani|sri_lankan|south_asian|nepalese"
+_SWEET_WORDS = "Sweet|Sweets|Mithai|Mishtan|Halwa|Halwai|Lassi|Namkeen|Chaat|Bakery|Kachori"
 
-_USA_QUERY = """
+
+def _arms(s, w, n, e) -> str:
+    lines = []
+    for el in ("node", "way"):  # arm 1: sweet/bakery shop, Indian name
+        lines.append(f'  {el}["shop"~"confectionery|pastry|bakery"]["name"~"{{names}}",i]({s},{w},{n},{e});')
+    for el in ("node", "way"):  # arm 2: Indian-cuisine place named like a sweet shop
+        lines.append(f'  {el}["cuisine"~"{_CUISINE}"]["name"~"{{sweets}}",i]({s},{w},{n},{e});')
+    return "\n".join(lines)
+
+
+_USA_QUERY = f"""
 [out:json][timeout:600];
 area["ISO3166-1"="US"][admin_level=2]->.usa;
 (
-  node["shop"~"confectionery|pastry|bakery"]["name"~"Mithai|Sweets|Bikaner|Haldiram|Indian Sweets|Desi",i](area.usa);
-  way["shop"~"confectionery|pastry|bakery"]["name"~"Mithai|Sweets|Bikaner|Haldiram|Indian Sweets|Desi",i](area.usa);
+  node["shop"~"confectionery|pastry|bakery"]["name"~"Mithai|Indian Sweets|Bombay Sweets|Bikaner|Haldiram|Royal Sweets|Maharaja",i](area.usa);
+  node["cuisine"~"{_CUISINE}"]["name"~"Sweets|Mithai|Halwa",i](area.usa);
 );
 out center tags;
 """
@@ -49,9 +63,9 @@ class SweetsOverpassScraper:
             query, read_timeout = _USA_QUERY, 660
         else:
             s, w, n, e = bbox(region)
-            query = _QUERY_TEMPLATE.format(
-                timeout=settings.scraper_timeout_seconds, shops=_SHOPS, names=_NAMES,
-                s=s, w=w, n=n, e=e)
+            query = (f"[out:json][timeout:{settings.scraper_timeout_seconds}];\n(\n"
+                     f"{_arms(s, w, n, e).format(names=_NAMES, sweets=_SWEET_WORDS)}\n);\n"
+                     f"out center tags;\n")
             read_timeout = settings.scraper_timeout_seconds + 30
         time.sleep(1)  # politeness
         resp = httpx.post(
@@ -86,7 +100,7 @@ class SweetsOverpassScraper:
             "email": tags.get("email") or tags.get("contact:email"),
             "website": tags.get("website") or tags.get("contact:website"),
             "hours_json": {"raw": tags["opening_hours"]} if tags.get("opening_hours") else None,
-            "store_type": tags.get("shop"),
+            "store_type": tags.get("shop") or "sweets",
             "extra_tags": _osm.attribute_tags(tags),
         }
 

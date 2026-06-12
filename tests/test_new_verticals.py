@@ -40,5 +40,8 @@ def test_scraper_query_templates_build():
     # f-string/format plumbing produces a query string without raising.
     from indo_usa_mcp.studios.scraper import _block as sblock, _NAMES as snames
     from indo_usa_mcp.services.scraper import _block as vblock, _NAMES as vnames
+    from indo_usa_mcp.sweets.scraper import _arms, _NAMES as wnames, _SWEET_WORDS
     assert "name" in sblock(1, 2, 3, 4).format(names=snames)
     assert "name" in vblock(1, 2, 3, 4).format(names=vnames)
+    q = _arms(1, 2, 3, 4).format(names=wnames, sweets=_SWEET_WORDS)
+    assert "cuisine" in q and "Mithai" in q  # two-arm: name + Indian-cuisine
