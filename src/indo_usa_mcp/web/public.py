@@ -8,7 +8,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Route
 
-from .. import payments
+from .. import payments, verticals
 from ..config import settings
 from ..pipeline import compliance, ingest, outreach
 from .common import _page, esc as _esc
@@ -23,15 +23,58 @@ _EDIT_FIELDS = [
 _DIETARY_OPTIONS = ["vegetarian", "vegan", "halal", "jain"]
 
 
+_CAT_ICONS = {
+    "restaurants": "🍛", "temples": "🛕", "groceries": "🛒", "professionals": "🩺",
+    "salons": "💇", "events": "🎉", "apparel": "👗", "sweets": "🍬", "studios": "🧘",
+    "services": "💸",
+}
+
+
 def home(request: Request) -> HTMLResponse:
-    return _page(
-        settings.platform_name,
-        f"<h2>{html.escape(settings.platform_name)}</h2>"
-        "<p class='muted'>An agent-first directory of Indian-American businesses, temples and "
-        "events across the USA.</p>"
-        "<p><a href='/chat'><button>Ask the assistant &rarr;</button></a></p>"
-        "<p class='muted'>Own a listing? <a href='/portal/login'>Sign in</a> to manage it.</p>",
-    )
+    """Public, shareable landing page: hero + category grid + CTA to the assistant."""
+    plat = html.escape(settings.platform_name)
+    brand = "#c1440e"
+    desc = ("Find Indian restaurants, sweets, temples, events, classes, salons, jewelry and "
+            "more across the USA — with a friendly AI guide.")
+    og_url = html.escape(settings.public_web_url.rstrip("/") + "/")
+    tiles = "".join(
+        f"<a class='tile' href='/chat'><span>{_CAT_ICONS.get(k, '•')}</span>"
+        f"{html.escape(cfg['label'])}</a>"
+        for k, cfg in verticals.VERTICALS.items())
+    doc = f"""<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{plat} — Indian-American directory</title>
+<meta name="description" content="{html.escape(desc)}">
+<meta property="og:title" content="{plat}">
+<meta property="og:description" content="{html.escape(desc)}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{og_url}">
+<meta name="twitter:card" content="summary">
+<style>
+ *{{box-sizing:border-box}}
+ body{{font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;margin:0;color:#1a1a1a;
+   background:#faf7f5;line-height:1.5}}
+ .hero{{text-align:center;padding:64px 20px 36px;max-width:680px;margin:0 auto}}
+ .hero h1{{font-size:34px;margin:0 0 10px}} .hero p{{color:#555;font-size:18px;margin:0 0 24px}}
+ .cta{{background:{brand};color:#fff;border:0;padding:15px 28px;border-radius:12px;font-size:17px;
+   text-decoration:none;display:inline-block;cursor:pointer}}
+ .grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;
+   max-width:760px;margin:8px auto 50px;padding:0 18px}}
+ .tile{{background:#fff;border:1px solid #eee;border-radius:14px;padding:18px;text-decoration:none;
+   color:#1a1a1a;font-weight:600;font-size:15px;display:flex;align-items:center;gap:10px}}
+ .tile span{{font-size:24px}} .tile:hover{{border-color:{brand}}}
+ footer{{text-align:center;color:#888;font-size:14px;padding:0 20px 40px}}
+ footer a{{color:{brand}}}
+</style></head><body>
+<div class="hero">
+ <h1>{plat}</h1>
+ <p>{html.escape(desc)}</p>
+ <a class="cta" href="/chat">Ask the assistant →</a>
+</div>
+<div class="grid">{tiles}</div>
+<footer>Own a business? <a href="/portal/login">Sign in</a> to claim &amp; manage your listing.</footer>
+</body></html>"""
+    return HTMLResponse(doc)
 
 
 def claim_get(request: Request) -> HTMLResponse:

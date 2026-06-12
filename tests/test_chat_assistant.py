@@ -66,6 +66,43 @@ def test_chat_api_returns_cards(no_db, monkeypatch):
     assert data["provider"] == "search" and len(data["cards"]) == 2
 
 
+def test_filter_scopes_to_vertical(monkeypatch):
+    from indo_usa_mcp import queries as r_queries
+    monkeypatch.setattr(settings, "llm_provider", "search")
+    monkeypatch.setattr(assistant.analytics, "log_impressions", lambda *a, **k: None)
+    monkeypatch.setattr(assistant.analytics, "log_call", lambda *a, **k: None)
+
+    def boom(*a, **k):
+        raise AssertionError("search_all must not be called when a vertical filter is set")
+    monkeypatch.setattr(assistant.verticals, "search_all", boom)
+    monkeypatch.setattr(r_queries, "search_restaurants_by_text",
+                        lambda q, **k: {"count": 1, "results": [{"id": 9, "name": "Scoped Diner"}]})
+    out = assistant.reply([{"role": "user", "content": "dinner"}],
+                          filters={"vertical": "restaurants", "open_now": False})
+    assert len(out["cards"]) == 1
+    assert out["cards"][0]["name"] == "Scoped Diner" and out["cards"][0]["vertical"] == "restaurants"
+
+
+def test_open_now_filter(monkeypatch):
+    from indo_usa_mcp import hours
+    monkeypatch.setattr(settings, "llm_provider", "search")
+    monkeypatch.setattr(assistant.analytics, "log_impressions", lambda *a, **k: None)
+    monkeypatch.setattr(assistant.analytics, "log_call", lambda *a, **k: None)
+    monkeypatch.setattr(assistant.verticals, "search_all", lambda *a, **k: {"count": 2, "results": [
+        {"vertical": "restaurants", "id": 1, "name": "Open Place", "_o": True},
+        {"vertical": "restaurants", "id": 2, "name": "Closed Place", "_o": False}]})
+    monkeypatch.setattr(hours, "annotate",
+                        lambda rows: [r.__setitem__("open_now", r.get("_o", False)) for r in rows])
+    out = assistant.reply([{"role": "user", "content": "food"}],
+                          filters={"vertical": None, "open_now": True})
+    assert [c["name"] for c in out["cards"]] == ["Open Place"]
+
+
+def test_landing_page_renders_with_share_meta():
+    r = TestClient(app).get("/")
+    assert r.status_code == 200 and "/chat" in r.text and 'property="og:title"' in r.text
+
+
 def test_chat_api_rate_limit(no_db, monkeypatch):
     monkeypatch.setattr(settings, "chat_rate_per_min", 1)
     chatmod._HITS.clear()

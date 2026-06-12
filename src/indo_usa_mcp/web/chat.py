@@ -14,7 +14,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route
 
-from .. import assistant
+from .. import assistant, verticals
 from ..config import settings
 
 # --- tiny in-memory per-IP rate limiter (abuse guard; LLM calls cost CPU or money) ---
@@ -48,9 +48,24 @@ def chat_page(request: Request) -> HTMLResponse:
     mode = "live assistant" if assistant.llm_active() else "smart search"
     chips = "".join(f"<button class='chip' onclick=\"ask(this.textContent)\">{html.escape(s)}</button>"
                     for s in _SUGGESTIONS)
+    # Category filter chips (All + every vertical) + an Open-now toggle.
+    fchips = "<button class='fchip on' data-v='' onclick='setVertical(this)'>All</button>"
+    fchips += "".join(
+        f"<button class='fchip' data-v='{k}' onclick='setVertical(this)'>{html.escape(cfg['label'])}</button>"
+        for k, cfg in verticals.VERTICALS.items())
+    fchips += "<button class='fchip open' onclick='toggleOpen(this)'>● Open now</button>"
+    og_url = html.escape(f"{settings.public_web_url.rstrip('/')}/chat")
+    og_desc = ("Ask for Indian restaurants, sweets, temples, events, classes, salons, "
+               "jewelry and more across the USA — with a friendly AI guide.")
     doc = f"""<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ask · {plat}</title>
+<meta name="description" content="{og_desc}">
+<meta property="og:title" content="{plat} — Ask the assistant">
+<meta property="og:description" content="{og_desc}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{og_url}">
+<meta name="twitter:card" content="summary">
 <style>
  :root{{--brand:{brand}}}
  *{{box-sizing:border-box}}
@@ -79,8 +94,15 @@ def chat_page(request: Request) -> HTMLResponse:
  .chips{{max-width:760px;margin:0 auto;width:100%;padding:0 18px 8px;display:flex;flex-wrap:wrap;gap:8px}}
  .chip{{background:#fff;border:1px solid #ddd;color:#333;border-radius:20px;padding:7px 12px;
    font-size:13px;cursor:pointer}}
+ .filterbar{{background:#fff;border-bottom:1px solid #eee;overflow-x:auto;white-space:nowrap;
+   padding:9px 18px;-webkit-overflow-scrolling:touch}}
+ .fchip{{background:#fff;border:1px solid #ddd;color:#555;border-radius:20px;padding:6px 12px;
+   font-size:13px;cursor:pointer;margin-right:7px}}
+ .fchip.on{{background:var(--brand);color:#fff;border-color:var(--brand)}}
+ .fchip.open.on{{background:#137333;border-color:#137333}}
 </style></head><body>
 <header><b>{plat}</b><span class="mode">· {mode}</span></header>
+<div class="filterbar">{fchips}</div>
 <div id="log"><div class="msg bot"><div class="bubble">Namaste! 🙏 Ask me for Indian
  restaurants, sweets, temples, events, classes and more across the USA. Try a category and a city.</div></div></div>
 <div class="cards" id="cards"></div>
@@ -91,9 +113,20 @@ def chat_page(request: Request) -> HTMLResponse:
 </form>
 <script>
 const log=document.getElementById('log'), cardsEl=document.getElementById('cards');
-let history=[], geo=null;
+let history=[], geo=null, lastQuery='';
+let filters={{vertical:null, open_now:false}};
 navigator.geolocation && navigator.geolocation.getCurrentPosition(
   p=>{{geo={{lat:p.coords.latitude,lng:p.coords.longitude}}}}, ()=>{{}}, {{timeout:4000}});
+function setVertical(el){{
+  document.querySelectorAll('.fchip:not(.open)').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on'); filters.vertical=el.dataset.v||null;
+  if(lastQuery) rerun();
+}}
+function toggleOpen(el){{
+  filters.open_now=!filters.open_now; el.classList.toggle('on', filters.open_now);
+  if(lastQuery) rerun();
+}}
+function rerun(){{ if(lastQuery) send(lastQuery, true); }}
 function bubble(role,text){{
   const m=document.createElement('div'); m.className='msg '+role;
   const b=document.createElement('div'); b.className='bubble'; b.textContent=text;
@@ -121,22 +154,24 @@ function renderCards(cards){{
     d.appendChild(links); cardsEl.appendChild(d);
   }});
 }}
-function ask(text){{document.getElementById('q').value=text; submitForm(new Event('x'));}}
-async function submitForm(e){{
-  e.preventDefault && e.preventDefault();
-  const q=document.getElementById('q'); const text=q.value.trim(); if(!text) return false;
-  q.value=''; bubble('user',text); history.push({{role:'user',content:text}});
-  const thinking=bubble('bot','…');
+async function send(text, isRerun){{
+  if(!isRerun){{ bubble('user',text); history.push({{role:'user',content:text}}); lastQuery=text; }}
+  const thinking=bubble('bot', isRerun?'filtering…':'…');
   try{{
     const r=await fetch('/chat/api',{{method:'POST',headers:{{'Content-Type':'application/json'}},
-      body:JSON.stringify({{messages:history,geo:geo}})}});
+      body:JSON.stringify({{messages:history, geo:geo, filters:filters}})}});
     const data=await r.json();
     thinking.textContent=data.reply||'(no response)';
-    history.push({{role:'assistant',content:data.reply||''}});
+    if(!isRerun) history.push({{role:'assistant',content:data.reply||''}});
     renderCards(data.cards);
   }}catch(err){{thinking.textContent='Sorry, something went wrong. Please try again.';}}
-  return false;
 }}
+function submitForm(e){{
+  e.preventDefault && e.preventDefault();
+  const q=document.getElementById('q'); const text=q.value.trim(); if(!text) return false;
+  q.value=''; send(text,false); return false;
+}}
+function ask(text){{ send(text,false); }}
 </script></body></html>"""
     return HTMLResponse(doc)
 
@@ -155,13 +190,18 @@ async def chat_api(request: Request) -> JSONResponse:
         body = {}
     messages = body.get("messages") or []
     geo = body.get("geo") if isinstance(body.get("geo"), dict) else None
+    raw = body.get("filters") if isinstance(body.get("filters"), dict) else {}
+    filters = {
+        "vertical": raw.get("vertical") if isinstance(raw.get("vertical"), str) else None,
+        "open_now": bool(raw.get("open_now")),
+    }
     if not isinstance(messages, list):
         messages = []
     # clamp lengths defensively
     for m in messages:
         if isinstance(m, dict) and isinstance(m.get("content"), str):
             m["content"] = m["content"][:1000]
-    result = assistant.reply(messages, geo=geo)
+    result = assistant.reply(messages, geo=geo, filters=filters)
     return JSONResponse(result)
 
 

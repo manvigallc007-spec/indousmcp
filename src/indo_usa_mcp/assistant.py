@@ -51,16 +51,50 @@ _TOOLS = [{
 
 
 # ---------------------------------------------------------------- directory search
-def _run_search(args: dict, limit: int = 8) -> dict:
-    res = verticals.search_all(
-        (args.get("query") or "").strip(), city=args.get("city") or None,
-        state=args.get("state") or None, limit=limit)
+def _run_search(args: dict, filters: dict | None = None, limit: int = 8) -> dict:
+    """Search the directory. `filters` (from the chat UI chips) override the LLM's args:
+    a `vertical` scopes to one category; `open_now` keeps only currently-open listings."""
+    filters = filters or {}
+    query = (args.get("query") or "").strip()
+    city = filters.get("city") or args.get("city") or None
+    state = filters.get("state") or args.get("state") or None
+    vertical = filters.get("vertical") or args.get("vertical") or None
+    open_now = bool(filters.get("open_now") or args.get("open_now"))
+
+    fn = (getattr(verticals.VERTICALS[vertical]["queries"], f"search_{vertical}_by_text", None)
+          if vertical in verticals.VERTICALS else None)
+    if fn:
+        res = fn(query, city=city, state=state, limit=limit)
+        for r in res.get("results", []):
+            r["vertical"] = vertical
+    else:
+        res = verticals.search_all(query, city=city, state=state, limit=limit)
+
+    rows = res.get("results", [])
+    if open_now and rows:
+        from . import hours
+        hours.annotate(rows)
+        rows = [r for r in rows if r.get("open_now")]
+        res = {**res, "results": rows, "count": len(rows)}
+
     try:  # credit human engagement to analytics + per-listing reach (best-effort)
         analytics.log_impressions("search_all", res)
-        analytics.log_call("chat", {"query": args.get("query")}, res.get("count"), "web-chat")
+        analytics.log_call("chat", {"query": query, "vertical": vertical, "open_now": open_now},
+                           res.get("count"), "web-chat")
     except Exception:
         pass
     return res
+
+
+def _filter_note(filters: dict | None) -> str | None:
+    if not filters:
+        return None
+    parts = []
+    if filters.get("vertical") in verticals.VERTICALS:
+        parts.append(f"only {verticals.VERTICALS[filters['vertical']]['label']} listings")
+    if filters.get("open_now"):
+        parts.append("only places open right now")
+    return ("The user has applied filters: " + "; ".join(parts) + ".") if parts else None
 
 
 def _cards(res: dict) -> list[dict]:
@@ -127,11 +161,11 @@ def _chat(messages: list[dict], use_tools: bool) -> dict:
     return resp.json()["choices"][0]["message"]
 
 
-def _llm_reply(messages: list[dict], geo: dict | None) -> dict:
+def _llm_reply(messages: list[dict], geo: dict | None, filters: dict | None) -> dict:
     convo: list[dict] = [{"role": "system", "content": _SYSTEM}]
-    note = _location_note(geo)
-    if note:
-        convo.append({"role": "system", "content": note})
+    for extra in (_location_note(geo), _filter_note(filters)):
+        if extra:
+            convo.append({"role": "system", "content": extra})
     convo += [{"role": m["role"], "content": m.get("content", "")} for m in messages]
 
     cards: list[dict] = []
@@ -149,7 +183,7 @@ def _llm_reply(messages: list[dict], geo: dict | None) -> dict:
                 args = json.loads(fn.get("arguments") or "{}")
             except Exception:
                 args = {}
-            res = _run_search(args)
+            res = _run_search(args, filters)
             cards = _cards(res)  # newest search wins for the card panel
             convo.append({"role": "tool", "tool_call_id": call.get("id"),
                           "content": _results_for_llm(res)})
@@ -167,14 +201,12 @@ def _last_user(messages: list[dict]) -> str:
     return ""
 
 
-def _search_reply(messages: list[dict], geo: dict | None) -> dict:
+def _search_reply(messages: list[dict], geo: dict | None, filters: dict | None) -> dict:
     query = _last_user(messages)
     if not query:
         return {"reply": "Tell me what you're looking for — a restaurant, temple, sweets shop, "
                 "event, and a city.", "cards": [], "provider": "search"}
-    args: dict[str, Any] = {"query": query}
-    note = _location_note(geo)
-    res = _run_search(args)
+    res = _run_search({"query": query}, filters)
     n = res.get("count", 0)
     if n == 0:
         text = (f"I couldn't find anything for “{query}”. Try adding a city/state, "
@@ -193,16 +225,16 @@ def llm_active() -> bool:
     return settings.llm_provider == "llm" and bool(settings.llm_base_url and settings.llm_model)
 
 
-def reply(messages: list[dict], geo: dict | None = None) -> dict:
+def reply(messages: list[dict], geo: dict | None = None, filters: dict | None = None) -> dict:
     """Produce an assistant reply for a chat history. Never raises into the web layer."""
     messages = [m for m in (messages or []) if m.get("role") in ("user", "assistant")][-12:]
     if llm_active():
         try:
-            return _llm_reply(messages, geo)
+            return _llm_reply(messages, geo, filters)
         except Exception as exc:  # LLM unreachable/misconfigured -> degrade to search
-            out = _search_reply(messages, geo)
+            out = _search_reply(messages, geo, filters)
             out["reply"] = ("(Live assistant is unavailable right now — showing a direct "
                             f"search instead.) {out['reply']}")
             out["llm_error"] = type(exc).__name__
             return out
-    return _search_reply(messages, geo)
+    return _search_reply(messages, geo, filters)
