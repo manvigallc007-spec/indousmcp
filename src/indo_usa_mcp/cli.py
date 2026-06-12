@@ -34,6 +34,10 @@ from .salons import pipeline as salons
 from .salons import queries as salon_queries
 from .temples import pipeline as temples
 from .temples import queries as temple_queries
+from .apparel import pipeline as apparel, queries as apparel_queries
+from .sweets import pipeline as sweets, queries as sweets_queries
+from .studios import pipeline as studios, queries as studio_queries
+from .services import pipeline as services, queries as service_queries
 
 
 def _print(obj) -> None:
@@ -298,6 +302,43 @@ def cmd_salons_query(args: argparse.Namespace) -> None:
             state=args.state, tag=args.tag, limit=args.limit))
 
 
+# Retail-style verticals added in batch — identical CLI surface, dispatched by name.
+# (pipeline module, queries module, list fn, search fn)
+_BATCH_VERTICALS = {
+    "apparel": (apparel, apparel_queries, apparel_queries.get_indian_apparel,
+                apparel_queries.search_apparel_by_text),
+    "sweets": (sweets, sweets_queries, sweets_queries.get_indian_sweets,
+               sweets_queries.search_sweets_by_text),
+    "studios": (studios, studio_queries, studio_queries.get_indian_studios,
+                studio_queries.search_studios_by_text),
+    "services": (services, service_queries, service_queries.get_indian_services,
+                 service_queries.search_services_by_text),
+}
+
+
+def cmd_bv_scrape(args: argparse.Namespace) -> None:
+    pipe = _BATCH_VERTICALS[args.vertical][0]
+    print(f"Scraping {args.vertical} for region={args.metro} ...")
+    print(f"Upserted {pipe.scrape_to_raw(args.metro)} raw {args.vertical} observation(s).")
+
+
+def cmd_bv_process(args: argparse.Namespace) -> None:
+    _print(_BATCH_VERTICALS[args.vertical][0].process_raw())
+
+
+def cmd_bv_stats(args: argparse.Namespace) -> None:
+    _print(_BATCH_VERTICALS[args.vertical][1].stats())
+
+
+def cmd_bv_query(args: argparse.Namespace) -> None:
+    _, _, get_fn, search_fn = _BATCH_VERTICALS[args.vertical]
+    if args.text:
+        _print(search_fn(args.text, city=args.city, state=args.state, limit=args.limit))
+    else:
+        _print(get_fn(lat=args.lat, lng=args.lng, radius_miles=args.radius, city=args.city,
+                      state=args.state, tag=args.tag, limit=args.limit))
+
+
 def cmd_events_discover(args: argparse.Namespace) -> None:
     from .events import discovery
     _print(discovery.discover_feeds(limit=args.limit))
@@ -560,6 +601,23 @@ def build_parser() -> argparse.ArgumentParser:
     sq.add_argument("--radius", type=float, default=15.0)
     sq.add_argument("--limit", type=int, default=10)
     sq.set_defaults(func=cmd_salons_query)
+
+    # ---- Batch verticals: apparel / sweets / studios / services (identical CLI) ----
+    for _v in _BATCH_VERTICALS:
+        bs = sub.add_parser(f"{_v}-scrape", help=f"Scrape Indian {_v}")
+        bs.add_argument("--metro", required=True, choices=SCRAPE_REGIONS, metavar="REGION")
+        bs.set_defaults(func=cmd_bv_scrape, vertical=_v)
+        sub.add_parser(f"{_v}-process", help=f"Process raw {_v} -> canonical").set_defaults(
+            func=cmd_bv_process, vertical=_v)
+        sub.add_parser(f"{_v}-stats", help=f"{_v} row counts & coverage").set_defaults(
+            func=cmd_bv_stats, vertical=_v)
+        bq = sub.add_parser(f"{_v}-query", help=f"Query {_v} as the MCP tools do")
+        bq.add_argument("--city"); bq.add_argument("--state")
+        bq.add_argument("--tag"); bq.add_argument("--text", help="semantic search")
+        bq.add_argument("--lat", type=float); bq.add_argument("--lng", type=float)
+        bq.add_argument("--radius", type=float, default=15.0)
+        bq.add_argument("--limit", type=int, default=10)
+        bq.set_defaults(func=cmd_bv_query, vertical=_v)
 
     # ---- Phase 2: events vertical (automated iCal ingestion, admin-approved) ----
     ed = sub.add_parser("events-discover", help="Scan org websites for iCal calendar feeds")

@@ -13,10 +13,14 @@ from .. import db
 from ..pipeline import feedback, ingest, outreach
 from ..pipeline.scrapers import SCRAPERS
 from ..pipeline.scrapers.metros import METROS
+from ..apparel import pipeline as apparel
 from ..events import pipeline as events
 from ..groceries import pipeline as groceries
 from ..professionals import pipeline as professionals
 from ..salons import pipeline as salons
+from ..services import pipeline as services
+from ..studios import pipeline as studios
+from ..sweets import pipeline as sweets
 from ..temples import pipeline as temples
 from .base import Agent
 
@@ -236,6 +240,114 @@ class SalonCleanerAgent(Agent):
         return result
 
 
+class ApparelScraperAgent(Agent):
+    name = "apparel_scraper"
+    description = "Scrapes Indian apparel & jewelry stores across every metro."
+    default_interval_s = 259200  # every 3 days
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        metros = params.get("metros") or list(METROS)
+        total, errors = 0, []
+        for metro in metros:
+            try:
+                total += apparel.scrape_to_raw(metro)
+            except Exception as exc:
+                errors.append({"metro": metro, "error": str(exc)})
+        return {"upserted": total, "errors": errors}
+
+
+class ApparelCleanerAgent(Agent):
+    name = "apparel_cleaner"
+    description = "Processes raw apparel/jewelry into canonical; deactivates stale ones."
+    default_interval_s = 86400
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        result = apparel.process_raw()
+        result.update(apparel.deactivate_stale(days=params.get("stale_days", 120)))
+        return result
+
+
+class SweetsScraperAgent(Agent):
+    name = "sweets_scraper"
+    description = "Scrapes Indian sweets shops (mithai) & bakeries across every metro."
+    default_interval_s = 259200
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        metros = params.get("metros") or list(METROS)
+        total, errors = 0, []
+        for metro in metros:
+            try:
+                total += sweets.scrape_to_raw(metro)
+            except Exception as exc:
+                errors.append({"metro": metro, "error": str(exc)})
+        return {"upserted": total, "errors": errors}
+
+
+class SweetsCleanerAgent(Agent):
+    name = "sweets_cleaner"
+    description = "Processes raw sweets/bakeries into canonical; deactivates stale ones."
+    default_interval_s = 86400
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        result = sweets.process_raw()
+        result.update(sweets.deactivate_stale(days=params.get("stale_days", 120)))
+        return result
+
+
+class StudioScraperAgent(Agent):
+    name = "studio_scraper"
+    description = "Scrapes Indian yoga & cultural studios (dance/music) across every metro."
+    default_interval_s = 259200
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        metros = params.get("metros") or list(METROS)
+        total, errors = 0, []
+        for metro in metros:
+            try:
+                total += studios.scrape_to_raw(metro)
+            except Exception as exc:
+                errors.append({"metro": metro, "error": str(exc)})
+        return {"upserted": total, "errors": errors}
+
+
+class StudioCleanerAgent(Agent):
+    name = "studio_cleaner"
+    description = "Processes raw studios into canonical; deactivates stale ones."
+    default_interval_s = 86400
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        result = studios.process_raw()
+        result.update(studios.deactivate_stale(days=params.get("stale_days", 150)))
+        return result
+
+
+class ServiceScraperAgent(Agent):
+    name = "service_scraper"
+    description = "Scrapes Indian community services (money transfer/immigration/travel)."
+    default_interval_s = 259200
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        metros = params.get("metros") or list(METROS)
+        total, errors = 0, []
+        for metro in metros:
+            try:
+                total += services.scrape_to_raw(metro)
+            except Exception as exc:
+                errors.append({"metro": metro, "error": str(exc)})
+        return {"upserted": total, "errors": errors}
+
+
+class ServiceCleanerAgent(Agent):
+    name = "service_cleaner"
+    description = "Processes raw services into canonical; deactivates stale ones."
+    default_interval_s = 86400
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        result = services.process_raw()
+        result.update(services.deactivate_stale(days=params.get("stale_days", 150)))
+        return result
+
+
 class EventFeedDiscoveryAgent(Agent):
     name = "event_feed_discovery"
     description = "Scans org websites for public iCal calendar feeds (auto-finds event sources)."
@@ -360,6 +472,14 @@ ALL_AGENTS = [
     ProfessionalCleanerAgent(),
     SalonScraperAgent(),
     SalonCleanerAgent(),
+    ApparelScraperAgent(),
+    ApparelCleanerAgent(),
+    SweetsScraperAgent(),
+    SweetsCleanerAgent(),
+    StudioScraperAgent(),
+    StudioCleanerAgent(),
+    ServiceScraperAgent(),
+    ServiceCleanerAgent(),
     EventFeedDiscoveryAgent(),
     EventScraperAgent(),
     EventCleanerAgent(),

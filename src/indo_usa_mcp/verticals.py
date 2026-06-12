@@ -11,11 +11,15 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from . import db, queries as r_queries
+from .apparel import pipeline as ap_pipeline, queries as ap_queries
 from .events import pipeline as e_pipeline, queries as e_queries
 from .groceries import pipeline as g_pipeline, queries as g_queries
 from .pipeline import clean, ingest
 from .professionals import pipeline as p_pipeline, queries as p_queries
 from .salons import pipeline as s_pipeline, queries as s_queries
+from .services import pipeline as sv_pipeline, queries as sv_queries
+from .studios import pipeline as st_pipeline, queries as st_queries
+from .sweets import pipeline as sw_pipeline, queries as sw_queries
 from .temples import pipeline as t_pipeline, queries as t_queries
 
 
@@ -41,6 +45,22 @@ def _update_salon(existing: dict, diff: dict) -> None:
 
 def _update_event(existing: dict, diff: dict) -> None:
     e_pipeline._update(existing, {**existing, **diff}, diff)
+
+
+def _update_apparel(existing: dict, diff: dict) -> None:
+    ap_pipeline._update(existing, {**existing, **diff}, diff)
+
+
+def _update_sweets(existing: dict, diff: dict) -> None:
+    sw_pipeline._update(existing, {**existing, **diff}, diff)
+
+
+def _update_studio(existing: dict, diff: dict) -> None:
+    st_pipeline._update(existing, {**existing, **diff}, diff)
+
+
+def _update_service(existing: dict, diff: dict) -> None:
+    sv_pipeline._update(existing, {**existing, **diff}, diff)
 
 
 # label, queries module, stats fn, scalar edit fields, has_hours, has_dietary, update fn
@@ -85,6 +105,34 @@ VERTICALS: dict[str, dict[str, Any]] = {
         "edit_fields": ["category", "organizer", "venue_name", "address_full", "city", "state",
                         "website", "phone", "email", "region_tag", "festival_specials"],
         "has_hours": False, "has_dietary": False, "update": _update_event,
+        "supports_claims": False,
+    },
+    "apparel": {
+        "label": "Apparel & Jewelry", "table": "apparel", "queries": ap_queries,
+        "edit_fields": ["phone", "email", "website", "address_full", "city", "state",
+                        "store_type", "region_tag", "festival_specials"],
+        "has_hours": True, "has_dietary": False, "update": _update_apparel,
+        "supports_claims": False,
+    },
+    "sweets": {
+        "label": "Sweets & Bakeries", "table": "sweets", "queries": sw_queries,
+        "edit_fields": ["phone", "email", "website", "address_full", "city", "state",
+                        "store_type", "region_tag", "festival_specials"],
+        "has_hours": True, "has_dietary": True, "update": _update_sweets,
+        "supports_claims": False,
+    },
+    "studios": {
+        "label": "Yoga & Dance Studios", "table": "studios", "queries": st_queries,
+        "edit_fields": ["phone", "email", "website", "address_full", "city", "state",
+                        "studio_type", "region_tag", "festival_specials"],
+        "has_hours": True, "has_dietary": False, "update": _update_studio,
+        "supports_claims": False,
+    },
+    "services": {
+        "label": "Community Services", "table": "services", "queries": sv_queries,
+        "edit_fields": ["phone", "email", "website", "address_full", "city", "state",
+                        "service_type", "region_tag", "festival_specials"],
+        "has_hours": True, "has_dietary": False, "update": _update_service,
         "supports_claims": False,
     },
 }

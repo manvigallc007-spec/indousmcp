@@ -108,8 +108,55 @@ def _event(rec: dict) -> str:
     return s
 
 
+def _apparel(rec: dict) -> str:
+    region = f"{rec['region_tag']} " if rec.get("region_tag") else ""
+    st = (rec.get("store_type") or "store").replace("_", " ")
+    kind = {"jewelry": "jewelry store", "fabric": "fabric & textile store",
+            "tailor": "tailoring shop", "boutique": "ethnic-wear boutique"}.get(st, "clothing store")
+    s = f"{rec.get('name', 'This shop')} is {_a(region or 'Indian')} {region}Indian {kind}{_loc(rec)}."
+    services = [t for t in (rec.get("tags") or [])
+                if t in ("bridal", "saree", "lehenga", "gold", "jewelry", "tailoring", "textiles")]
+    if services:
+        s += f" Specializes in {', '.join(services)}."
+    return s + _amenities(rec) + _hours(rec)
+
+
+def _sweets(rec: dict) -> str:
+    region = f"{rec['region_tag']} " if rec.get("region_tag") else ""
+    st = rec.get("store_type") or "sweets"
+    kind = {"bakery": "bakery", "pastry": "bakery"}.get(st, "sweets shop (mithai)")
+    s = f"{rec.get('name', 'This shop')} is {_a(region or 'Indian')} {region}Indian {kind}{_loc(rec)}."
+    diet = rec.get("dietary_tags") or []
+    if diet:
+        s += f" Offers {', '.join(diet)} options."
+    return s + _amenities(rec) + _hours(rec)
+
+
+def _studio(rec: dict) -> str:
+    disc = (rec.get("studio_type") or "cultural").replace("_", " ")
+    kind = {"yoga": "yoga studio", "dance": "Indian classical dance school",
+            "music": "Indian music school", "language": "language school"}.get(disc, "cultural studio")
+    s = f"{rec.get('name', 'This studio')} is {_a(kind)} {kind}{_loc(rec)}."
+    disciplines = [t for t in (rec.get("tags") or [])
+                   if t in ("yoga", "bharatanatyam", "kathak", "kuchipudi", "odissi", "tabla",
+                            "sitar", "carnatic", "hindustani", "dance", "music")]
+    if disciplines:
+        s += f" Classes: {', '.join(disciplines)}."
+    return s + _hours(rec)
+
+
+def _service(rec: dict) -> str:
+    st = (rec.get("service_type") or "service").replace("_", " ")
+    kind = {"money transfer": "money transfer / remittance service", "bank": "bank",
+            "immigration": "immigration & visa service", "travel": "travel agency",
+            "tax": "tax & accounting service", "insurance": "insurance service"}.get(st, f"{st} service")
+    s = f"{rec.get('name', 'This business')} is {_a(kind)} {kind} serving the Indian community{_loc(rec)}."
+    return s + _hours(rec)
+
+
 _BUILDERS = {"restaurants": _restaurant, "temples": _temple, "groceries": _grocery,
-             "professionals": _professional, "salons": _salon, "events": _event}
+             "professionals": _professional, "salons": _salon, "events": _event,
+             "apparel": _apparel, "sweets": _sweets, "studios": _studio, "services": _service}
 
 
 def _rating(rec: dict) -> str:

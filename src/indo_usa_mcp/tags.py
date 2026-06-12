@@ -49,6 +49,41 @@ _SALON_TAGS: dict[str, tuple[str, ...]] = {
 }
 
 
+_APPAREL_TAGS: dict[str, tuple[str, ...]] = {
+    "saree": ("saree", "sari", "saris"), "lehenga": ("lehenga", "lehnga"),
+    "salwar": ("salwar", "anarkali"), "sherwani": ("sherwani",), "kurta": ("kurta", "kurti"),
+    "bridal": ("bridal", "wedding", "dulhan"), "ethnic-wear": ("ethnic", "vastra", "pehnava"),
+    "jewelry": ("jewel", "jewell", "bangle", "zari"), "gold": ("gold", "sona", "sonar"),
+    "tailoring": ("tailor", "stitch", "alteration"), "textiles": ("fabric", "silk", "textile"),
+}
+_SWEETS_TAGS: dict[str, tuple[str, ...]] = {
+    "mithai": ("mithai", "mishtan", "misthan", "sweet"), "halwa": ("halwa", "halwai"),
+    "jalebi": ("jalebi",), "laddu": ("laddu", "ladoo"), "barfi": ("barfi", "burfi"),
+    "rasmalai": ("rasmalai", "rasgulla", "rasagulla"), "gulab-jamun": ("gulab",),
+    "bakery": ("bakery", "bakers", "pastry"), "eggless": ("eggless",), "kaju": ("kaju",),
+}
+_STUDIO_TAGS: dict[str, tuple[str, ...]] = {
+    "yoga": ("yoga",), "bharatanatyam": ("bharatanatyam", "bharata", "bharat natyam", "natyam"),
+    "kathak": ("kathak",), "kuchipudi": ("kuchipudi",), "odissi": ("odissi",),
+    "dance": ("dance", "nritya", "nataraj", "abhinaya"), "tabla": ("tabla",),
+    "sitar": ("sitar",), "veena": ("veena",), "carnatic": ("carnatic",),
+    "hindustani": ("hindustani",), "music": ("music", "sangeet", "raga", "vocal"),
+    "language": ("hindi", "tamil", "telugu", "language", "sanskrit"),
+}
+_SERVICE_TAGS: dict[str, tuple[str, ...]] = {
+    "money-transfer": ("remit", "money transfer", "money2india", "xpress money", "ria money",
+                       "western union", "wire transfer"),
+    "forex": ("forex", "currency exchange", "bureau"), "bank": ("bank",),
+    "immigration": ("immigration", "visa", "green card", "citizenship"),
+    "travel": ("travel", "yatra", "tours", "flights", "airfare"),
+    "tax": ("tax", "cpa", "accountant", "bookkeep"), "insurance": ("insurance",),
+}
+
+
+def _match(text: str, table: dict[str, tuple[str, ...]]) -> set[str]:
+    return {tag for tag, kws in table.items() if any(k in text for k in kws)}
+
+
 def _from_keywords(text: str) -> list[str]:
     return [tag for tag, kws in _TAG_KEYWORDS.items() if kws and any(k in text for k in kws)]
 
@@ -74,6 +109,29 @@ def extract(vertical: str, rec: dict) -> list[str]:
         found = {t for t, kws in _SALON_TAGS.items() if any(k in text for k in kws)}
         if rec.get("salon_type"):
             found.add(rec["salon_type"].lower())
+        return sorted(found)
+    if vertical == "apparel":
+        text = " ".join(str(rec.get(f) or "") for f in ("name", "store_type", "description")).lower()
+        found = _match(text, _APPAREL_TAGS)
+        if rec.get("store_type"):
+            found.add(rec["store_type"].lower())
+        return sorted(found)
+    if vertical == "sweets":
+        text = " ".join(str(rec.get(f) or "") for f in ("name", "store_type", "description")).lower()
+        found = _match(text, _SWEETS_TAGS) | {"sweets"}
+        found.update(t.lower() for t in (rec.get("dietary_tags") or []))
+        return sorted(found)
+    if vertical == "studios":
+        text = " ".join(str(rec.get(f) or "") for f in ("name", "studio_type", "description")).lower()
+        found = _match(text, _STUDIO_TAGS)
+        if rec.get("studio_type"):
+            found.add(rec["studio_type"].lower())
+        return sorted(found)
+    if vertical == "services":
+        text = " ".join(str(rec.get(f) or "") for f in ("name", "service_type", "description")).lower()
+        found = _match(text, _SERVICE_TAGS)
+        if rec.get("service_type"):
+            found.add(rec["service_type"].lower())
         return sorted(found)
 
     text = " ".join(str(rec.get(f) or "") for f in (

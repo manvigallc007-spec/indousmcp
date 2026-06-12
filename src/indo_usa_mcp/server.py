@@ -10,12 +10,16 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from . import queries, verticals
+from .apparel import queries as apparel_queries
 from .config import settings
 from .events import queries as event_queries
 from .groceries import queries as grocery_queries
 from .pipeline import feedback, outreach
 from .professionals import queries as professional_queries
 from .salons import queries as salon_queries
+from .services import queries as service_queries
+from .studios import queries as studio_queries
+from .sweets import queries as sweets_queries
 from .temples import queries as temple_queries
 
 mcp = FastMCP("indo-usa-diaspora", host=settings.mcp_host, port=settings.mcp_port)
@@ -318,12 +322,150 @@ def search_events_by_text(
     return event_queries.search_events_by_text(query, city=city, state=state, limit=limit)
 
 
+# --------------------------------------------------------------- apparel & jewelry
+@mcp.tool()
+def get_indian_apparel(
+    lat: float | None = None, lng: float | None = None, radius_miles: float = 15.0,
+    city: str | None = None, state: str | None = None, tag: str | None = None,
+    open_now: bool = False, limit: int = 25,
+) -> dict[str, Any]:
+    """Find Indian apparel & jewelry stores (sarees, lehengas, ethnic wear, gold jewelers).
+
+    Provide a point (`lat`+`lng`, optional `radius_miles`) or `city`/`state`. Filter by `tag`
+    (e.g. "saree", "bridal", "gold", "jewelry", "tailoring") or `open_now`.
+    """
+    return apparel_queries.get_indian_apparel(
+        lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
+        tag=tag, open_now=open_now, limit=limit)
+
+
+@mcp.tool()
+def get_apparel_details(apparel_id: int) -> dict[str, Any]:
+    """Full canonical record for one apparel/jewelry store, plus its version history."""
+    record = apparel_queries.get_apparel_details(apparel_id)
+    if record is None:
+        return {"error": "not_found", "apparel_id": apparel_id}
+    return record
+
+
+@mcp.tool()
+def search_apparel_by_text(
+    query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+) -> dict[str, Any]:
+    """Free-text/semantic search over Indian apparel & jewelry stores."""
+    return apparel_queries.search_apparel_by_text(query, city=city, state=state, limit=limit)
+
+
+# --------------------------------------------------------------- sweets & bakeries
+@mcp.tool()
+def get_indian_sweets(
+    lat: float | None = None, lng: float | None = None, radius_miles: float = 15.0,
+    city: str | None = None, state: str | None = None, tag: str | None = None,
+    open_now: bool = False, limit: int = 25,
+) -> dict[str, Any]:
+    """Find Indian sweets shops (mithai) & bakeries.
+
+    Provide a point (`lat`+`lng`, optional `radius_miles`) or `city`/`state`. Filter by `tag`
+    (e.g. "mithai", "jalebi", "bakery", "eggless") or `open_now`.
+    """
+    return sweets_queries.get_indian_sweets(
+        lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
+        tag=tag, open_now=open_now, limit=limit)
+
+
+@mcp.tool()
+def get_sweets_details(sweets_id: int) -> dict[str, Any]:
+    """Full canonical record for one sweets shop / bakery, plus its version history."""
+    record = sweets_queries.get_sweets_details(sweets_id)
+    if record is None:
+        return {"error": "not_found", "sweets_id": sweets_id}
+    return record
+
+
+@mcp.tool()
+def search_sweets_by_text(
+    query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+) -> dict[str, Any]:
+    """Free-text/semantic search over Indian sweets shops & bakeries."""
+    return sweets_queries.search_sweets_by_text(query, city=city, state=state, limit=limit)
+
+
+# --------------------------------------------------------------- yoga & dance studios
+@mcp.tool()
+def get_indian_studios(
+    lat: float | None = None, lng: float | None = None, radius_miles: float = 15.0,
+    city: str | None = None, state: str | None = None, tag: str | None = None,
+    open_now: bool = False, limit: int = 25,
+) -> dict[str, Any]:
+    """Find Indian yoga & cultural studios (yoga, classical dance, music, language classes).
+
+    Provide a point (`lat`+`lng`, optional `radius_miles`) or `city`/`state`. Filter by `tag`
+    (e.g. "yoga", "bharatanatyam", "kathak", "tabla", "carnatic") or `open_now`.
+    """
+    return studio_queries.get_indian_studios(
+        lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
+        tag=tag, open_now=open_now, limit=limit)
+
+
+@mcp.tool()
+def get_studio_details(studio_id: int) -> dict[str, Any]:
+    """Full canonical record for one studio, plus its version history."""
+    record = studio_queries.get_studio_details(studio_id)
+    if record is None:
+        return {"error": "not_found", "studio_id": studio_id}
+    return record
+
+
+@mcp.tool()
+def search_studios_by_text(
+    query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+) -> dict[str, Any]:
+    """Free-text/semantic search over Indian yoga/dance/music studios."""
+    return studio_queries.search_studios_by_text(query, city=city, state=state, limit=limit)
+
+
+# --------------------------------------------------------------- community services
+@mcp.tool()
+def get_indian_services(
+    lat: float | None = None, lng: float | None = None, radius_miles: float = 15.0,
+    city: str | None = None, state: str | None = None, tag: str | None = None,
+    open_now: bool = False, limit: int = 25,
+) -> dict[str, Any]:
+    """Find Indian community services (money transfer/remittance, banks, immigration/visa,
+    travel agents, tax/insurance).
+
+    Provide a point (`lat`+`lng`, optional `radius_miles`) or `city`/`state`. Filter by `tag`
+    (e.g. "money-transfer", "immigration", "travel", "tax") or `open_now`.
+    """
+    return service_queries.get_indian_services(
+        lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
+        tag=tag, open_now=open_now, limit=limit)
+
+
+@mcp.tool()
+def get_service_details(service_id: int) -> dict[str, Any]:
+    """Full canonical record for one service business, plus its version history."""
+    record = service_queries.get_service_details(service_id)
+    if record is None:
+        return {"error": "not_found", "service_id": service_id}
+    return record
+
+
+@mcp.tool()
+def search_services_by_text(
+    query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+) -> dict[str, Any]:
+    """Free-text/semantic search over Indian community services."""
+    return service_queries.search_services_by_text(query, city=city, state=state, limit=limit)
+
+
 @mcp.tool()
 def search_all(
     query: str, city: str | None = None, state: str | None = None, limit: int = 20,
 ) -> dict[str, Any]:
     """Search across ALL Indian-American verticals at once — restaurants, temples, groceries,
-    healthcare professionals, and beauty salons.
+    healthcare professionals, beauty salons, events, apparel & jewelry, sweets & bakeries,
+    yoga/dance studios, and community services.
 
     Use for broad queries like "Indian things near me in Edison NJ" or "vegetarian South
     Indian". Each result is tagged with its `vertical`; featured listings rank first, then by

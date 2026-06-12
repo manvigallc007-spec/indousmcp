@@ -37,6 +37,14 @@ _TOOL_VERTICAL = {
     "search_salons_by_text": "salons",
     "get_indian_events": "events", "get_event_details": "events",
     "search_events_by_text": "events",
+    "get_indian_apparel": "apparel", "get_apparel_details": "apparel",
+    "search_apparel_by_text": "apparel",
+    "get_indian_sweets": "sweets", "get_sweets_details": "sweets",
+    "search_sweets_by_text": "sweets",
+    "get_indian_studios": "studios", "get_studio_details": "studios",
+    "search_studios_by_text": "studios",
+    "get_indian_services": "services", "get_service_details": "services",
+    "search_services_by_text": "services",
 }
 
 
