@@ -87,9 +87,12 @@ services:
       # bot set LLM_PROVIDER=llm and point at Ollama (free, self-hosted) or a hosted API key.
       CHAT_ENABLED: ${CHAT_ENABLED:-true}
       LLM_PROVIDER: ${LLM_PROVIDER:-search}
-      LLM_BASE_URL: ${LLM_BASE_URL:-http://localhost:11434/v1}
+      # Containerized default points at the opt-in `ollama` service below (enable with the
+      # `llm` profile). For host-installed Ollama use http://host.docker.internal:11434/v1.
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434/v1}
       LLM_API_KEY: ${LLM_API_KEY:-ollama}
-      LLM_MODEL: ${LLM_MODEL:-llama3.1}
+      LLM_MODEL: ${LLM_MODEL:-gemma2:2b}
+      LLM_USE_TOOLS: ${LLM_USE_TOOLS:-false}
       # Admin dashboard + owner portal sessions (set these to enable /admin).
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       SECRET_KEY: ${SECRET_KEY:-dev-insecure-change-me}
@@ -161,7 +164,22 @@ services:
       - server
       - web
 
+  # Opt-in self-hosted LLM for the /chat assistant (free). Enable with: --profile llm
+  # After it's up:  docker compose -f docker-compose.prod.yml exec ollama ollama pull gemma2:2b
+  # Then set LLM_PROVIDER=llm in .env (LLM_MODEL=gemma2:2b, LLM_USE_TOOLS=false already default).
+  # CPU-only; no GPU needed. A 2B model wants ~3-4GB free RAM — check your VPS before enabling.
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    profiles: ["llm"]
+    volumes:
+      - ollama_models:/root/.ollama
+    # Not published to the host; only the web service reaches it over the compose network.
+    expose:
+      - "11434"
+
 volumes:
   diaspora_pgdata:
   caddy_data:
   caddy_config:
+  ollama_models:

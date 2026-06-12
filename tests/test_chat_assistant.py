@@ -53,6 +53,44 @@ def test_llm_error_degrades_to_search(no_db, monkeypatch):
     assert out["llm_error"] == "RuntimeError"
 
 
+def test_grounded_mode_searches_then_single_call(no_db, monkeypatch):
+    # Gemma / small-model path: llm_use_tools=False -> search first, then ONE no-tools LLM call.
+    monkeypatch.setattr(settings, "llm_provider", "llm")
+    monkeypatch.setattr(settings, "llm_base_url", "http://x")
+    monkeypatch.setattr(settings, "llm_model", "gemma2:2b")
+    monkeypatch.setattr(settings, "llm_use_tools", False)
+    seen = {}
+
+    def fake_chat(convo, use_tools):
+        seen["use_tools"] = use_tools
+        seen["grounded"] = any("Listings found" in m.get("content", "") for m in convo)
+        return {"content": "Try Dosa Hut in Edison!"}
+    monkeypatch.setattr(assistant, "_chat", fake_chat)
+    out = assistant.reply([{"role": "user", "content": "dosa"}])
+    assert out["provider"] == "llm" and out["reply"] == "Try Dosa Hut in Edison!"
+    assert len(out["cards"]) == 2                 # cards came from the pre-search
+    assert seen["use_tools"] is False and seen["grounded"] is True
+
+
+def test_grounded_mode_searches_then_single_call(no_db, monkeypatch):
+    # Gemma / small-model path: llm_use_tools=False -> search first, then ONE no-tools LLM call.
+    monkeypatch.setattr(settings, "llm_provider", "llm")
+    monkeypatch.setattr(settings, "llm_base_url", "http://x")
+    monkeypatch.setattr(settings, "llm_model", "gemma2:2b")
+    monkeypatch.setattr(settings, "llm_use_tools", False)
+    seen = {}
+
+    def fake_chat(convo, use_tools):
+        seen["use_tools"] = use_tools
+        seen["grounded"] = any("Listings found" in m.get("content", "") for m in convo)
+        return {"content": "Try Dosa Hut in Edison!"}
+    monkeypatch.setattr(assistant, "_chat", fake_chat)
+    out = assistant.reply([{"role": "user", "content": "dosa"}])
+    assert out["provider"] == "llm" and out["reply"] == "Try Dosa Hut in Edison!"
+    assert len(out["cards"]) == 2                 # cards came from the pre-search
+    assert seen["use_tools"] is False and seen["grounded"] is True
+
+
 def test_chat_page_renders():
     r = TestClient(app).get("/chat")
     assert r.status_code == 200 and "chat/api" in r.text

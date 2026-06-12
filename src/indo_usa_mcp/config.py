@@ -67,13 +67,19 @@ class Settings(BaseSettings):
     #   llm_provider = "search"  -> no LLM, templated semantic-search replies (free, default)
     #   llm_provider = "llm"     -> real tool-calling chatbot against llm_base_url
     # For self-hosted Ollama (free): llm_provider=llm, llm_base_url=http://localhost:11434/v1,
-    #   llm_api_key=ollama, llm_model=llama3.1 (run `ollama serve` + `ollama pull llama3.1`).
+    #   llm_api_key=ollama, llm_model=<model> (run `ollama serve` + `ollama pull <model>`).
+    #   Models: llama3.1 / qwen2.5 support tool-calling; gemma2:2b / gemma3 do not — for those
+    #   (and small models on a CPU VPS) set llm_use_tools=false (grounded single-call mode).
     # For a hosted API: set llm_base_url + a real llm_api_key + llm_model (it meters/bills).
     chat_enabled: bool = True
     llm_provider: str = "search"
     llm_base_url: str = "http://localhost:11434/v1"
     llm_api_key: str = "ollama"
     llm_model: str = "llama3.1"
+    # True = function/tool-calling (needs a tool-capable model). False = grounded RAG: search
+    # first, then one LLM call to phrase the answer — works with Gemma & any small model, and
+    # is faster on a no-GPU VPS. Recommended for self-hosted small models.
+    llm_use_tools: bool = True
     llm_timeout_s: int = 60
     chat_rate_per_min: int = 20            # per-IP request cap on the chat API (abuse guard)
 
