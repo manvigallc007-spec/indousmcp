@@ -285,14 +285,17 @@ python -m indo_usa_mcp.cli salons-query --tag threading --city Sunnyvale
 ## Phase 2: Events vertical (automated, admin-approved)
 
 Indian-American community events (festivals, garba, concerts, puja). **Fully automated** —
-agents ingest events from public **iCalendar (.ics) feeds** (set `EVENT_ICAL_FEEDS`), the
+an agent **auto-discovers** iCal feeds by scanning the websites of orgs already in the
+database (temples first) for calendar links, and agents ingest events from those feeds plus
+any in `EVENT_ICAL_FEEDS`. The
 cleaner **auto-approves high-confidence events and queues the rest** under *Admin → Events*
 for one-click approval (no manual entry). **Past events are kept, not deleted** — they're
 date-filtered out of upcoming results (`get_indian_events` returns upcoming by default;
 `include_past=true` for history) and an 18-month retention purges very old ones.
 
 ```powershell
-python -m indo_usa_mcp.cli events-scrape      # ingest configured iCal feeds
+python -m indo_usa_mcp.cli events-discover     # scan org websites for iCal feeds
+python -m indo_usa_mcp.cli events-scrape      # ingest configured + discovered iCal feeds
 python -m indo_usa_mcp.cli events-process     # auto-approve / queue for admin
 python -m indo_usa_mcp.cli events-approvals   # list pending
 python -m indo_usa_mcp.cli events-query --city Edison --category garba

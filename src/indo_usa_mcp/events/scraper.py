@@ -20,7 +20,10 @@ _DT = re.compile(r"^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})Z?)?$")
 
 
 def _feeds() -> list[str]:
-    return [f.strip() for f in (settings.event_ical_feeds or "").split(",") if f.strip()]
+    """Configured feeds (EVENT_ICAL_FEEDS) + auto-discovered feeds from org websites."""
+    configured = [f.strip() for f in (settings.event_ical_feeds or "").split(",") if f.strip()]
+    from .discovery import discovered_feeds
+    return list(dict.fromkeys(configured + discovered_feeds()))
 
 
 def _unfold(text: str) -> list[str]:

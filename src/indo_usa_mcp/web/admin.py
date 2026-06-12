@@ -403,11 +403,16 @@ def events_page(request: Request) -> HTMLResponse:
             f"<td><a href='{esc(e['source_url'])}'>src</a></td>"
             f"<td>{_event_btns(e['id'])}</td></tr>")
     stats = verticals.VERTICALS["events"]["queries"].stats()
+    feeds = db.query_one(
+        "SELECT count(*) FILTER (WHERE found AND active) AS found, count(*) AS scanned "
+        "FROM event_feed_sources") or {"found": 0, "scanned": 0}
     body = (f"<div class='cards'>"
             f"<div class='kpi'><b>{stats['upcoming']}</b><span>upcoming (live)</span></div>"
             f"<div class='kpi'><b class='{'warn' if stats['pending'] else ''}'>{stats['pending']}</b>"
             f"<span>pending approval</span></div>"
-            f"<div class='kpi'><b>{stats['past']}</b><span>past (kept)</span></div></div>"
+            f"<div class='kpi'><b>{stats['past']}</b><span>past (kept)</span></div>"
+            f"<div class='kpi'><b>{feeds['found']}</b><span>discovered feeds</span>"
+            f"<div class='muted'>{feeds['scanned']} sites scanned</div></div></div>"
             "<p class='muted'>Events are ingested automatically from iCal feeds; high-confidence "
             "ones auto-approve, the rest wait here. Past events are kept and date-filtered.</p>"
             + (f"<h3>Pending approval ({len(pend)})</h3><table><tr><th>Event</th><th>Category</th>"

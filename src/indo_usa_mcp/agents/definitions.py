@@ -236,6 +236,16 @@ class SalonCleanerAgent(Agent):
         return result
 
 
+class EventFeedDiscoveryAgent(Agent):
+    name = "event_feed_discovery"
+    description = "Scans org websites for public iCal calendar feeds (auto-finds event sources)."
+    default_interval_s = 604800  # weekly
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from ..events import discovery
+        return discovery.discover_feeds(limit=params.get("limit", 30))
+
+
 class EventScraperAgent(Agent):
     name = "event_scraper"
     description = "Ingests Indian-American events from public iCalendar feeds."
@@ -336,6 +346,7 @@ ALL_AGENTS = [
     ProfessionalCleanerAgent(),
     SalonScraperAgent(),
     SalonCleanerAgent(),
+    EventFeedDiscoveryAgent(),
     EventScraperAgent(),
     EventCleanerAgent(),
     ReportingAgent(),

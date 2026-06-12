@@ -278,6 +278,11 @@ def cmd_salons_query(args: argparse.Namespace) -> None:
             state=args.state, tag=args.tag, limit=args.limit))
 
 
+def cmd_events_discover(args: argparse.Namespace) -> None:
+    from .events import discovery
+    _print(discovery.discover_feeds(limit=args.limit))
+
+
 def cmd_events_scrape(_: argparse.Namespace) -> None:
     print(f"Ingesting events from {len(events.scraper._feeds())} iCal feed(s)...")
     print(f"Upserted {events.scrape_to_raw()} raw event observation(s).")
@@ -522,6 +527,9 @@ def build_parser() -> argparse.ArgumentParser:
     sq.set_defaults(func=cmd_salons_query)
 
     # ---- Phase 2: events vertical (automated iCal ingestion, admin-approved) ----
+    ed = sub.add_parser("events-discover", help="Scan org websites for iCal calendar feeds")
+    ed.add_argument("--limit", type=int, default=30)
+    ed.set_defaults(func=cmd_events_discover)
     sub.add_parser("events-scrape", help="Ingest events from configured iCal feeds").set_defaults(
         func=cmd_events_scrape)
     sub.add_parser("events-process", help="Process raw events -> approval routing").set_defaults(
