@@ -3,9 +3,10 @@
 Agent-first, agent-only data layer for the Indian-American diaspora. **Phase 1: Indian
 restaurants (USA).** This repo is the walking skeleton from the architecture blueprint:
 
-- **MCP server** exposing the 3 core capabilities (`get_indian_restaurants`,
-  `get_restaurant_details`, `search_restaurants_by_text`) plus outreach tools
-  (`find_unclaimed_restaurants`, `draft_claim_outreach`) and `submit_correction`.
+- **MCP server** exposing restaurant capabilities (`get_indian_restaurants`,
+  `get_restaurant_details`, `search_restaurants_by_text`, `find_unclaimed_restaurants`,
+  `draft_claim_outreach`, `submit_correction`) and **temple** capabilities
+  (`get_indian_temples`, `get_temple_details`, `search_temples_by_text`).
 - **Data pipeline**: scrape → raw → clean/enrich/score → approval queue → canonical table →
   versioning.
 - **One real scraper**: OpenStreetMap Overpass (public, ODbL-licensed, no login, ToS-safe).
@@ -180,6 +181,23 @@ python -m indo_usa_mcp.agents.scheduler        # long-lived scheduler (VPS worke
 Two independent public scrapers feed the pipeline: `osm_overpass` (OpenStreetMap, ODbL)
 and `wikidata` (Wikidata SPARQL, CC0). Pick one with `scrape --source <name>`; the
 Scraper Agent runs both.
+
+## Phase 2: Temples vertical
+
+An independent vertical (Hindu/Sikh/Jain places of worship) sharing the same pipeline,
+agents, embeddings and deployment — per the blueprint's "independent verticals, shared
+infra" principle. Own table (`temples`), own OSM scraper (`amenity=place_of_worship` +
+`religion`), own agents (`temple_scraper`, `temple_cleaner`), own MCP tools. Cultural
+enrichment infers **deity** (Venkateswara, Krishna, Lakshmi…) and **region** (Punjabi for
+Sikh, Gujarati for Swaminarayan, Telugu for Venkateswara…) from the name.
+
+```powershell
+python -m indo_usa_mcp.cli temples-scrape --metro bay_area
+python -m indo_usa_mcp.cli temples-process
+python -m indo_usa_mcp.cli temples-stats
+python -m indo_usa_mcp.cli temples-query --religion hindu --city Fremont
+python -m indo_usa_mcp.cli temples-query --text "swaminarayan gujarati mandir"
+```
 
 ## Connecting an MCP client
 

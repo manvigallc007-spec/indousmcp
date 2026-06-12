@@ -13,6 +13,7 @@ from .. import db
 from ..pipeline import feedback, ingest, outreach
 from ..pipeline.scrapers import SCRAPERS
 from ..pipeline.scrapers.metros import METROS
+from ..temples import pipeline as temples
 from .base import Agent
 
 
@@ -123,6 +124,33 @@ class SubmissionAgent(Agent):
         }
 
 
+class TempleScraperAgent(Agent):
+    name = "temple_scraper"
+    description = "Scrapes Hindu/Sikh/Jain places of worship across every metro."
+    default_interval_s = 172800  # every 2 days (temples change rarely)
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        metros = params.get("metros") or list(METROS)
+        total, errors = 0, []
+        for metro in metros:
+            try:
+                total += temples.scrape_to_raw(metro)
+            except Exception as exc:
+                errors.append({"metro": metro, "error": str(exc)})
+        return {"upserted": total, "errors": errors}
+
+
+class TempleCleanerAgent(Agent):
+    name = "temple_cleaner"
+    description = "Processes raw temples into canonical; deactivates stale ones."
+    default_interval_s = 86400
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        result = temples.process_raw()
+        result.update(temples.deactivate_stale(days=params.get("stale_days", 90)))
+        return result
+
+
 class MonitoringAgent(Agent):
     name = "monitoring"
     description = "Detects anomalies (backlogs, scraper failures, stale data) -> alerts."
@@ -183,5 +211,7 @@ ALL_AGENTS = [
     FeedbackAgent(),
     OutreachAgent(),
     SubmissionAgent(),
+    TempleScraperAgent(),
+    TempleCleanerAgent(),
     MonitoringAgent(),
 ]

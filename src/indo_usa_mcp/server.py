@@ -12,6 +12,7 @@ from mcp.server.fastmcp import FastMCP
 from . import queries
 from .config import settings
 from .pipeline import feedback, outreach
+from .temples import queries as temple_queries
 
 mcp = FastMCP("indo-usa-diaspora", host=settings.mcp_host, port=settings.mcp_port)
 
@@ -106,6 +107,46 @@ def submit_correction(restaurant_id: int, field: str, value: str, reason: str = 
     human for claimed/featured ones. Identity fields (name, coordinates) are not correctable.
     """
     return feedback.submit_correction(restaurant_id, field, value, reason=reason, source="agent")
+
+
+# --------------------------------------------------------------- temples (Phase 2)
+@mcp.tool()
+def get_indian_temples(
+    lat: float | None = None,
+    lng: float | None = None,
+    radius_miles: float = 15.0,
+    city: str | None = None,
+    state: str | None = None,
+    religion: str | None = None,
+    denomination: str | None = None,
+    limit: int = 25,
+) -> dict[str, Any]:
+    """Find Indian-American temples (Hindu/Sikh/Jain places of worship).
+
+    Provide a point (`lat`+`lng`, optional `radius_miles`) or `city`/`state`. Filter by
+    `religion` ("hindu", "sikh", "jain") or `denomination` (e.g. "swaminarayan"). Returns
+    records with deity, region, hours, confidence and `distance_miles` when a point is given.
+    """
+    return temple_queries.get_indian_temples(
+        lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
+        religion=religion, denomination=denomination, limit=limit)
+
+
+@mcp.tool()
+def get_temple_details(temple_id: int) -> dict[str, Any]:
+    """Full canonical record for one temple, plus its version history."""
+    record = temple_queries.get_temple_details(temple_id)
+    if record is None:
+        return {"error": "not_found", "temple_id": temple_id}
+    return record
+
+
+@mcp.tool()
+def search_temples_by_text(
+    query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+) -> dict[str, Any]:
+    """Free-text/semantic search over temples (name/deity/denomination/region)."""
+    return temple_queries.search_temples_by_text(query, city=city, state=state, limit=limit)
 
 
 def main() -> None:

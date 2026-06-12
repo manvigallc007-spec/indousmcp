@@ -24,6 +24,8 @@ from .agents.scheduler import run_loop
 from .pipeline import feedback, ingest, outreach, seed
 from .pipeline.scrapers import SCRAPERS
 from .pipeline.scrapers.metros import SCRAPE_REGIONS
+from .temples import pipeline as temples
+from .temples import queries as temple_queries
 
 
 def _print(obj) -> None:
@@ -140,6 +142,30 @@ def cmd_query(args: argparse.Namespace) -> None:
             dietary_tags=args.dietary, featured_only=args.featured, limit=args.limit))
 
 
+def cmd_temples_scrape(args: argparse.Namespace) -> None:
+    print(f"Scraping temples for region={args.metro} ...")
+    n = temples.scrape_to_raw(args.metro)
+    print(f"Upserted {n} raw temple observation(s).")
+
+
+def cmd_temples_process(_: argparse.Namespace) -> None:
+    _print(temples.process_raw())
+
+
+def cmd_temples_stats(_: argparse.Namespace) -> None:
+    _print(temple_queries.stats())
+
+
+def cmd_temples_query(args: argparse.Namespace) -> None:
+    if args.text:
+        _print(temple_queries.search_temples_by_text(
+            args.text, city=args.city, state=args.state, limit=args.limit))
+    else:
+        _print(temple_queries.get_indian_temples(
+            lat=args.lat, lng=args.lng, radius_miles=args.radius, city=args.city,
+            state=args.state, religion=args.religion, limit=args.limit))
+
+
 def cmd_stats(_: argparse.Namespace) -> None:
     _print(queries.stats())
 
@@ -245,6 +271,27 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("--id", type=int, help="fetch one restaurant + version history")
     q.add_argument("--limit", type=int, default=10)
     q.set_defaults(func=cmd_query)
+
+    # ---- Phase 2: temples vertical ----
+    ts = sub.add_parser("temples-scrape", help="Scrape Hindu/Sikh/Jain temples for a region")
+    ts.add_argument("--metro", required=True, choices=SCRAPE_REGIONS, metavar="REGION")
+    ts.set_defaults(func=cmd_temples_scrape)
+
+    sub.add_parser("temples-process", help="Process raw temples -> canonical").set_defaults(
+        func=cmd_temples_process)
+    sub.add_parser("temples-stats", help="Temple row counts & coverage").set_defaults(
+        func=cmd_temples_stats)
+
+    tq = sub.add_parser("temples-query", help="Query temples as the MCP tools do")
+    tq.add_argument("--city")
+    tq.add_argument("--state")
+    tq.add_argument("--religion", help="hindu | sikh | jain")
+    tq.add_argument("--text", help="semantic search")
+    tq.add_argument("--lat", type=float)
+    tq.add_argument("--lng", type=float)
+    tq.add_argument("--radius", type=float, default=15.0)
+    tq.add_argument("--limit", type=int, default=10)
+    tq.set_defaults(func=cmd_temples_query)
 
     sub.add_parser("stats", help="Show row counts & coverage").set_defaults(func=cmd_stats)
     return p
