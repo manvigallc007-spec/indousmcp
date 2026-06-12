@@ -12,7 +12,7 @@ from typing import Any, Callable
 
 from . import db, queries as r_queries
 from .groceries import pipeline as g_pipeline, queries as g_queries
-from .pipeline import ingest
+from .pipeline import clean, ingest
 from .temples import pipeline as t_pipeline, queries as t_queries
 
 
@@ -65,35 +65,67 @@ def _table(vertical: str) -> str:
 
 
 # ------------------------------------------------------------------ generic queries
-def list_records(vertical: str, q: str | None = None, flt: str | None = None,
-                 limit: int = 50, offset: int = 0) -> list[dict]:
-    table = _table(vertical)
+_FLT_MAP = {"featured": "is_featured", "claimed": "is_claimed",
+            "inactive": "NOT is_active", "active": "is_active"}
+
+
+def _filters(q, flt, state, city):
     where, params = ["deleted_at IS NULL"], []
     if q:
         where.append("(name ILIKE %s OR city ILIKE %s)")
         params += [f"%{q}%", f"%{q}%"]
-    flt_map = {"featured": "is_featured", "claimed": "is_claimed",
-               "inactive": "NOT is_active", "active": "is_active"}
-    if flt in flt_map:
-        where.append(flt_map[flt])
+    if flt in _FLT_MAP:
+        where.append(_FLT_MAP[flt])
+    if state:
+        where.append("LOWER(state) = LOWER(%s)")
+        params.append(state)
+    if city:
+        where.append("LOWER(city) = LOWER(%s)")
+        params.append(city)
+    return where, params
+
+
+def list_records(vertical: str, q: str | None = None, flt: str | None = None,
+                 state: str | None = None, city: str | None = None,
+                 limit: int = 50, offset: int = 0) -> list[dict]:
+    where, params = _filters(q, flt, state, city)
     sql = (f"SELECT id, name, city, state, is_active, is_featured, is_claimed, "
-           f"confidence_score, region_tag FROM {table} WHERE {' AND '.join(where)} "
+           f"confidence_score, region_tag FROM {_table(vertical)} WHERE {' AND '.join(where)} "
            f"ORDER BY id DESC LIMIT %s OFFSET %s")
     return db.query(sql, params + [limit, offset])
 
 
-def count_records(vertical: str, q: str | None = None, flt: str | None = None) -> int:
-    table = _table(vertical)
-    where, params = ["deleted_at IS NULL"], []
-    if q:
-        where.append("(name ILIKE %s OR city ILIKE %s)")
-        params += [f"%{q}%", f"%{q}%"]
-    flt_map = {"featured": "is_featured", "claimed": "is_claimed",
-               "inactive": "NOT is_active", "active": "is_active"}
-    if flt in flt_map:
-        where.append(flt_map[flt])
-    row = db.query_one(f"SELECT count(*) AS n FROM {table} WHERE {' AND '.join(where)}", params)
+def count_records(vertical: str, q: str | None = None, flt: str | None = None,
+                  state: str | None = None, city: str | None = None) -> int:
+    where, params = _filters(q, flt, state, city)
+    row = db.query_one(f"SELECT count(*) AS n FROM {_table(vertical)} WHERE {' AND '.join(where)}", params)
     return row["n"] if row else 0
+
+
+def geo_summary(vertical: str, state: str | None = None) -> list[dict]:
+    """Country/state/city rollup. Without `state`: counts per state. With it: per city."""
+    table = _table(vertical)
+    if state is None:
+        return db.query(
+            f"SELECT COALESCE(state, '(unknown)') AS state, count(*) AS n FROM {table} "
+            f"WHERE deleted_at IS NULL AND is_active GROUP BY state ORDER BY n DESC")
+    return db.query(
+        f"SELECT COALESCE(city, '(unknown)') AS city, count(*) AS n FROM {table} "
+        f"WHERE deleted_at IS NULL AND is_active AND LOWER(state) = LOWER(%s) "
+        f"GROUP BY city ORDER BY n DESC", (state,))
+
+
+def normalize_geography(vertical: str) -> dict:
+    """Backfill: normalize existing city/state (e.g. 'California' -> 'CA') in place."""
+    table = _table(vertical)
+    updated = 0
+    for r in db.query(f"SELECT id, city, state FROM {table} WHERE deleted_at IS NULL"):
+        ns, nc = clean.normalize_state(r["state"]), clean.normalize_city(r["city"])
+        if ns != r["state"] or nc != r["city"]:
+            db.execute(f"UPDATE {table} SET state = %s, city = %s, updated_at = now() WHERE id = %s",
+                       (ns, nc, r["id"]))
+            updated += 1
+    return {"vertical": vertical, "updated": updated}
 
 
 def get_record(vertical: str, rec_id: int) -> dict | None:

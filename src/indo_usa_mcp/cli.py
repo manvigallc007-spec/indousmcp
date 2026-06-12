@@ -198,6 +198,16 @@ def cmd_report(_: argparse.Namespace) -> None:
     print(reporting.render_text(report))
 
 
+def cmd_quality(_: argparse.Namespace) -> None:
+    from . import quality
+    _print(quality.scan_all())
+
+
+def cmd_normalize_geo(_: argparse.Namespace) -> None:
+    from . import verticals
+    _print([verticals.normalize_geography(v) for v in verticals.VERTICALS])
+
+
 def cmd_stats(_: argparse.Namespace) -> None:
     _print(queries.stats())
 
@@ -348,6 +358,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("report", help="Compute & print the daily health/growth report").set_defaults(
         func=cmd_report)
+    sub.add_parser("quality", help="Data-quality scan across verticals").set_defaults(
+        func=cmd_quality)
+    sub.add_parser("normalize-geo", help="Backfill city/state normalization across verticals").set_defaults(
+        func=cmd_normalize_geo)
     sub.add_parser("stats", help="Show row counts & coverage").set_defaults(func=cmd_stats)
     return p
 

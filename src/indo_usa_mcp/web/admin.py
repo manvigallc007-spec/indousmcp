@@ -8,7 +8,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Route
 
-from .. import db, payments, reporting, verticals
+from .. import db, payments, quality, reporting, verticals
 from ..agents import AGENTS, run_agent
 from ..config import settings
 from ..pipeline import ingest
@@ -95,16 +95,24 @@ def data_list(request: Request) -> HTMLResponse:
         return admin_page("Not found", "<p>Unknown vertical.</p>", status=404)
     q = request.query_params.get("q") or None
     flt = request.query_params.get("filter") or None
+    state = request.query_params.get("state") or None
+    city = request.query_params.get("city") or None
     page = max(int(request.query_params.get("page", "1") or 1), 1)
     per = 50
-    rows = verticals.list_records(vertical, q=q, flt=flt, limit=per, offset=(page - 1) * per)
-    total = verticals.count_records(vertical, q=q, flt=flt)
+    rows = verticals.list_records(vertical, q=q, flt=flt, state=state, city=city,
+                                  limit=per, offset=(page - 1) * per)
+    total = verticals.count_records(vertical, q=q, flt=flt, state=state, city=city)
 
     tabs = " · ".join(f"<a href='/admin/data/{v}'>{verticals.VERTICALS[v]['label']}"
                       f"{' ◀' if v == vertical else ''}</a>" for v in _VKEYS)
     filters = " ".join(
         f"<a href='/admin/data/{vertical}?filter={f}'>{f}</a>"
         for f in ("active", "featured", "claimed", "inactive"))
+    geo_ctx = ""
+    if state or city:
+        loc = ", ".join(x for x in (city, state) if x)
+        geo_ctx = (f"<p class='muted'>Location: <b>{esc(loc)}</b> "
+                   f"· <a href='/admin/data/{vertical}'>clear</a></p>")
     trs = ""
     for x in rows:
         badges = " ".join(b for b in (
@@ -119,12 +127,100 @@ def data_list(request: Request) -> HTMLResponse:
            + (f"<a href='?page={page-1}'>‹ prev</a> " if page > 1 else "")
            + (f"<a href='?page={page+1}'>next ›</a>" if page < pages else ""))
     body = (f"<p>{tabs}</p><p class='muted'>Filter: {filters} · "
-            f"<a href='/admin/data/{vertical}'>all</a></p>"
+            f"<a href='/admin/data/{vertical}'>all</a> · "
+            f"<a href='/admin/geo/{vertical}'>by location ▸</a></p>{geo_ctx}"
             f"<form method='get' class='inline'><input name='q' placeholder='search name/city' "
             f"value='{esc(q)}'> <button>Search</button></form>"
             f"<table><tr><th>ID</th><th>Name</th><th>Location</th><th>Region</th>"
             f"<th>Conf</th><th></th></tr>{trs}</table>{nav}")
     return admin_page(f"Data · {verticals.VERTICALS[vertical]['label']}", body, active="Data")
+
+
+# -------------------------------------------------------------------- geography
+def geo_page(request: Request) -> HTMLResponse:
+    if (r := require_admin(request)):
+        return r
+    vertical = request.path_params["vertical"]
+    if vertical not in verticals.VERTICALS:
+        return admin_page("Not found", "<p>Unknown vertical.</p>", status=404)
+    state = request.query_params.get("state") or None
+    tabs = " · ".join(f"<a href='/admin/geo/{v}'>{verticals.VERTICALS[v]['label']}"
+                      f"{' ◀' if v == vertical else ''}</a>" for v in _VKEYS)
+
+    if state is None:  # country -> states
+        rows = verticals.geo_summary(vertical)
+        trs = "".join(
+            f"<tr><td><a href='/admin/geo/{vertical}?state={esc(x['state'])}'>{esc(x['state'])}</a></td>"
+            f"<td>{x['n']}</td></tr>" for x in rows)
+        body = (f"<p>{tabs}</p><p class='muted'>USA · {len(rows)} states · "
+                f"click a state to drill into cities</p>"
+                f"<table><tr><th>State</th><th>Active records</th></tr>{trs}</table>")
+        return admin_page(f"Geography · {verticals.VERTICALS[vertical]['label']}", body, active="Geography")
+
+    rows = verticals.geo_summary(vertical, state=state)  # state -> cities
+    trs = "".join(
+        f"<tr><td><a href='/admin/data/{vertical}?state={esc(state)}&city={esc(x['city'])}'>"
+        f"{esc(x['city'])}</a></td><td>{x['n']}</td>"
+        f"<td><a href='/admin/data/{vertical}?state={esc(state)}&city={esc(x['city'])}'>view ▸</a></td></tr>"
+        for x in rows)
+    body = (f"<p><a href='/admin/geo/{vertical}'>‹ all states</a> · "
+            f"<a href='/admin/data/{vertical}?state={esc(state)}'>view all {esc(state)} ▸</a></p>"
+            f"<h3>{esc(state)} — cities</h3>"
+            f"<table><tr><th>City</th><th>Records</th><th></th></tr>{trs}</table>")
+    return admin_page(f"Geography · {esc(state)}", body, active="Geography")
+
+
+# ----------------------------------------------------------------- data quality
+def quality_page(request: Request) -> HTMLResponse:
+    if (r := require_admin(request)):
+        return r
+    vertical = request.path_params["vertical"]
+    if vertical not in verticals.VERTICALS:
+        return admin_page("Not found", "<p>Unknown vertical.</p>", status=404)
+    issue = request.query_params.get("issue") or None
+    tabs = " · ".join(f"<a href='/admin/quality/{v}'>{verticals.VERTICALS[v]['label']}"
+                      f"{' ◀' if v == vertical else ''}</a>" for v in _VKEYS)
+
+    if issue and issue in quality.ISSUES:  # drill into a specific issue
+        rows = quality.flagged(vertical, issue, limit=200)
+        trs = "".join(
+            f"<tr><td><a href='/admin/data/{vertical}/{x['id']}'>{esc(x['name'])}</a></td>"
+            f"<td>{esc(x['city'])}, {esc(x['state'])}</td><td>{esc(x['region_tag'])}</td>"
+            f"<td>{x['confidence_score']}</td></tr>" for x in rows)
+        body = (f"<p><a href='/admin/quality/{vertical}'>‹ quality overview</a></p>"
+                f"<h3>{quality.ISSUES[issue][0]} — {len(rows)} records</h3>"
+                f"<table><tr><th>Name</th><th>Location</th><th>Region</th><th>Conf</th></tr>{trs}</table>")
+        return admin_page(f"Quality · {quality.ISSUES[issue][0]}", body, active="Quality")
+
+    s = quality.summary(vertical)
+    cards = "".join(
+        f"<a class='kpi' href='/admin/quality/{vertical}?issue={k}' style='text-decoration:none;color:inherit'>"
+        f"<b class='{'warn' if s[k] else ''}'>{s[k]}</b><span>{label}</span></a>"
+        for k, (label, _) in quality.ISSUES.items())
+    dupes = quality.duplicates(vertical, limit=40)
+    dtr = "".join(
+        f"<tr><td>{esc(d['name'])}</td><td>{esc(d['city'])}, {esc(d['state'])}</td><td>{d['n']}</td>"
+        f"<td>{' '.join(f'<a href=\"/admin/data/{vertical}/{i}\">#{i}</a>' for i in d['ids'])}</td></tr>"
+        for d in dupes)
+    body = (f"<p>{tabs}</p><p class='muted'>{s['total']} active records · "
+            "click an issue to see affected records, then fix them inline.</p>"
+            f"<div class='cards'>{cards}</div>"
+            "<p><form method='post' action='/admin/quality' class='inline'>"
+            f"<input type='hidden' name='vertical' value='{vertical}'>"
+            "<button>Normalize city/state now</button></form></p>"
+            + (f"<h3>Possible duplicates ({len(dupes)})</h3><table><tr><th>Name</th>"
+               f"<th>Location</th><th>Count</th><th>Records</th></tr>{dtr}</table>" if dupes else
+               "<p class='muted'>No duplicate groups found.</p>"))
+    return admin_page(f"Quality · {verticals.VERTICALS[vertical]['label']}", body, active="Quality")
+
+
+async def quality_action(request: Request) -> HTMLResponse:
+    if (r := require_admin(request)):
+        return r
+    vertical = (await request.form()).get("vertical")
+    if vertical in verticals.VERTICALS:
+        verticals.normalize_geography(vertical)
+    return RedirectResponse(f"/admin/quality/{vertical}", status_code=303)
 
 
 def data_detail(request: Request) -> HTMLResponse:
@@ -401,6 +497,9 @@ routes = [
     Route("/admin/logout", logout, methods=["GET"]),
     Route("/admin", overview, methods=["GET"]),
     Route("/admin/data/{vertical}", data_list, methods=["GET"]),
+    Route("/admin/geo/{vertical}", geo_page, methods=["GET"]),
+    Route("/admin/quality/{vertical}", quality_page, methods=["GET"]),
+    Route("/admin/quality", quality_action, methods=["POST"]),
     Route("/admin/data/{vertical}/{id:int}", data_detail, methods=["GET"]),
     Route("/admin/data/{vertical}/{id:int}", data_edit, methods=["POST"]),
     Route("/admin/data/{vertical}/{id:int}/action", data_action, methods=["POST"]),

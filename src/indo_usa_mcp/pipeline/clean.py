@@ -35,6 +35,40 @@ _DIETARY_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
 ]
 
 
+_US_STATES = {
+    "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR", "california": "CA",
+    "colorado": "CO", "connecticut": "CT", "delaware": "DE", "florida": "FL", "georgia": "GA",
+    "hawaii": "HI", "idaho": "ID", "illinois": "IL", "indiana": "IN", "iowa": "IA",
+    "kansas": "KS", "kentucky": "KY", "louisiana": "LA", "maine": "ME", "maryland": "MD",
+    "massachusetts": "MA", "michigan": "MI", "minnesota": "MN", "mississippi": "MS",
+    "missouri": "MO", "montana": "MT", "nebraska": "NE", "nevada": "NV", "new hampshire": "NH",
+    "new jersey": "NJ", "new mexico": "NM", "new york": "NY", "north carolina": "NC",
+    "north dakota": "ND", "ohio": "OH", "oklahoma": "OK", "oregon": "OR", "pennsylvania": "PA",
+    "rhode island": "RI", "south carolina": "SC", "south dakota": "SD", "tennessee": "TN",
+    "texas": "TX", "utah": "UT", "vermont": "VT", "virginia": "VA", "washington": "WA",
+    "west virginia": "WV", "wisconsin": "WI", "wyoming": "WY", "district of columbia": "DC",
+}
+_STATE_CODES = set(_US_STATES.values())
+
+
+def normalize_state(state: str | None) -> str | None:
+    """Return the 2-letter USPS code for a US state ('California' -> 'CA'); pass through else."""
+    if not state:
+        return None
+    s = state.strip()
+    if s.upper() in _STATE_CODES:
+        return s.upper()
+    return _US_STATES.get(s.lower(), s)
+
+
+def normalize_city(city: str | None) -> str | None:
+    """Trim and title-case a city name ('  fremont ' -> 'Fremont')."""
+    if not city:
+        return None
+    c = re.sub(r"\s+", " ", city).strip()
+    return c.title() if c.islower() or c.isupper() else c
+
+
 def _strip_accents(text: str) -> str:
     return "".join(
         c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c)
@@ -96,8 +130,8 @@ def clean(candidate: dict) -> dict:
         "natural_key": natural_key(name, lat, lng),
         "name": name,
         "address_full": (candidate.get("address_full") or "").strip() or None,
-        "city": candidate.get("city"),
-        "state": candidate.get("state"),
+        "city": normalize_city(candidate.get("city")),
+        "state": normalize_state(candidate.get("state")),
         "country": candidate.get("country") or "USA",
         "lat": lat,
         "lng": lng,
