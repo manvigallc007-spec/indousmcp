@@ -5,14 +5,14 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from . import db, embeddings
+from . import db, embeddings, hours
 
 # Columns exposed to agents (no internal embedding/raw fields).
 _PUBLIC_COLS = [
     "id", "name", "address_full", "city", "state", "country", "lat", "lng",
     "phone", "website", "menu_url", "hours_json", "cuisine_type", "region_tag",
     "dietary_tags", "price_range", "delivery_partners", "festival_specials", "description",
-    "is_active", "is_claimed", "confidence_score", "version",
+    "tags", "is_active", "is_claimed", "confidence_score", "version",
     "source_name", "source_url", "last_seen_at",
 ]
 # A listing is *effectively* featured while flagged AND within its paid window.
@@ -39,13 +39,16 @@ def get_indian_restaurants(
     state: str | None = None,
     region_tag: str | None = None,
     dietary_tags: list[str] | None = None,
+    tag: str | None = None,
+    open_now: bool = False,
     featured_only: bool = False,
     limit: int = 25,
 ) -> dict[str, Any]:
     """List active restaurants by geo-radius and/or filters.
 
     Featured listings are surfaced first (explicit `is_featured` flag), then by
-    confidence, then by proximity when a point is supplied.
+    confidence, then by proximity. `tag` filters on a keyword (e.g. "biryani"); `open_now`
+    keeps only places open at the current time (records carry an `open_now` flag).
     """
     where = ["deleted_at IS NULL", "is_active = true"]
     params: list[Any] = []
@@ -62,6 +65,9 @@ def get_indian_restaurants(
     if dietary_tags:
         where.append("dietary_tags @> %s")
         params.append(dietary_tags)
+    if tag:
+        where.append("tags @> %s")
+        params.append([tag.lower()])
     if featured_only:
         where.append(_FEATURED)
 
@@ -90,6 +96,9 @@ def get_indian_restaurants(
         kept.sort(key=lambda r: (not r["is_featured"], r["distance_miles"]))
         rows = kept
 
+    hours.annotate(rows)
+    if open_now:
+        rows = [r for r in rows if r.get("open_now")]
     rows = rows[:limit]
     return {"count": len(rows), "results": rows}
 

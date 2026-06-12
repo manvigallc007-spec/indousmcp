@@ -18,7 +18,7 @@ from .scraper import TempleOverpassScraper
 _CANONICAL_FIELDS = [
     "natural_key", "name", "address_full", "city", "state", "country", "lat", "lng",
     "phone", "email", "website", "hours_json", "religion", "denomination", "deity",
-    "region_tag", "festival_specials", "description", "source_name", "source_url",
+    "region_tag", "festival_specials", "description", "tags", "source_name", "source_url",
     "source_id", "confidence_score",
 ]
 _DIFF_FIELDS = [f for f in _CANONICAL_FIELDS if f != "natural_key"]
@@ -78,7 +78,7 @@ def clean_temple(c: dict) -> dict:
         "phone": rclean.normalize_phone(c.get("phone")),
         "email": (c.get("email") or "").strip().lower() or None,
         "website": c.get("website"),
-        "hours_json": c.get("hours_json"),
+        "hours_json": rclean._with_hours(c.get("hours_json")),
         "religion": religion,
         "denomination": c.get("denomination"),
         "deity": _infer_deity(haystack),
@@ -88,8 +88,9 @@ def clean_temple(c: dict) -> dict:
         "source_url": c.get("source_url"),
         "source_id": c.get("source_id"),
     }
-    from .. import describe
+    from .. import describe, tags as tagmod
     rec["description"] = describe.describe("temples", rec)
+    rec["tags"] = tagmod.extract("temples", rec)
     rec["confidence_score"] = _score(rec)
     return rec
 

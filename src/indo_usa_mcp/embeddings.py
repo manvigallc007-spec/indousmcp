@@ -142,9 +142,10 @@ def embed(text: str) -> list[float]:
 
 
 def text_for(record: dict) -> str:
-    """Text to embed: the natural-language description if present, else a field blob."""
+    """Text to embed: the description (+ tags) if present, else a field blob."""
     if record.get("description"):
-        return record["description"]
+        tags = record.get("tags") or []
+        return record["description"] + (" Tags: " + ", ".join(tags) if tags else "")
     parts: list[str] = []
     for field in _TEXT_FIELDS:
         value = record.get(field)

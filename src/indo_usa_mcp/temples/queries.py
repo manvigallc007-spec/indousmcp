@@ -5,12 +5,12 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from .. import db, embeddings
+from .. import db, embeddings, hours
 
 _PUBLIC_COLS = [
     "id", "name", "address_full", "city", "state", "country", "lat", "lng",
     "phone", "email", "website", "hours_json", "religion", "denomination", "deity",
-    "region_tag", "festival_specials", "description", "is_active", "is_claimed", "confidence_score",
+    "region_tag", "festival_specials", "description", "tags", "is_active", "is_claimed", "confidence_score",
     "version", "source_name", "source_url", "last_seen_at",
 ]
 _FEATURED = "(is_featured AND (featured_until IS NULL OR featured_until > now()))"
@@ -28,11 +28,15 @@ def _haversine_miles(lat1, lng1, lat2, lng2) -> float:
 def get_indian_temples(
     *, lat: float | None = None, lng: float | None = None, radius_miles: float = 15.0,
     city: str | None = None, state: str | None = None, religion: str | None = None,
-    denomination: str | None = None, limit: int = 25,
+    denomination: str | None = None, tag: str | None = None, open_now: bool = False,
+    limit: int = 25,
 ) -> dict[str, Any]:
-    """List active temples by geo-radius and/or filters (religion, denomination, city)."""
+    """List active temples by geo-radius and/or filters (religion, denomination, city, tag)."""
     where = ["deleted_at IS NULL", "is_active = true"]
     params: list[Any] = []
+    if tag:
+        where.append("tags @> %s")
+        params.append([tag.lower()])
     if city:
         where.append("LOWER(city) = LOWER(%s)")
         params.append(city)
@@ -66,6 +70,9 @@ def get_indian_temples(
                 kept.append(row)
         kept.sort(key=lambda r: (not r["is_featured"], r["distance_miles"]))
         rows = kept
+    hours.annotate(rows)
+    if open_now:
+        rows = [r for r in rows if r.get("open_now")]
     rows = rows[:limit]
     return {"count": len(rows), "results": rows}
 

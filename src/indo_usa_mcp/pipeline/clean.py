@@ -140,7 +140,7 @@ def clean(candidate: dict) -> dict:
         "email": (candidate.get("email") or "").strip().lower() or None,
         "website": candidate.get("website"),
         "menu_url": candidate.get("menu_url"),
-        "hours_json": candidate.get("hours_json"),
+        "hours_json": _with_hours(candidate.get("hours_json")),
         "cuisine_type": candidate.get("cuisine_type") or "Indian",
         "region_tag": candidate.get("region_tag") or _infer_region(haystack),
         "dietary_tags": candidate.get("dietary_tags") or _infer_dietary(haystack),
@@ -151,10 +151,16 @@ def clean(candidate: dict) -> dict:
         "source_url": candidate.get("source_url"),
         "source_id": candidate.get("source_id"),
     }
-    from .. import describe
+    from .. import describe, tags as tagmod
     record["description"] = describe.describe("restaurants", record)
+    record["tags"] = tagmod.extract("restaurants", record)
     record["confidence_score"] = score(record)
     return record
+
+
+def _with_hours(hours_json):
+    from .. import hours
+    return hours.with_hours(hours_json)
 
 
 def fill_location(city, state, lat, lng) -> tuple:

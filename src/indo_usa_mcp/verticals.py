@@ -179,30 +179,59 @@ def apply_edits(vertical: str, rec_id: int, edits: dict) -> dict:
 
 def enhance_existing(vertical: str) -> dict[str, Any]:
     """Backfill search quality on existing rows: geocode-fill city/state, (re)generate the
-    description, and (re)compute the embedding from it. Run after enabling a new embedder."""
-    from . import describe, embeddings
+    description + tags + structured hours, and (re)compute the embedding. Idempotent."""
+    from . import describe, embeddings, hours as hmod, tags as tagmod
     from .pipeline import clean as rclean
+    from .pipeline.ingest import _adapt
     table = _table(vertical)
     changed = embedded = 0
     for r in db.query(f"SELECT * FROM {table} WHERE deleted_at IS NULL"):
         city, state = rclean.fill_location(r.get("city"), r.get("state"), r.get("lat"), r.get("lng"))
-        desc = describe.describe(vertical, {**r, "city": city, "state": state})
+        rec = {**r, "city": city, "state": state}
+        rec["description"] = describe.describe(vertical, rec)
+        rec["tags"] = tagmod.extract(vertical, rec)
+        new_hours = hmod.with_hours(r.get("hours_json"))
+
+        updates = {"city": city, "state": state, "description": rec["description"],
+                   "tags": rec["tags"], "hours_json": new_hours}
         sets, params = [], []
-        if city != r.get("city"):
-            sets.append("city = %s"); params.append(city)
-        if state != r.get("state"):
-            sets.append("state = %s"); params.append(state)
-        if desc != r.get("description"):
-            sets.append("description = %s"); params.append(desc)
+        for f, v in updates.items():
+            if v != r.get(f):
+                sets.append(f"{f} = %s"); params.append(_adapt(v))
         if sets:
             db.execute(f"UPDATE {table} SET {', '.join(sets)}, updated_at = now() WHERE id = %s",
                        params + [r["id"]])
             changed += 1
         if embeddings.enabled():
             db.execute(f"UPDATE {table} SET embedding = %s::vector WHERE id = %s",
-                       (embeddings.to_vector_literal(embeddings.embed(desc)), r["id"]))
+                       (embeddings.to_vector_literal(embeddings.embed(embeddings.text_for(rec))), r["id"]))
             embedded += 1
     return {"vertical": vertical, "changed": changed, "embedded": embedded}
+
+
+_MERGE_FILL = ["phone", "email", "website", "address_full", "region_tag",
+               "hours_json", "description"]
+
+
+def merge_duplicates(vertical: str, keep_id: int, drop_ids: list[int]) -> dict[str, Any]:
+    """Merge duplicates into the keeper: fill the keeper's empty fields from the dropped
+    records, then soft-delete the dropped ones (reversible)."""
+    keeper = get_record(vertical, keep_id)
+    if keeper is None:
+        return {"ok": False, "error": "keeper_not_found"}
+    diff: dict[str, Any] = {}
+    for did in drop_ids:
+        d = get_record(vertical, did)
+        if d is None:
+            continue
+        for f in _MERGE_FILL:
+            if keeper.get(f) in (None, "", {}) and d.get(f) not in (None, "", {}) and f not in diff:
+                diff[f] = d.get(f)
+    if diff:
+        get(vertical)["update"](keeper, diff)
+    for did in drop_ids:
+        set_deleted(vertical, did, True)
+    return {"ok": True, "kept": keep_id, "dropped": list(drop_ids), "filled": sorted(diff)}
 
 
 def featured_summary() -> dict[str, Any]:

@@ -27,6 +27,8 @@ def get_indian_restaurants(
     state: str | None = None,
     region_tag: str | None = None,
     dietary_tags: list[str] | None = None,
+    tag: str | None = None,
+    open_now: bool = False,
     featured_only: bool = False,
     limit: int = 25,
 ) -> dict[str, Any]:
@@ -34,22 +36,16 @@ def get_indian_restaurants(
 
     Provide either a point (`lat`+`lng`, optionally `radius_miles`) or `city`/`state`.
     Optional filters: `region_tag` (e.g. "Gujarati", "South Indian"), `dietary_tags`
-    (any of "vegetarian", "vegan", "halal", "jain"), and `featured_only`.
+    (any of "vegetarian", "vegan", "halal", "jain"), `tag` (a keyword/dish like "biryani",
+    "dosa", "catering"), `open_now` (only places open at the current time), `featured_only`.
 
-    Returns a list of records each with metadata, a `confidence_score` (0-1), an
-    `is_featured` flag, and `distance_miles` when a point was supplied.
+    Each record includes a `description`, `tags`, a `confidence_score` (0-1), an `is_featured`
+    flag, an `open_now` flag (true/false/null), and `distance_miles` when a point was supplied.
     """
     return queries.get_indian_restaurants(
-        lat=lat,
-        lng=lng,
-        radius_miles=radius_miles,
-        city=city,
-        state=state,
-        region_tag=region_tag,
-        dietary_tags=dietary_tags,
-        featured_only=featured_only,
-        limit=limit,
-    )
+        lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
+        region_tag=region_tag, dietary_tags=dietary_tags, tag=tag, open_now=open_now,
+        featured_only=featured_only, limit=limit)
 
 
 @mcp.tool()
@@ -120,17 +116,19 @@ def get_indian_temples(
     state: str | None = None,
     religion: str | None = None,
     denomination: str | None = None,
+    tag: str | None = None,
+    open_now: bool = False,
     limit: int = 25,
 ) -> dict[str, Any]:
     """Find Indian-American temples (Hindu/Sikh/Jain places of worship).
 
     Provide a point (`lat`+`lng`, optional `radius_miles`) or `city`/`state`. Filter by
-    `religion` ("hindu", "sikh", "jain") or `denomination` (e.g. "swaminarayan"). Returns
-    records with deity, region, hours, confidence and `distance_miles` when a point is given.
+    `religion` ("hindu", "sikh", "jain"), `denomination` (e.g. "swaminarayan"), `tag`, or
+    `open_now`. Records include description, deity, region, tags, hours and `open_now`.
     """
     return temple_queries.get_indian_temples(
         lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
-        religion=religion, denomination=denomination, limit=limit)
+        religion=religion, denomination=denomination, tag=tag, open_now=open_now, limit=limit)
 
 
 @mcp.tool()
@@ -159,17 +157,19 @@ def get_indian_groceries(
     city: str | None = None,
     state: str | None = None,
     region_tag: str | None = None,
+    tag: str | None = None,
+    open_now: bool = False,
     limit: int = 25,
 ) -> dict[str, Any]:
     """Find Indian grocery stores (desi groceries / supermarkets).
 
     Provide a point (`lat`+`lng`, optional `radius_miles`) or `city`/`state`. Optional
-    `region_tag` (e.g. "Gujarati", "South Indian"). Returns store type, hours, region,
-    confidence and `distance_miles` when a point is supplied.
+    `region_tag` (e.g. "Gujarati"), `tag` (e.g. "spices", "halal"), `open_now`. Records
+    include description, store type, tags, hours, region and `open_now`.
     """
     return grocery_queries.get_indian_groceries(
         lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
-        region_tag=region_tag, limit=limit)
+        region_tag=region_tag, tag=tag, open_now=open_now, limit=limit)
 
 
 @mcp.tool()

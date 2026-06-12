@@ -124,6 +124,13 @@ Records are optimized for agent retrieval:
   the structured fields, returned to agents, and used as the text that gets embedded.
 - **Reverse-geocoded location** — missing `city`/`state` are filled offline from coordinates
   (`reverse_geocoder`), so "near me / in <city>" queries work for every record.
+- **Keyword `tags`** (e.g. `biryani`, `dosa`, `halal`, `catering`) — extracted from
+  name/description; agents can filter with `tag=...`, and they boost embedding recall.
+- **`open_now`** — `opening_hours` are parsed into structured per-day intervals; each result
+  carries an `open_now` flag (true/false/null) and the tools accept an `open_now=true` filter,
+  enabling "what's open near me right now".
+- **Dedup-merge** — the admin Quality view lists duplicate groups with a one-click merge
+  (fills the keeper's empty fields, soft-deletes the rest).
 
 `search_*_by_text` ranks by embedding cosine distance (pgvector `<=>`), falling back to
 trigram. Providers (`EMBEDDING_PROVIDER`):

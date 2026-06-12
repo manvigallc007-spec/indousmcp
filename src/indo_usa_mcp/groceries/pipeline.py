@@ -14,7 +14,7 @@ from .scraper import GroceryOverpassScraper
 _CANONICAL_FIELDS = [
     "natural_key", "name", "address_full", "city", "state", "country", "lat", "lng",
     "phone", "email", "website", "hours_json", "store_type", "region_tag", "dietary_tags",
-    "festival_specials", "description", "source_name", "source_url", "source_id",
+    "festival_specials", "description", "tags", "source_name", "source_url", "source_id",
     "confidence_score",
 ]
 _DIFF_FIELDS = [f for f in _CANONICAL_FIELDS if f != "natural_key"]
@@ -60,7 +60,7 @@ def clean_grocery(c: dict) -> dict:
         "phone": rclean.normalize_phone(c.get("phone")),
         "email": (c.get("email") or "").strip().lower() or None,
         "website": c.get("website"),
-        "hours_json": c.get("hours_json"),
+        "hours_json": rclean._with_hours(c.get("hours_json")),
         "store_type": c.get("store_type"),
         "region_tag": _infer_region(haystack),
         "dietary_tags": _infer_dietary(haystack),
@@ -69,8 +69,9 @@ def clean_grocery(c: dict) -> dict:
         "source_url": c.get("source_url"),
         "source_id": c.get("source_id"),
     }
-    from .. import describe
+    from .. import describe, tags as tagmod
     rec["description"] = describe.describe("groceries", rec)
+    rec["tags"] = tagmod.extract("groceries", rec)
     rec["confidence_score"] = _score(rec)
     return rec
 

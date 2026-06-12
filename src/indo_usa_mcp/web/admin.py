@@ -198,9 +198,18 @@ def quality_page(request: Request) -> HTMLResponse:
         f"<b class='{'warn' if s[k] else ''}'>{s[k]}</b><span>{label}</span></a>"
         for k, (label, _) in quality.ISSUES.items())
     dupes = quality.duplicates(vertical, limit=40)
+
+    def _merge_btn(ids):
+        keep, drops = ids[0], ids[1:]
+        return (f"<form method='post' action='/admin/quality/merge' class='inline'>"
+                f"<input type='hidden' name='vertical' value='{vertical}'>"
+                f"<input type='hidden' name='keep' value='{keep}'>"
+                f"<input type='hidden' name='drop' value='{','.join(str(i) for i in drops)}'>"
+                f"<button class='btn gray'>Merge → keep #{keep}</button></form>")
     dtr = "".join(
         f"<tr><td>{esc(d['name'])}</td><td>{esc(d['city'])}, {esc(d['state'])}</td><td>{d['n']}</td>"
-        f"<td>{' '.join(f'<a href=\"/admin/data/{vertical}/{i}\">#{i}</a>' for i in d['ids'])}</td></tr>"
+        f"<td>{' '.join(f'<a href=\"/admin/data/{vertical}/{i}\">#{i}</a>' for i in d['ids'])}</td>"
+        f"<td>{_merge_btn(d['ids'])}</td></tr>"
         for d in dupes)
     body = (f"<p>{tabs}</p><p class='muted'>{s['total']} active records · "
             "click an issue to see affected records, then fix them inline.</p>"
@@ -208,8 +217,10 @@ def quality_page(request: Request) -> HTMLResponse:
             "<p><form method='post' action='/admin/quality' class='inline'>"
             f"<input type='hidden' name='vertical' value='{vertical}'>"
             "<button>Normalize city/state now</button></form></p>"
-            + (f"<h3>Possible duplicates ({len(dupes)})</h3><table><tr><th>Name</th>"
-               f"<th>Location</th><th>Count</th><th>Records</th></tr>{dtr}</table>" if dupes else
+            + (f"<h3>Possible duplicates ({len(dupes)})</h3>"
+               "<p class='muted'>Merge fills the keeper's empty fields from the others, then "
+               "soft-deletes them.</p><table><tr><th>Name</th><th>Location</th><th>Count</th>"
+               f"<th>Records</th><th></th></tr>{dtr}</table>" if dupes else
                "<p class='muted'>No duplicate groups found.</p>"))
     return admin_page(f"Quality · {verticals.VERTICALS[vertical]['label']}", body, active="Quality")
 
@@ -220,6 +231,19 @@ async def quality_action(request: Request) -> HTMLResponse:
     vertical = (await request.form()).get("vertical")
     if vertical in verticals.VERTICALS:
         verticals.normalize_geography(vertical)
+    return RedirectResponse(f"/admin/quality/{vertical}", status_code=303)
+
+
+async def quality_merge(request: Request) -> HTMLResponse:
+    if (r := require_admin(request)):
+        return r
+    form = await request.form()
+    vertical = form.get("vertical")
+    if vertical in verticals.VERTICALS:
+        keep = int(form.get("keep"))
+        drops = [int(x) for x in (form.get("drop") or "").split(",") if x.strip()]
+        if drops:
+            verticals.merge_duplicates(vertical, keep, drops)
     return RedirectResponse(f"/admin/quality/{vertical}", status_code=303)
 
 
@@ -500,6 +524,7 @@ routes = [
     Route("/admin/geo/{vertical}", geo_page, methods=["GET"]),
     Route("/admin/quality/{vertical}", quality_page, methods=["GET"]),
     Route("/admin/quality", quality_action, methods=["POST"]),
+    Route("/admin/quality/merge", quality_merge, methods=["POST"]),
     Route("/admin/data/{vertical}/{id:int}", data_detail, methods=["GET"]),
     Route("/admin/data/{vertical}/{id:int}", data_edit, methods=["POST"]),
     Route("/admin/data/{vertical}/{id:int}/action", data_action, methods=["POST"]),
