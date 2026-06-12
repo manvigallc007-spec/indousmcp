@@ -305,6 +305,7 @@ def _record(tool: str, kwargs: dict, result) -> None:
         from . import analytics
         count = result.get("count") if isinstance(result, dict) else None
         analytics.log_call(tool, kwargs, count, _client_name())
+        analytics.log_impressions(tool, result)
     except Exception:
         pass  # analytics must never break a tool response
 

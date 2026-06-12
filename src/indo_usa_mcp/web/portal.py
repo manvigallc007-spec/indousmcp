@@ -8,7 +8,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Route
 
-from .. import db, payments, verticals
+from .. import analytics, db, payments, verticals
 from ..config import settings
 from ..pipeline import outreach
 from .auth import make_magic_token, portal_email, verify_magic_token
@@ -86,11 +86,15 @@ def dashboard(request: Request) -> HTMLResponse:
         upgrade = ""
         if x["vertical"] == "restaurants" and not x["is_featured"] and payments.enabled():
             upgrade = f" · <a href='/upgrade?id={x['id']}'>Get featured</a>"
+        reach = analytics.reach_for(x["vertical"], x["id"], days=30)
         rows += (f"<tr><td><a href='/portal/edit/{x['vertical']}/{x['id']}'>{esc(x['name'])}</a></td>"
                  f"<td class='muted'>{x['vertical']}</td>"
-                 f"<td>{esc(x['city'])}, {esc(x['state'])}</td><td>{status}{upgrade}</td></tr>")
+                 f"<td>{esc(x['city'])}, {esc(x['state'])}</td>"
+                 f"<td>{reach} <span class='muted'>shown (30d)</span></td>"
+                 f"<td>{status}{upgrade}</td></tr>")
     body = (f"<h2>Your listings</h2><p class='muted'>{esc(email)} · "
             f"<a href='/portal/logout'>sign out</a></p>"
+            "<p class='muted'>“Shown” = times an AI assistant surfaced your listing.</p>"
             f"<table style='width:100%'>{rows}</table>")
     return _page("Your listings", body)
 

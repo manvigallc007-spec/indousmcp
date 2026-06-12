@@ -126,11 +126,13 @@ def search_restaurants_by_text(
     city: str | None = None,
     state: str | None = None,
     limit: int = 25,
+    precomputed_qvec: str | None = None,
 ) -> dict[str, Any]:
     """Text search over restaurants.
 
     Uses embedding-ranked vector search (pgvector cosine) when an embedding provider
     is configured and rows have embeddings; otherwise falls back to trigram (pg_trgm).
+    `precomputed_qvec` lets a caller (e.g. search_all) embed the query once and reuse it.
     """
     filters = ["deleted_at IS NULL", "is_active = true"]
     geo: list[Any] = []
@@ -142,12 +144,12 @@ def search_restaurants_by_text(
         geo.append(state)
 
     if embeddings.enabled():
-        return _search_semantic(query_text, filters, geo, limit)
+        return _search_semantic(query_text, filters, geo, limit, precomputed_qvec)
     return _search_trigram(query_text, filters, geo, limit)
 
 
-def _search_semantic(query_text, filters, geo, limit) -> dict[str, Any]:
-    qvec = embeddings.to_vector_literal(embeddings.embed(query_text))
+def _search_semantic(query_text, filters, geo, limit, precomputed_qvec=None) -> dict[str, Any]:
+    qvec = precomputed_qvec or embeddings.to_vector_literal(embeddings.embed(query_text))
     where = " AND ".join([*filters, "embedding IS NOT NULL"])
     # cosine distance (<=>); match_score = 1 - distance for a 0..1 similarity.
     sql = (

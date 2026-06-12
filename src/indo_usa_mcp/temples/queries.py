@@ -90,6 +90,7 @@ def get_temple_details(temple_id: int) -> dict[str, Any] | None:
 
 def search_temples_by_text(
     query_text: str, *, city: str | None = None, state: str | None = None, limit: int = 25,
+    precomputed_qvec: str | None = None,
 ) -> dict[str, Any]:
     filters = ["deleted_at IS NULL", "is_active = true"]
     geo: list[Any] = []
@@ -101,7 +102,7 @@ def search_temples_by_text(
         geo.append(state)
 
     if embeddings.enabled():
-        qvec = embeddings.to_vector_literal(embeddings.embed(query_text))
+        qvec = precomputed_qvec or embeddings.to_vector_literal(embeddings.embed(query_text))
         where = " AND ".join([*filters, "embedding IS NOT NULL"])
         sql = (f"SELECT {_COLS_SQL}, 1 - (embedding <=> %s::vector) AS match_score "
                f"FROM temples WHERE {where} "

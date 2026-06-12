@@ -241,8 +241,10 @@ The web app (`:8080`) now serves three audiences:
   (country → state → city, click to filter records), **Quality** control (records flagged for
   missing region/contact/geo/city + duplicate groups, with a one-click city/state normalizer),
   **approvals** & **feedback** queues, **agents** (last-run health, run-now, resolve alerts),
-  **Traffic** (every MCP tool call logged: by tool / agent-client / day), **payments**, and
-  **reports**. Set `ADMIN_PASSWORD` to enable; blank disables it.
+  **Traffic** (every MCP tool call logged: by tool / agent-client / day, plus **most-shown
+  listings**), **payments**, and **reports**. Set `ADMIN_PASSWORD` to enable; blank disables it.
+- Owners see a **reach** number per listing in the portal ("shown N times by AI assistants",
+  from per-listing impression tracking) — a concrete hook for selling featured placement.
 - **Customer portal** (`/portal/*`) — owners sign in via **passwordless magic-link** email and
   manage all their listings across verticals (edit, featured status, upgrade).
 

@@ -508,6 +508,19 @@ def traffic_page(request: Request) -> HTMLResponse:
             f"<h3>By day</h3><table><tr><th>Day</th><th>Calls</th></tr>{day_rows}</table>"
             f"<h3>Recent calls</h3><table><tr><th>When</th><th>Tool</th><th>Agent</th>"
             f"<th>Args</th><th>Results</th></tr>{rec_rows}</table>")
+
+    top = analytics.top_listings(days=30, limit=15)
+    if top:
+        top_rows = ""
+        for x in top:
+            rec = verticals.get_record(x["vertical"], x["record_id"])
+            nm = esc(rec["name"]) if rec else f"#{x['record_id']}"
+            top_rows += (f"<tr><td><a href='/admin/data/{x['vertical']}/{x['record_id']}'>{nm}</a></td>"
+                         f"<td class='muted'>{x['vertical']}</td><td>{x['impressions']}</td></tr>")
+        body += (f"<h3>Most-shown listings (30d)</h3>"
+                 "<p class='muted'>How often each listing was surfaced to an agent — a reach "
+                 "signal for owners and for selling featured placement.</p>"
+                 f"<table><tr><th>Listing</th><th>Vertical</th><th>Impressions</th></tr>{top_rows}</table>")
     return admin_page("Traffic", body, active="Traffic")
 
 

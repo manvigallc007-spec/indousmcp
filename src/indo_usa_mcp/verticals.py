@@ -265,13 +265,16 @@ def search_all(query: str, city: str | None = None, state: str | None = None,
     Each result is tagged with its `vertical`. Lets an agent answer broad "Indian things
     near me" queries without choosing a vertical first.
     """
+    from . import embeddings
+    qvec = embeddings.to_vector_literal(embeddings.embed(query)) if embeddings.enabled() else None
+
     merged: list[dict] = []
     ranking = "trigram"
     for key, cfg in VERTICALS.items():
         fn = getattr(cfg["queries"], f"search_{key}_by_text", None)
         if fn is None:
             continue
-        res = fn(query, city=city, state=state, limit=limit)
+        res = fn(query, city=city, state=state, limit=limit, precomputed_qvec=qvec)
         ranking = res.get("ranking", ranking)
         for r in res["results"]:
             r["vertical"] = key
