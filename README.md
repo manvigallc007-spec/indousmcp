@@ -5,8 +5,9 @@ restaurants (USA).** This repo is the walking skeleton from the architecture blu
 
 - **MCP server** exposing restaurant capabilities (`get_indian_restaurants`,
   `get_restaurant_details`, `search_restaurants_by_text`, `find_unclaimed_restaurants`,
-  `draft_claim_outreach`, `submit_correction`) and **temple** capabilities
-  (`get_indian_temples`, `get_temple_details`, `search_temples_by_text`).
+  `draft_claim_outreach`, `submit_correction`), **temple** capabilities
+  (`get_indian_temples`, `get_temple_details`, `search_temples_by_text`) and **grocery**
+  capabilities (`get_indian_groceries`, `get_grocery_details`, `search_groceries_by_text`).
 - **Data pipeline**: scrape → raw → clean/enrich/score → approval queue → canonical table →
   versioning.
 - **One real scraper**: OpenStreetMap Overpass (public, ODbL-licensed, no login, ToS-safe).
@@ -197,6 +198,19 @@ python -m indo_usa_mcp.cli temples-process
 python -m indo_usa_mcp.cli temples-stats
 python -m indo_usa_mcp.cli temples-query --religion hindu --city Fremont
 python -m indo_usa_mcp.cli temples-query --text "swaminarayan gujarati mandir"
+```
+
+## Phase 2: Groceries vertical
+
+Same recipe as temples — independent `groceries` table + OSM scraper (grocery-type shops
+whose name signals Indian groceries: Patel, India, Apna, Swad, Masala…) + own agents
+(`grocery_scraper`, `grocery_cleaner`) + 3 MCP tools. Infers `store_type` and `region_tag`.
+
+```powershell
+python -m indo_usa_mcp.cli groceries-scrape --metro bay_area
+python -m indo_usa_mcp.cli groceries-process
+python -m indo_usa_mcp.cli groceries-query --city Fremont
+python -m indo_usa_mcp.cli groceries-query --text "patel brothers indian grocery"
 ```
 
 ## Connecting an MCP client

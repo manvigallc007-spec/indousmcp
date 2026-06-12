@@ -13,6 +13,7 @@ from .. import db
 from ..pipeline import feedback, ingest, outreach
 from ..pipeline.scrapers import SCRAPERS
 from ..pipeline.scrapers.metros import METROS
+from ..groceries import pipeline as groceries
 from ..temples import pipeline as temples
 from .base import Agent
 
@@ -151,6 +152,33 @@ class TempleCleanerAgent(Agent):
         return result
 
 
+class GroceryScraperAgent(Agent):
+    name = "grocery_scraper"
+    description = "Scrapes Indian grocery stores across every metro."
+    default_interval_s = 172800
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        metros = params.get("metros") or list(METROS)
+        total, errors = 0, []
+        for metro in metros:
+            try:
+                total += groceries.scrape_to_raw(metro)
+            except Exception as exc:
+                errors.append({"metro": metro, "error": str(exc)})
+        return {"upserted": total, "errors": errors}
+
+
+class GroceryCleanerAgent(Agent):
+    name = "grocery_cleaner"
+    description = "Processes raw groceries into canonical; deactivates stale ones."
+    default_interval_s = 86400
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        result = groceries.process_raw()
+        result.update(groceries.deactivate_stale(days=params.get("stale_days", 90)))
+        return result
+
+
 class MonitoringAgent(Agent):
     name = "monitoring"
     description = "Detects anomalies (backlogs, scraper failures, stale data) -> alerts."
@@ -213,5 +241,7 @@ ALL_AGENTS = [
     SubmissionAgent(),
     TempleScraperAgent(),
     TempleCleanerAgent(),
+    GroceryScraperAgent(),
+    GroceryCleanerAgent(),
     MonitoringAgent(),
 ]

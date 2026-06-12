@@ -24,6 +24,8 @@ from .agents.scheduler import run_loop
 from .pipeline import feedback, ingest, outreach, seed
 from .pipeline.scrapers import SCRAPERS
 from .pipeline.scrapers.metros import SCRAPE_REGIONS
+from .groceries import pipeline as groceries
+from .groceries import queries as grocery_queries
 from .temples import pipeline as temples
 from .temples import queries as temple_queries
 
@@ -166,6 +168,30 @@ def cmd_temples_query(args: argparse.Namespace) -> None:
             state=args.state, religion=args.religion, limit=args.limit))
 
 
+def cmd_groceries_scrape(args: argparse.Namespace) -> None:
+    print(f"Scraping groceries for region={args.metro} ...")
+    n = groceries.scrape_to_raw(args.metro)
+    print(f"Upserted {n} raw grocery observation(s).")
+
+
+def cmd_groceries_process(_: argparse.Namespace) -> None:
+    _print(groceries.process_raw())
+
+
+def cmd_groceries_stats(_: argparse.Namespace) -> None:
+    _print(grocery_queries.stats())
+
+
+def cmd_groceries_query(args: argparse.Namespace) -> None:
+    if args.text:
+        _print(grocery_queries.search_groceries_by_text(
+            args.text, city=args.city, state=args.state, limit=args.limit))
+    else:
+        _print(grocery_queries.get_indian_groceries(
+            lat=args.lat, lng=args.lng, radius_miles=args.radius, city=args.city,
+            state=args.state, region_tag=args.region, limit=args.limit))
+
+
 def cmd_stats(_: argparse.Namespace) -> None:
     _print(queries.stats())
 
@@ -292,6 +318,27 @@ def build_parser() -> argparse.ArgumentParser:
     tq.add_argument("--radius", type=float, default=15.0)
     tq.add_argument("--limit", type=int, default=10)
     tq.set_defaults(func=cmd_temples_query)
+
+    # ---- Phase 2: groceries vertical ----
+    gs = sub.add_parser("groceries-scrape", help="Scrape Indian grocery stores for a region")
+    gs.add_argument("--metro", required=True, choices=SCRAPE_REGIONS, metavar="REGION")
+    gs.set_defaults(func=cmd_groceries_scrape)
+
+    sub.add_parser("groceries-process", help="Process raw groceries -> canonical").set_defaults(
+        func=cmd_groceries_process)
+    sub.add_parser("groceries-stats", help="Grocery row counts & coverage").set_defaults(
+        func=cmd_groceries_stats)
+
+    gq = sub.add_parser("groceries-query", help="Query groceries as the MCP tools do")
+    gq.add_argument("--city")
+    gq.add_argument("--state")
+    gq.add_argument("--region", help="region_tag, e.g. 'Gujarati'")
+    gq.add_argument("--text", help="semantic search")
+    gq.add_argument("--lat", type=float)
+    gq.add_argument("--lng", type=float)
+    gq.add_argument("--radius", type=float, default=15.0)
+    gq.add_argument("--limit", type=int, default=10)
+    gq.set_defaults(func=cmd_groceries_query)
 
     sub.add_parser("stats", help="Show row counts & coverage").set_defaults(func=cmd_stats)
     return p

@@ -24,6 +24,7 @@ DEFAULT_SCHEDULE = {name: agent.default_interval_s for name, agent in AGENTS.ite
 _RUN_ORDER = [
     "scraper", "cleaner", "enrichment", "feedback", "approval_assistant",
     "temple_scraper", "temple_cleaner",
+    "grocery_scraper", "grocery_cleaner",
     "discovery", "outreach", "monitoring", "submission",
 ]
 

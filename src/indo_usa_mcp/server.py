@@ -11,6 +11,7 @@ from mcp.server.fastmcp import FastMCP
 
 from . import queries
 from .config import settings
+from .groceries import queries as grocery_queries
 from .pipeline import feedback, outreach
 from .temples import queries as temple_queries
 
@@ -147,6 +148,45 @@ def search_temples_by_text(
 ) -> dict[str, Any]:
     """Free-text/semantic search over temples (name/deity/denomination/region)."""
     return temple_queries.search_temples_by_text(query, city=city, state=state, limit=limit)
+
+
+# ------------------------------------------------------------- groceries (Phase 2)
+@mcp.tool()
+def get_indian_groceries(
+    lat: float | None = None,
+    lng: float | None = None,
+    radius_miles: float = 15.0,
+    city: str | None = None,
+    state: str | None = None,
+    region_tag: str | None = None,
+    limit: int = 25,
+) -> dict[str, Any]:
+    """Find Indian grocery stores (desi groceries / supermarkets).
+
+    Provide a point (`lat`+`lng`, optional `radius_miles`) or `city`/`state`. Optional
+    `region_tag` (e.g. "Gujarati", "South Indian"). Returns store type, hours, region,
+    confidence and `distance_miles` when a point is supplied.
+    """
+    return grocery_queries.get_indian_groceries(
+        lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
+        region_tag=region_tag, limit=limit)
+
+
+@mcp.tool()
+def get_grocery_details(grocery_id: int) -> dict[str, Any]:
+    """Full canonical record for one grocery store, plus its version history."""
+    record = grocery_queries.get_grocery_details(grocery_id)
+    if record is None:
+        return {"error": "not_found", "grocery_id": grocery_id}
+    return record
+
+
+@mcp.tool()
+def search_groceries_by_text(
+    query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+) -> dict[str, Any]:
+    """Free-text/semantic search over Indian grocery stores (name/region/store type)."""
+    return grocery_queries.search_groceries_by_text(query, city=city, state=state, limit=limit)
 
 
 def main() -> None:
