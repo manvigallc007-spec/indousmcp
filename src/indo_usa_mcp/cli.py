@@ -28,6 +28,8 @@ from .groceries import pipeline as groceries
 from .groceries import queries as grocery_queries
 from .professionals import pipeline as professionals
 from .professionals import queries as professional_queries
+from .salons import pipeline as salons
+from .salons import queries as salon_queries
 from .temples import pipeline as temples
 from .temples import queries as temple_queries
 
@@ -240,6 +242,30 @@ def cmd_professionals_query(args: argparse.Namespace) -> None:
             state=args.state, profession_type=args.type, limit=args.limit))
 
 
+def cmd_salons_scrape(args: argparse.Namespace) -> None:
+    print(f"Scraping salons for region={args.metro} ...")
+    n = salons.scrape_to_raw(args.metro)
+    print(f"Upserted {n} raw salon observation(s).")
+
+
+def cmd_salons_process(_: argparse.Namespace) -> None:
+    _print(salons.process_raw())
+
+
+def cmd_salons_stats(_: argparse.Namespace) -> None:
+    _print(salon_queries.stats())
+
+
+def cmd_salons_query(args: argparse.Namespace) -> None:
+    if args.text:
+        _print(salon_queries.search_salons_by_text(
+            args.text, city=args.city, state=args.state, limit=args.limit))
+    else:
+        _print(salon_queries.get_indian_salons(
+            lat=args.lat, lng=args.lng, radius_miles=args.radius, city=args.city,
+            state=args.state, tag=args.tag, limit=args.limit))
+
+
 def cmd_stats(_: argparse.Namespace) -> None:
     _print(queries.stats())
 
@@ -417,6 +443,27 @@ def build_parser() -> argparse.ArgumentParser:
     pq.add_argument("--radius", type=float, default=15.0)
     pq.add_argument("--limit", type=int, default=10)
     pq.set_defaults(func=cmd_professionals_query)
+
+    # ---- Phase 2: salons vertical ----
+    ss = sub.add_parser("salons-scrape", help="Scrape Indian beauty salons (threading/henna)")
+    ss.add_argument("--metro", required=True, choices=SCRAPE_REGIONS, metavar="REGION")
+    ss.set_defaults(func=cmd_salons_scrape)
+
+    sub.add_parser("salons-process", help="Process raw salons -> canonical").set_defaults(
+        func=cmd_salons_process)
+    sub.add_parser("salons-stats", help="Salon row counts & coverage").set_defaults(
+        func=cmd_salons_stats)
+
+    sq = sub.add_parser("salons-query", help="Query salons as the MCP tools do")
+    sq.add_argument("--city")
+    sq.add_argument("--state")
+    sq.add_argument("--tag", help="e.g. threading, henna, bridal")
+    sq.add_argument("--text", help="semantic search")
+    sq.add_argument("--lat", type=float)
+    sq.add_argument("--lng", type=float)
+    sq.add_argument("--radius", type=float, default=15.0)
+    sq.add_argument("--limit", type=int, default=10)
+    sq.set_defaults(func=cmd_salons_query)
 
     sub.add_parser("stats", help="Show row counts & coverage").set_defaults(func=cmd_stats)
     return p

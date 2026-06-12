@@ -70,8 +70,18 @@ def _professional(rec: dict) -> str:
     return s + _hours(rec)
 
 
+def _salon(rec: dict) -> str:
+    services = [t for t in (rec.get("tags") or [])
+               if t in ("threading", "henna", "mehndi", "brows", "bridal", "waxing",
+                        "facial", "hair", "makeup")]
+    s = f"{rec.get('name', 'This salon')} is an Indian beauty salon{_loc(rec)}."
+    if services:
+        s += f" Services: {', '.join(services)}."
+    return s + _hours(rec)
+
+
 _BUILDERS = {"restaurants": _restaurant, "temples": _temple, "groceries": _grocery,
-             "professionals": _professional}
+             "professionals": _professional, "salons": _salon}
 
 
 def describe(vertical: str, rec: dict) -> str:

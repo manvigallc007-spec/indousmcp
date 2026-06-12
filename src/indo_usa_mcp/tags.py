@@ -36,6 +36,19 @@ _TAG_KEYWORDS: dict[str, tuple[str, ...]] = {
 }
 
 
+_SALON_TAGS: dict[str, tuple[str, ...]] = {
+    "threading": ("thread",),
+    "brows": ("brow", "eyebrow"),
+    "henna": ("henna",),
+    "mehndi": ("mehndi", "mehendi"),
+    "bridal": ("bridal", "wedding"),
+    "waxing": ("wax",),
+    "facial": ("facial", "spa"),
+    "hair": ("hair", "salon"),
+    "makeup": ("makeup", "make-up", "glam"),
+}
+
+
 def _from_keywords(text: str) -> list[str]:
     return [tag for tag, kws in _TAG_KEYWORDS.items() if kws and any(k in text for k in kws)]
 
@@ -48,6 +61,12 @@ def extract(vertical: str, rec: dict) -> list[str]:
     if vertical == "professionals":
         out = [rec.get("profession_type"), rec.get("speciality")]
         return sorted({str(x).lower() for x in out if x})
+    if vertical == "salons":
+        text = " ".join(str(rec.get(f) or "") for f in ("name", "salon_type")).lower()
+        found = {t for t, kws in _SALON_TAGS.items() if any(k in text for k in kws)}
+        if rec.get("salon_type"):
+            found.add(rec["salon_type"].lower())
+        return sorted(found)
 
     text = " ".join(str(rec.get(f) or "") for f in (
         "name", "description", "cuisine_type", "store_type", "region_tag")).lower()

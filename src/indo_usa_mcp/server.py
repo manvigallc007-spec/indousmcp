@@ -14,6 +14,7 @@ from .config import settings
 from .groceries import queries as grocery_queries
 from .pipeline import feedback, outreach
 from .professionals import queries as professional_queries
+from .salons import queries as salon_queries
 from .temples import queries as temple_queries
 
 mcp = FastMCP("indo-usa-diaspora", host=settings.mcp_host, port=settings.mcp_port)
@@ -232,6 +233,46 @@ def search_professionals_by_text(
 ) -> dict[str, Any]:
     """Free-text/semantic search over Indian-American healthcare professionals."""
     return professional_queries.search_professionals_by_text(query, city=city, state=state, limit=limit)
+
+
+# --------------------------------------------------------------- salons (Phase 2)
+@mcp.tool()
+def get_indian_salons(
+    lat: float | None = None,
+    lng: float | None = None,
+    radius_miles: float = 15.0,
+    city: str | None = None,
+    state: str | None = None,
+    tag: str | None = None,
+    open_now: bool = False,
+    limit: int = 25,
+) -> dict[str, Any]:
+    """Find Indian beauty salons (threading, henna/mehndi, hair, bridal).
+
+    Provide a point (`lat`+`lng`, optional `radius_miles`) or `city`/`state`. Filter by
+    `tag` (e.g. "threading", "henna", "bridal") or `open_now`. Records include description,
+    services (tags), hours and an `open_now` flag.
+    """
+    return salon_queries.get_indian_salons(
+        lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
+        tag=tag, open_now=open_now, limit=limit)
+
+
+@mcp.tool()
+def get_salon_details(salon_id: int) -> dict[str, Any]:
+    """Full canonical record for one salon, plus its version history."""
+    record = salon_queries.get_salon_details(salon_id)
+    if record is None:
+        return {"error": "not_found", "salon_id": salon_id}
+    return record
+
+
+@mcp.tool()
+def search_salons_by_text(
+    query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+) -> dict[str, Any]:
+    """Free-text/semantic search over Indian beauty salons."""
+    return salon_queries.search_salons_by_text(query, city=city, state=state, limit=limit)
 
 
 def main() -> None:

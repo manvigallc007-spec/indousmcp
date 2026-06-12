@@ -15,6 +15,7 @@ from ..pipeline.scrapers import SCRAPERS
 from ..pipeline.scrapers.metros import METROS
 from ..groceries import pipeline as groceries
 from ..professionals import pipeline as professionals
+from ..salons import pipeline as salons
 from ..temples import pipeline as temples
 from .base import Agent
 
@@ -207,6 +208,33 @@ class ProfessionalCleanerAgent(Agent):
         return result
 
 
+class SalonScraperAgent(Agent):
+    name = "salon_scraper"
+    description = "Scrapes Indian beauty salons (threading/henna) across every metro."
+    default_interval_s = 259200
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        metros = params.get("metros") or list(METROS)
+        total, errors = 0, []
+        for metro in metros:
+            try:
+                total += salons.scrape_to_raw(metro)
+            except Exception as exc:
+                errors.append({"metro": metro, "error": str(exc)})
+        return {"upserted": total, "errors": errors}
+
+
+class SalonCleanerAgent(Agent):
+    name = "salon_cleaner"
+    description = "Processes raw salons into canonical; deactivates stale ones."
+    default_interval_s = 86400
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        result = salons.process_raw()
+        result.update(salons.deactivate_stale(days=params.get("stale_days", 120)))
+        return result
+
+
 class ReportingAgent(Agent):
     name = "reporting"
     description = "Computes the daily health & growth report and emails it."
@@ -285,6 +313,8 @@ ALL_AGENTS = [
     GroceryCleanerAgent(),
     ProfessionalScraperAgent(),
     ProfessionalCleanerAgent(),
+    SalonScraperAgent(),
+    SalonCleanerAgent(),
     ReportingAgent(),
     MonitoringAgent(),
 ]

@@ -18,7 +18,7 @@ from .verticals import VERTICALS
 
 # (canonical table, raw table) per vertical for backlog/growth counts.
 _RAW = {"restaurants": "restaurant_raw", "temples": "temple_raw", "groceries": "grocery_raw",
-        "professionals": "professional_raw"}
+        "professionals": "professional_raw", "salons": "salon_raw"}
 
 
 def _scalar(sql: str, params=None) -> int:

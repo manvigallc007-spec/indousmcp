@@ -8,8 +8,8 @@ restaurants (USA).** This repo is the walking skeleton from the architecture blu
   `draft_claim_outreach`, `submit_correction`), **temple** capabilities
   (`get_indian_temples`, `get_temple_details`, `search_temples_by_text`) and **grocery**
   capabilities (`get_indian_groceries`, `get_grocery_details`, `search_groceries_by_text`)
-  and **professional** capabilities (`get_indian_professionals`, `get_professional_details`,
-  `search_professionals_by_text`).
+  **professional** capabilities (`get_indian_professionals`, …) and **salon** capabilities
+  (`get_indian_salons`, `get_salon_details`, `search_salons_by_text`).
 - **Data pipeline**: scrape → raw → clean/enrich/score → approval queue → canonical table →
   versioning.
 - **One real scraper**: OpenStreetMap Overpass (public, ODbL-licensed, no login, ToS-safe).
@@ -263,6 +263,18 @@ view helps curate false positives.
 python -m indo_usa_mcp.cli professionals-scrape --metro bay_area
 python -m indo_usa_mcp.cli professionals-process
 python -m indo_usa_mcp.cli professionals-query --type dentist --city "San Jose"
+```
+
+## Phase 2: Salons vertical (beauty / threading)
+
+Indian beauty salons — eyebrow threading, henna/mehndi, hair, bridal — from OSM
+hairdresser/beauty shops with a strong South-Asian service/name signal. Same recipe; tags
+capture services (threading, henna, bridal…). Best OSM coverage of the verticals so far.
+
+```powershell
+python -m indo_usa_mcp.cli salons-scrape --metro bay_area
+python -m indo_usa_mcp.cli salons-process
+python -m indo_usa_mcp.cli salons-query --tag threading --city Sunnyvale
 ```
 
 ## Connecting an MCP client
