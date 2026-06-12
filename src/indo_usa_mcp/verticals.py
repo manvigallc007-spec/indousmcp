@@ -294,12 +294,21 @@ def search_all(query: str, city: str | None = None, state: str | None = None,
     merged.sort(key=lambda r: (not r.get("is_featured"), -(r.get("match_score") or 0)))
     merged = merged[:limit]
     return {"count": len(merged), "query": query, "ranking": ranking, "results": merged}
-    """Active (effective) featured counts per vertical — the live paid placements."""
+
+
+def featured_summary() -> dict[str, Any]:
+    """Active (effective) featured counts per vertical — the live paid placements.
+
+    Resilient to a not-yet-migrated table (counts it as 0) so the admin never 500s.
+    """
     out, total = {}, 0
     for key in VERTICALS:
-        row = db.query_one(
-            f"SELECT count(*) AS n FROM {_table(key)} WHERE deleted_at IS NULL "
-            f"AND is_featured AND (featured_until IS NULL OR featured_until > now())")
-        out[key] = row["n"] if row else 0
+        try:
+            row = db.query_one(
+                f"SELECT count(*) AS n FROM {_table(key)} WHERE deleted_at IS NULL "
+                f"AND is_featured AND (featured_until IS NULL OR featured_until > now())")
+            out[key] = row["n"] if row else 0
+        except Exception:
+            out[key] = 0
         total += out[key]
     return {"by_vertical": out, "total": total}

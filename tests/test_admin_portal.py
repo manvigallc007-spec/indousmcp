@@ -35,6 +35,13 @@ def test_portal_login_page_renders():
     assert TestClient(app).get("/portal/login").status_code == 200
 
 
+def test_verticals_helpers_are_defined():
+    # Guards against an edit dropping a function's `def` line (caused a Payments 500).
+    for fn in ("featured_summary", "search_all", "merge_duplicates", "enhance_existing",
+               "geo_summary", "normalize_geography"):
+        assert callable(getattr(verticals, fn, None)), f"verticals.{fn} missing"
+
+
 def test_report_render_text():
     metrics = {
         "health": {"agent_runs_24h": 1, "agent_errors_24h": 0, "open_alerts": 0,
