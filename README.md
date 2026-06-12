@@ -239,7 +239,8 @@ The web app (`:8080`) now serves three audiences:
   (country → state → city, click to filter records), **Quality** control (records flagged for
   missing region/contact/geo/city + duplicate groups, with a one-click city/state normalizer),
   **approvals** & **feedback** queues, **agents** (last-run health, run-now, resolve alerts),
-  **payments**, and **reports**. Set `ADMIN_PASSWORD` to enable; blank disables it.
+  **Traffic** (every MCP tool call logged: by tool / agent-client / day), **payments**, and
+  **reports**. Set `ADMIN_PASSWORD` to enable; blank disables it.
 - **Customer portal** (`/portal/*`) — owners sign in via **passwordless magic-link** email and
   manage all their listings across verticals (edit, featured status, upgrade).
 

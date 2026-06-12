@@ -207,6 +207,11 @@ def cmd_quality(_: argparse.Namespace) -> None:
     _print(quality.scan_all())
 
 
+def cmd_traffic(_: argparse.Namespace) -> None:
+    from . import analytics
+    _print(analytics.traffic_summary())
+
+
 def cmd_normalize_geo(_: argparse.Namespace) -> None:
     from . import verticals
     _print([verticals.normalize_geography(v) for v in verticals.VERTICALS])
@@ -418,6 +423,8 @@ def build_parser() -> argparse.ArgumentParser:
         func=cmd_report)
     sub.add_parser("quality", help="Data-quality scan across verticals").set_defaults(
         func=cmd_quality)
+    sub.add_parser("traffic", help="Agent traffic: tool-call analytics").set_defaults(
+        func=cmd_traffic)
     sub.add_parser("normalize-geo", help="Backfill city/state normalization across verticals").set_defaults(
         func=cmd_normalize_geo)
     ed = sub.add_parser("enhance-data", help="Backfill descriptions + geocode + embeddings (search quality)")

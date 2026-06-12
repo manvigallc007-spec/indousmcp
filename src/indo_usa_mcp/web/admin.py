@@ -8,7 +8,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Route
 
-from .. import db, payments, quality, reporting, verticals
+from .. import analytics, db, payments, quality, reporting, verticals
 from ..agents import AGENTS, run_agent
 from ..config import settings
 from ..pipeline import ingest
@@ -477,6 +477,40 @@ def payments_page(request: Request) -> HTMLResponse:
     return admin_page("Payments", f"<div class='cards'>{cards}</div>" + pay_tbl, active="Payments")
 
 
+# ----------------------------------------------------------------------- traffic
+def traffic_page(request: Request) -> HTMLResponse:
+    if (r := require_admin(request)):
+        return r
+    t = analytics.traffic_summary(days=30)
+    cards = (f"<div class='kpi'><b>{t['total_calls']}</b><span>tool calls (30d)</span></div>"
+             f"<div class='kpi'><b>{t['calls_today']}</b><span>today</span></div>"
+             f"<div class='kpi'><b>{t['distinct_clients']}</b><span>distinct agents</span></div>")
+    max_tool = max((x["n"] for x in t["by_tool"]), default=1)
+    tool_rows = "".join(
+        f"<tr><td>{esc(x['tool'])}</td><td>{x['n']}</td>"
+        f"<td><span class='bar' style='width:{int(120 * x['n'] / max_tool)}px'></span></td>"
+        f"<td class='muted'>{esc(x['last'])}</td></tr>" for x in t["by_tool"])
+    client_rows = "".join(
+        f"<tr><td>{esc(x['client'])}</td><td>{x['n']}</td></tr>" for x in t["by_client"])
+    day_rows = "".join(f"<tr><td class='muted'>{x['day']}</td><td>{x['n']}</td></tr>"
+                       for x in t["by_day"])
+    recent = analytics.recent_calls(40)
+    rec_rows = "".join(
+        f"<tr><td class='muted'>{esc(c['created_at'])}</td><td>{esc(c['tool'])}</td>"
+        f"<td>{esc(c['client'] or '(unknown)')}</td><td>{esc(c['args'])}</td>"
+        f"<td>{c['result_count'] if c['result_count'] is not None else ''}</td></tr>" for c in recent)
+    body = (f"<div class='cards'>{cards}</div>"
+            "<p class='muted'>Every AI-agent call to an MCP tool is logged here. "
+            "Client/agent names appear when the agent identifies itself.</p>"
+            f"<h3>By tool (30d)</h3><table><tr><th>Tool</th><th>Calls</th><th></th>"
+            f"<th>Last</th></tr>{tool_rows or '<tr><td colspan=4 class=muted>No calls yet.</td></tr>'}</table>"
+            f"<h3>By agent/client</h3><table><tr><th>Client</th><th>Calls</th></tr>{client_rows}</table>"
+            f"<h3>By day</h3><table><tr><th>Day</th><th>Calls</th></tr>{day_rows}</table>"
+            f"<h3>Recent calls</h3><table><tr><th>When</th><th>Tool</th><th>Agent</th>"
+            f"<th>Args</th><th>Results</th></tr>{rec_rows}</table>")
+    return admin_page("Traffic", body, active="Traffic")
+
+
 # ----------------------------------------------------------------------- reports
 def reports_page(request: Request) -> HTMLResponse:
     if (r := require_admin(request)):
@@ -535,6 +569,7 @@ routes = [
     Route("/admin/claims", claims, methods=["GET"]),
     Route("/admin/agents", agents_page, methods=["GET"]),
     Route("/admin/agents", agents_action, methods=["POST"]),
+    Route("/admin/traffic", traffic_page, methods=["GET"]),
     Route("/admin/payments", payments_page, methods=["GET"]),
     Route("/admin/reports", reports_page, methods=["GET"]),
     Route("/admin/reports", reports_action, methods=["POST"]),

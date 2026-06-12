@@ -275,6 +275,50 @@ def search_salons_by_text(
     return salon_queries.search_salons_by_text(query, city=city, state=state, limit=limit)
 
 
+# ---------------------------------------------------- agent traffic analytics
+def _client_name() -> str | None:
+    """Best-effort MCP client/agent identity (name/version) for the current call."""
+    try:
+        from mcp.server.lowlevel.server import request_ctx
+        ci = request_ctx.get().session.client_params.clientInfo
+        return f"{ci.name}/{ci.version}" if ci and ci.name else None
+    except Exception:
+        return None
+
+
+def _record(tool: str, kwargs: dict, result) -> None:
+    try:
+        from . import analytics
+        count = result.get("count") if isinstance(result, dict) else None
+        analytics.log_call(tool, kwargs, count, _client_name())
+    except Exception:
+        pass  # analytics must never break a tool response
+
+
+def _install_tracking() -> None:
+    """Wrap every registered tool's fn to log the call (tool, args, count, client)."""
+    import functools
+
+    for name, tool in mcp._tool_manager._tools.items():
+        orig = tool.fn
+        if getattr(tool, "is_async", False):
+            @functools.wraps(orig)
+            async def w(*a, _orig=orig, _name=name, **k):
+                res = await _orig(*a, **k)
+                _record(_name, k, res)
+                return res
+        else:
+            @functools.wraps(orig)
+            def w(*a, _orig=orig, _name=name, **k):
+                res = _orig(*a, **k)
+                _record(_name, k, res)
+                return res
+        tool.fn = w
+
+
+_install_tracking()
+
+
 def main() -> None:
     # stdio for local clients; streamable-http for a hosted service (see deploy/).
     if settings.mcp_transport == "stdio":

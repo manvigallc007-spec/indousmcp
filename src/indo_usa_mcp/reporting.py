@@ -41,6 +41,8 @@ def compute_daily_report() -> dict[str, Any]:
         "SELECT count(*) FROM approval_queue WHERE status='pending'")
     health["feedback_pending"] = _scalar(
         "SELECT count(*) FROM feedback WHERE status='pending'")
+    health["tool_calls_24h"] = _scalar(
+        "SELECT count(*) FROM tool_log WHERE created_at > now() - interval '24 hours'")
 
     # ---- Per-vertical totals + today's new (growth) + raw backlog (health) ----
     per_vertical = {}
@@ -111,6 +113,7 @@ def render_text(report: dict) -> str:
               f"  agent runs 24h: {h['agent_runs_24h']}  errors: {h['agent_errors_24h']}",
               f"  open alerts: {h['open_alerts']}",
               f"  pending approvals: {h['approvals_pending']}  feedback: {h['feedback_pending']}",
+              f"  agent tool-calls (24h): {h.get('tool_calls_24h', 0)}",
               f"  raw backlog: {h.get('raw_backlog', {})}",
               "", f"Featured (live paid placements): {g['featured_total']}",
               f"New claims today: {g['claims_today']}"]

@@ -41,7 +41,7 @@ _ADMIN_NAV = [
     ("Geography", "/admin/geo/restaurants"), ("Quality", "/admin/quality/restaurants"),
     ("Approvals", "/admin/approvals"), ("Feedback", "/admin/feedback"),
     ("Claims", "/admin/claims"), ("Agents", "/admin/agents"),
-    ("Payments", "/admin/payments"), ("Reports", "/admin/reports"),
+    ("Traffic", "/admin/traffic"), ("Payments", "/admin/payments"), ("Reports", "/admin/reports"),
 ]
 
 
