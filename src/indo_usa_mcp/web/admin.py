@@ -127,7 +127,9 @@ def data_list(request: Request) -> HTMLResponse:
     nav = (f"<span class='muted'>{total} records · page {page}/{max(pages,1)}</span> "
            + (f"<a href='?page={page-1}'>‹ prev</a> " if page > 1 else "")
            + (f"<a href='?page={page+1}'>next ›</a>" if page < pages else ""))
-    body = (f"<p>{tabs}</p><p class='muted'>Filter: {filters} · "
+    add_btn = (f"<p><a class='btn' href='/admin/data/{vertical}/new'>+ Add listing</a></p>"
+               if vertical != "events" else "")
+    body = (f"<p>{tabs}</p>{add_btn}<p class='muted'>Filter: {filters} · "
             f"<a href='/admin/data/{vertical}'>all</a> · "
             f"<a href='/admin/geo/{vertical}'>by location ▸</a></p>{geo_ctx}"
             f"<form method='get' class='inline'><input name='q' placeholder='search name/city' "
@@ -246,6 +248,58 @@ async def quality_merge(request: Request) -> HTMLResponse:
         if drops:
             verticals.merge_duplicates(vertical, keep, drops)
     return RedirectResponse(f"/admin/quality/{vertical}", status_code=303)
+
+
+_NEW_BASE = ["name", "address_full", "city", "state", "lat", "lng", "phone", "email", "website"]
+
+
+def data_new(request: Request) -> HTMLResponse:
+    if (r := require_admin(request)):
+        return r
+    vertical = request.path_params["vertical"]
+    if vertical not in verticals.VERTICALS or vertical == "events":
+        return admin_page("Not allowed",
+                          "<p>Listings can't be hand-added to this category"
+                          f"{' (events are agent-managed)' if vertical == 'events' else ''}.</p>",
+                          status=404)
+    cfg = verticals.VERTICALS[vertical]
+    extra = [f for f in cfg["edit_fields"] if f not in _NEW_BASE]
+    rows = "".join(f"<label>{f}{' *' if f == 'name' else ''}</label><input name='{f}'>"
+                   for f in _NEW_BASE + extra)
+    if cfg["has_hours"]:
+        rows += "<label>hours (e.g. Mo-Su 10:00-21:00)</label><input name='hours'>"
+    if cfg["has_dietary"]:
+        rows += "<label>dietary_tags (comma-separated)</label><input name='dietary_csv'>"
+    body = (f"<p><a href='/admin/data/{vertical}'>‹ back to {vertical}</a></p>"
+            f"<h3>Add a {verticals.VERTICALS[vertical]['label']} listing</h3>"
+            "<p class='muted'>Manually add a business OSM doesn't have. Name is required; "
+            "lat/lng (optional) auto-fills city/state. Saved as source=admin, active immediately, "
+            "with a description + tags + embedding generated automatically.</p>"
+            f"<form method='post' action='/admin/data/{vertical}/new'>{rows}"
+            "<button>Create listing</button></form>")
+    return admin_page("Add listing", body, active="Data")
+
+
+async def data_create(request: Request) -> HTMLResponse:
+    if (r := require_admin(request)):
+        return r
+    vertical = request.path_params["vertical"]
+    if vertical not in verticals.VERTICALS or vertical == "events":
+        return admin_page("Not allowed", "<p>Cannot add records here.</p>", status=404)
+    form = await request.form()
+    data = {k: form.get(k) for k in form.keys()}
+    if "dietary_csv" in form:
+        data["dietary_tags"] = sorted(
+            t.strip() for t in (form.get("dietary_csv") or "").split(",") if t.strip())
+    res = verticals.create_record(vertical, data)
+    if res.get("ok"):
+        return RedirectResponse(f"/admin/data/{vertical}/{res['id']}", status_code=303)
+    msg = {"name_required": "Name is required.",
+           "duplicate": "A listing with this name + location already exists.",
+           "events_are_agent_managed": "Events are managed by agents."}.get(
+        res.get("error"), "Could not create the listing.")
+    return admin_page("Could not add", f"<p class='err'>{msg}</p>"
+                      f"<p><a href='/admin/data/{vertical}/new'>‹ try again</a></p>", status=400)
 
 
 def data_detail(request: Request) -> HTMLResponse:
@@ -627,6 +681,8 @@ routes = [
     Route("/admin/logout", logout, methods=["GET"]),
     Route("/admin", overview, methods=["GET"]),
     Route("/admin/data/{vertical}", data_list, methods=["GET"]),
+    Route("/admin/data/{vertical}/new", data_new, methods=["GET"]),
+    Route("/admin/data/{vertical}/new", data_create, methods=["POST"]),
     Route("/admin/geo/{vertical}", geo_page, methods=["GET"]),
     Route("/admin/quality/{vertical}", quality_page, methods=["GET"]),
     Route("/admin/quality", quality_action, methods=["POST"]),

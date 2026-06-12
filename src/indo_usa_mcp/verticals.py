@@ -8,6 +8,7 @@ the f-string SQL below is safe.
 
 from __future__ import annotations
 
+import uuid
 from typing import Any, Callable
 
 from . import db, queries as r_queries
@@ -259,6 +260,75 @@ def apply_edits(vertical: str, rec_id: int, edits: dict) -> dict:
         return {"ok": True, "updated": 0}
     cfg["update"](existing, diff)
     return {"ok": True, "updated": len(diff), "fields": sorted(diff)}
+
+
+def _to_float(v: Any) -> float | None:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def create_record(vertical: str, data: dict) -> dict[str, Any]:
+    """Admin-create a canonical listing — the zero-noise way to add what OSM misses.
+
+    Builds the same canonical shape scrapers produce (natural_key, description, tags,
+    embedding) with source_name='admin', active immediately. Events are excluded (they're
+    agent-managed: admin only approves). Returns {ok, id} or {ok: False, error}.
+    """
+    cfg = get(vertical)
+    if vertical == "events":
+        return {"ok": False, "error": "events_are_agent_managed"}
+    from . import describe, embeddings, tags as tagmod
+    from .pipeline.ingest import _adapt
+    table = cfg["table"]
+    name = (data.get("name") or "").strip()
+    if not name:
+        return {"ok": False, "error": "name_required"}
+    lat, lng = _to_float(data.get("lat")), _to_float(data.get("lng"))
+    city, state = clean.fill_location((data.get("city") or "").strip() or None,
+                                      (data.get("state") or "").strip() or None, lat, lng)
+    rec: dict[str, Any] = {
+        "natural_key": clean.natural_key(name, lat, lng),
+        "name": name,
+        "address_full": (data.get("address_full") or "").strip() or None,
+        "city": city, "state": state,
+        "country": (data.get("country") or "USA").strip() or "USA",
+        "lat": lat, "lng": lng,
+        "phone": clean.normalize_phone(data.get("phone")),
+        "email": (data.get("email") or "").strip().lower() or None,
+        "website": (data.get("website") or "").strip() or None,
+        "region_tag": (data.get("region_tag") or "").strip() or None,
+        "festival_specials": (data.get("festival_specials") or "").strip() or None,
+        "source_name": "admin", "source_id": f"admin/{uuid.uuid4().hex[:12]}",
+        "confidence_score": 0.7, "is_active": True,
+    }
+    if cfg["has_hours"]:
+        raw = (data.get("hours") or "").strip()
+        rec["hours_json"] = clean._with_hours({"raw": raw}) if raw else None
+    if cfg["has_dietary"]:
+        rec["dietary_tags"] = data.get("dietary_tags") or []
+    for f in cfg["edit_fields"]:  # vertical-specific scalars (type column, speciality, ...)
+        if f not in rec:
+            v = data.get(f)
+            rec[f] = (v.strip() or None) if isinstance(v, str) else v
+    rec["description"] = describe.describe(vertical, rec)
+    rec["tags"] = tagmod.extract(vertical, rec)
+
+    if db.query_one(f"SELECT 1 AS x FROM {table} WHERE natural_key = %s", (rec["natural_key"],)):
+        return {"ok": False, "error": "duplicate"}
+    cols = {r["column_name"] for r in db.query(
+        "SELECT column_name FROM information_schema.columns WHERE table_name = %s", (table,))}
+    use = [k for k in rec if k in cols]
+    row = db.query_one(
+        f"INSERT INTO {table} ({', '.join(use)}, last_seen_at) "
+        f"VALUES ({', '.join(['%s'] * len(use))}, now()) RETURNING id",
+        [_adapt(rec[k]) for k in use])
+    new_id = row["id"]
+    if embeddings.enabled():
+        db.execute(f"UPDATE {table} SET embedding = %s::vector WHERE id = %s",
+                   (embeddings.to_vector_literal(embeddings.embed(embeddings.text_for(rec))), new_id))
+    return {"ok": True, "id": new_id, "vertical": vertical}
 
 
 def enhance_existing(vertical: str) -> dict[str, Any]:

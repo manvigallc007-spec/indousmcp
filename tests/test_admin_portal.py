@@ -42,6 +42,12 @@ def test_verticals_helpers_are_defined():
         assert callable(getattr(verticals, fn, None)), f"verticals.{fn} missing"
 
 
+def test_create_record_guards():
+    # Both guards short-circuit before any DB access.
+    assert verticals.create_record("events", {"name": "x"})["error"] == "events_are_agent_managed"
+    assert verticals.create_record("apparel", {"name": "   "})["error"] == "name_required"
+
+
 def test_report_render_text():
     metrics = {
         "health": {"agent_runs_24h": 1, "agent_errors_24h": 0, "open_alerts": 0,
