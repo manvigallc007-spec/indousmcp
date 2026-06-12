@@ -8,8 +8,9 @@ restaurants (USA).** This repo is the walking skeleton from the architecture blu
   `draft_claim_outreach`, `submit_correction`), **temple** capabilities
   (`get_indian_temples`, `get_temple_details`, `search_temples_by_text`) and **grocery**
   capabilities (`get_indian_groceries`, `get_grocery_details`, `search_groceries_by_text`)
-  **professional** capabilities (`get_indian_professionals`, …) and **salon** capabilities
-  (`get_indian_salons`, `get_salon_details`, `search_salons_by_text`).
+  **professional** capabilities (`get_indian_professionals`, …), **salon** capabilities
+  (`get_indian_salons`, …), and a cross-vertical **`search_all`** that searches every vertical
+  at once (each result tagged with its `vertical`).
 - **Data pipeline**: scrape → raw → clean/enrich/score → approval queue → canonical table →
   versioning.
 - **One real scraper**: OpenStreetMap Overpass (public, ODbL-licensed, no login, ToS-safe).
@@ -138,10 +139,11 @@ Records are optimized for agent retrieval:
 trigram. Providers (`EMBEDDING_PROVIDER`):
 
 - **`hashing`** (default) — feature-hashing, zero extra deps; lexical.
-- **`fastembed`** (recommended) — real semantic embeddings via `BAAI/bge-small-en-v1.5`
-  (384-dim, ONNX, **no torch**). Install the extra: `pip install -e ".[semantic]"`
-  (the Docker image already includes it), set `EMBEDDING_PROVIDER=fastembed`, then
-  `python -m indo_usa_mcp.cli enhance-data` to (re)embed.
+- **`fastembed`** (recommended, **prod default**) — real semantic embeddings via
+  `BAAI/bge-small-en-v1.5` (384-dim, ONNX, **no torch**). The Docker image includes it and the
+  prod compose defaults `EMBEDDING_PROVIDER=fastembed`; after deploying run
+  `python -m indo_usa_mcp.cli enhance-data` once to re-embed existing rows. Set
+  `EMBEDDING_PROVIDER=hashing` if the VPS is RAM-constrained.
 - **`sentence_transformers`** — `all-MiniLM-L6-v2` (heavier, pulls torch).
 - **`none`** — trigram only.
 

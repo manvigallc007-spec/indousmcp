@@ -258,7 +258,27 @@ def merge_duplicates(vertical: str, keep_id: int, drop_ids: list[int]) -> dict[s
     return {"ok": True, "kept": keep_id, "dropped": list(drop_ids), "filled": sorted(diff)}
 
 
-def featured_summary() -> dict[str, Any]:
+def search_all(query: str, city: str | None = None, state: str | None = None,
+               limit: int = 20) -> dict[str, Any]:
+    """Search every vertical at once and merge results (featured first, then relevance).
+
+    Each result is tagged with its `vertical`. Lets an agent answer broad "Indian things
+    near me" queries without choosing a vertical first.
+    """
+    merged: list[dict] = []
+    ranking = "trigram"
+    for key, cfg in VERTICALS.items():
+        fn = getattr(cfg["queries"], f"search_{key}_by_text", None)
+        if fn is None:
+            continue
+        res = fn(query, city=city, state=state, limit=limit)
+        ranking = res.get("ranking", ranking)
+        for r in res["results"]:
+            r["vertical"] = key
+            merged.append(r)
+    merged.sort(key=lambda r: (not r.get("is_featured"), -(r.get("match_score") or 0)))
+    merged = merged[:limit]
+    return {"count": len(merged), "query": query, "ranking": ranking, "results": merged}
     """Active (effective) featured counts per vertical — the live paid placements."""
     out, total = {}, 0
     for key in VERTICALS:

@@ -31,6 +31,8 @@ services:
       MCP_TRANSPORT: streamable-http
       MCP_HOST: 0.0.0.0
       MCP_PORT: 8000
+      # Real semantic search by default (fastembed is in the image). Set hashing if RAM is tight.
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-fastembed}
     ports:
       - "8000:8000"
     depends_on:
@@ -46,6 +48,7 @@ services:
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-diaspora}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-fastembed}
     depends_on:
       db:
         condition: service_healthy

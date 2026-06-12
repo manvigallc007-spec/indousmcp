@@ -9,7 +9,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from . import queries
+from . import queries, verticals
 from .config import settings
 from .groceries import queries as grocery_queries
 from .pipeline import feedback, outreach
@@ -273,6 +273,20 @@ def search_salons_by_text(
 ) -> dict[str, Any]:
     """Free-text/semantic search over Indian beauty salons."""
     return salon_queries.search_salons_by_text(query, city=city, state=state, limit=limit)
+
+
+@mcp.tool()
+def search_all(
+    query: str, city: str | None = None, state: str | None = None, limit: int = 20,
+) -> dict[str, Any]:
+    """Search across ALL Indian-American verticals at once — restaurants, temples, groceries,
+    healthcare professionals, and beauty salons.
+
+    Use for broad queries like "Indian things near me in Edison NJ" or "vegetarian South
+    Indian". Each result is tagged with its `vertical`; featured listings rank first, then by
+    relevance. Optionally constrain by `city`/`state`.
+    """
+    return verticals.search_all(query, city=city, state=state, limit=limit)
 
 
 # ---------------------------------------------------- agent traffic analytics
