@@ -1,0 +1,157 @@
+"""Vertical registry + generic admin data helpers.
+
+Maps each vertical (restaurants / temples / groceries) to its table, stats, editable
+fields and a versioned update function, so admin/data code stays generic instead of being
+duplicated per vertical. Table names come only from this registry (never user input), so
+the f-string SQL below is safe.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Callable
+
+from . import db, queries as r_queries
+from .groceries import pipeline as g_pipeline, queries as g_queries
+from .pipeline import ingest
+from .temples import pipeline as t_pipeline, queries as t_queries
+
+
+def _update_restaurant(existing: dict, diff: dict) -> None:
+    ingest._update_canonical(existing, {**existing, **diff}, diff, change_reason="admin edit")
+
+
+def _update_temple(existing: dict, diff: dict) -> None:
+    t_pipeline._update(existing, {**existing, **diff}, diff)
+
+
+def _update_grocery(existing: dict, diff: dict) -> None:
+    g_pipeline._update(existing, {**existing, **diff}, diff)
+
+
+# label, queries module, stats fn, scalar edit fields, has_hours, has_dietary, update fn
+VERTICALS: dict[str, dict[str, Any]] = {
+    "restaurants": {
+        "label": "Restaurants", "table": "restaurants", "queries": r_queries,
+        "edit_fields": ["phone", "email", "website", "menu_url", "address_full", "city",
+                        "state", "cuisine_type", "region_tag", "price_range", "festival_specials"],
+        "has_hours": True, "has_dietary": True, "update": _update_restaurant,
+        "supports_claims": True,
+    },
+    "temples": {
+        "label": "Temples", "table": "temples", "queries": t_queries,
+        "edit_fields": ["phone", "email", "website", "address_full", "city", "state",
+                        "religion", "denomination", "deity", "region_tag", "festival_specials"],
+        "has_hours": True, "has_dietary": False, "update": _update_temple,
+        "supports_claims": False,
+    },
+    "groceries": {
+        "label": "Groceries", "table": "groceries", "queries": g_queries,
+        "edit_fields": ["phone", "email", "website", "address_full", "city", "state",
+                        "store_type", "region_tag", "festival_specials"],
+        "has_hours": True, "has_dietary": True, "update": _update_grocery,
+        "supports_claims": False,
+    },
+}
+
+
+def get(vertical: str) -> dict[str, Any]:
+    if vertical not in VERTICALS:
+        raise ValueError(f"Unknown vertical '{vertical}'")
+    return VERTICALS[vertical]
+
+
+def _table(vertical: str) -> str:
+    return get(vertical)["table"]
+
+
+# ------------------------------------------------------------------ generic queries
+def list_records(vertical: str, q: str | None = None, flt: str | None = None,
+                 limit: int = 50, offset: int = 0) -> list[dict]:
+    table = _table(vertical)
+    where, params = ["deleted_at IS NULL"], []
+    if q:
+        where.append("(name ILIKE %s OR city ILIKE %s)")
+        params += [f"%{q}%", f"%{q}%"]
+    flt_map = {"featured": "is_featured", "claimed": "is_claimed",
+               "inactive": "NOT is_active", "active": "is_active"}
+    if flt in flt_map:
+        where.append(flt_map[flt])
+    sql = (f"SELECT id, name, city, state, is_active, is_featured, is_claimed, "
+           f"confidence_score, region_tag FROM {table} WHERE {' AND '.join(where)} "
+           f"ORDER BY id DESC LIMIT %s OFFSET %s")
+    return db.query(sql, params + [limit, offset])
+
+
+def count_records(vertical: str, q: str | None = None, flt: str | None = None) -> int:
+    table = _table(vertical)
+    where, params = ["deleted_at IS NULL"], []
+    if q:
+        where.append("(name ILIKE %s OR city ILIKE %s)")
+        params += [f"%{q}%", f"%{q}%"]
+    flt_map = {"featured": "is_featured", "claimed": "is_claimed",
+               "inactive": "NOT is_active", "active": "is_active"}
+    if flt in flt_map:
+        where.append(flt_map[flt])
+    row = db.query_one(f"SELECT count(*) AS n FROM {table} WHERE {' AND '.join(where)}", params)
+    return row["n"] if row else 0
+
+
+def get_record(vertical: str, rec_id: int) -> dict | None:
+    return db.query_one(f"SELECT * FROM {_table(vertical)} WHERE id = %s", (rec_id,))
+
+
+# ----------------------------------------------------------------- generic mutations
+def set_featured(vertical: str, rec_id: int, days: int | None = 30) -> None:
+    table = _table(vertical)
+    if days is None:
+        db.execute(f"UPDATE {table} SET is_featured = true, featured_until = NULL, "
+                   f"updated_at = now() WHERE id = %s", (rec_id,))
+    else:
+        db.execute(f"UPDATE {table} SET is_featured = true, "
+                   f"featured_until = now() + (%s || ' days')::interval, updated_at = now() "
+                   f"WHERE id = %s", (days, rec_id))
+
+
+def unset_featured(vertical: str, rec_id: int) -> None:
+    db.execute(f"UPDATE {_table(vertical)} SET is_featured = false, featured_until = NULL, "
+               f"updated_at = now() WHERE id = %s", (rec_id,))
+
+
+def set_active(vertical: str, rec_id: int, active: bool) -> None:
+    db.execute(f"UPDATE {_table(vertical)} SET is_active = %s, updated_at = now() WHERE id = %s",
+               (active, rec_id))
+
+
+def set_deleted(vertical: str, rec_id: int, deleted: bool) -> None:
+    val = "now()" if deleted else "NULL"
+    db.execute(f"UPDATE {_table(vertical)} SET deleted_at = {val}, updated_at = now() WHERE id = %s",
+               (rec_id,))
+
+
+def apply_edits(vertical: str, rec_id: int, edits: dict) -> dict:
+    """Versioned admin edit of a record's allowed fields."""
+    cfg = get(vertical)
+    existing = get_record(vertical, rec_id)
+    if existing is None:
+        return {"ok": False, "error": "not_found"}
+    allowed = set(cfg["edit_fields"]) | ({"hours_json"} if cfg["has_hours"] else set()) \
+        | ({"dietary_tags"} if cfg["has_dietary"] else set())
+    from .pipeline.ingest import _normalize
+    diff = {k: v for k, v in edits.items()
+            if k in allowed and _normalize(existing.get(k)) != _normalize(v)}
+    if not diff:
+        return {"ok": True, "updated": 0}
+    cfg["update"](existing, diff)
+    return {"ok": True, "updated": len(diff), "fields": sorted(diff)}
+
+
+def featured_summary() -> dict[str, Any]:
+    """Active (effective) featured counts per vertical — the live paid placements."""
+    out, total = {}, 0
+    for key in VERTICALS:
+        row = db.query_one(
+            f"SELECT count(*) AS n FROM {_table(key)} WHERE deleted_at IS NULL "
+            f"AND is_featured AND (featured_until IS NULL OR featured_until > now())")
+        out[key] = row["n"] if row else 0
+        total += out[key]
+    return {"by_vertical": out, "total": total}

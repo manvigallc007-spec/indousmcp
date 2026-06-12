@@ -144,6 +144,27 @@ Now a claimed owner sees a **"Get Featured"** button → pays → the webhook au
 (verified by Stripe signature). Test with Stripe **test mode** keys first (`sk_test_…`) and a
 test card `4242 4242 4242 4242`.
 
+## Admin dashboard & owner portal
+
+Set these in `/opt/diaspora/.env`, then recreate the `web` service:
+```
+ADMIN_PASSWORD=a-strong-admin-password     # blank = /admin disabled
+SECRET_KEY=a-long-random-string            # signs sessions + magic-links
+REPORT_EMAIL=you@example.com               # daily report recipient (needs SMTP set)
+```
+```bash
+docker compose -f docker-compose.prod.yml up -d --build web
+```
+- **Admin:** `http://YOUR_VPS_IP:8080/admin` → log in with `ADMIN_PASSWORD`. Control data,
+  approvals, feedback, agents, payments, reports across all verticals.
+- **Owner portal:** `http://YOUR_VPS_IP:8080/portal/login` → owners get a magic-link email
+  (requires SMTP; without SMTP the link is shown on-page for testing).
+- **Daily report:** emailed nightly by the `reporting` agent; on demand:
+  `docker compose -f docker-compose.prod.yml exec server python -m indo_usa_mcp.cli report`.
+
+> ⚠️ Put the **Caddy HTTPS proxy** in front before exposing `/admin` publicly, and use a strong
+> `ADMIN_PASSWORD`. Admin over plain HTTP on a public IP is risky.
+
 ## Day-2 operations
 
 ```bash

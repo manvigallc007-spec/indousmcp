@@ -12,6 +12,7 @@ dependencies = [
     "pydantic-settings>=2.2",
     "python-dotenv>=1.0",
     "stripe>=7.0",
+    "itsdangerous>=2.0",
 ]
 
 [project.optional-dependencies]

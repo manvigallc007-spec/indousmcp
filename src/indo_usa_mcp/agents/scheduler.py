@@ -25,7 +25,7 @@ _RUN_ORDER = [
     "scraper", "cleaner", "enrichment", "feedback", "approval_assistant",
     "temple_scraper", "temple_cleaner",
     "grocery_scraper", "grocery_cleaner",
-    "discovery", "outreach", "monitoring", "submission",
+    "discovery", "outreach", "reporting", "monitoring", "submission",
 ]
 
 # How often the loop wakes to check what's due.

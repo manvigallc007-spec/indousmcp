@@ -192,6 +192,12 @@ def cmd_groceries_query(args: argparse.Namespace) -> None:
             state=args.state, region_tag=args.region, limit=args.limit))
 
 
+def cmd_report(_: argparse.Namespace) -> None:
+    from . import reporting
+    report = reporting.compute_daily_report()
+    print(reporting.render_text(report))
+
+
 def cmd_stats(_: argparse.Namespace) -> None:
     _print(queries.stats())
 
@@ -340,6 +346,8 @@ def build_parser() -> argparse.ArgumentParser:
     gq.add_argument("--limit", type=int, default=10)
     gq.set_defaults(func=cmd_groceries_query)
 
+    sub.add_parser("report", help="Compute & print the daily health/growth report").set_defaults(
+        func=cmd_report)
     sub.add_parser("stats", help="Show row counts & coverage").set_defaults(func=cmd_stats)
     return p
 

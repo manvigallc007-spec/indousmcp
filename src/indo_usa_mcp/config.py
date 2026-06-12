@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     # Public claim web page (owner-facing)
     web_host: str = "0.0.0.0"
     web_port: int = 8080
+
+    # Admin dashboard + sessions/magic-links. Blank admin_password disables /admin.
+    admin_password: str = ""
+    secret_key: str = "dev-insecure-change-me"   # signs session cookies + magic-links
+    report_email: str = ""                       # daily report recipient (defaults to contact)
+    magic_link_ttl_minutes: int = 30
     # Public base URL of the web app (for Stripe redirect URLs), e.g. https://yourdomain.com
     public_web_url: str = "http://localhost:8080"
 

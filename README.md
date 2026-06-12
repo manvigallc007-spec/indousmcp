@@ -213,6 +213,25 @@ python -m indo_usa_mcp.cli groceries-query --city Fremont
 python -m indo_usa_mcp.cli groceries-query --text "patel brothers indian grocery"
 ```
 
+## Admin dashboard, reporting & owner portal
+
+The web app (`:8080`) now serves three audiences:
+
+- **Public/owner** — `/`, `/claim`, `/manage`, `/upgrade` (existing)
+- **Admin** (`/admin/*`, password-gated) — overview KPIs, cross-vertical **data control**
+  (browse/search/edit/feature/deactivate/soft-delete), **approvals** & **feedback** queues,
+  **agents** (last-run health, run-now, resolve alerts), **payments** (featured placements +
+  Stripe payments), and **reports**. Set `ADMIN_PASSWORD` to enable; blank disables it.
+- **Customer portal** (`/portal/*`) — owners sign in via **passwordless magic-link** email and
+  manage all their listings across verticals (edit, featured status, upgrade).
+
+**Daily report**: the `reporting` agent computes a health + growth snapshot nightly into
+`daily_reports`, shows it on `/admin/reports`, and emails it (via SMTP) to `REPORT_EMAIL`.
+Run on demand with `python -m indo_usa_mcp.cli report`.
+
+> Security: enable HTTPS (the Caddy `tls` profile) and set a strong `ADMIN_PASSWORD` +
+> random `SECRET_KEY` before exposing `/admin` publicly.
+
 ## Connecting an MCP client
 
 Point any MCP client (Claude Desktop, etc.) at:

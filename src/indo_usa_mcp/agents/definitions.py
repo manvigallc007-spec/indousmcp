@@ -179,6 +179,18 @@ class GroceryCleanerAgent(Agent):
         return result
 
 
+class ReportingAgent(Agent):
+    name = "reporting"
+    description = "Computes the daily health & growth report and emails it."
+    default_interval_s = 86400
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from .. import reporting
+        report = reporting.compute_daily_report()
+        emailed = reporting.email_daily_report(report)
+        return {"computed": True, "emailed": emailed, "deltas": report.get("deltas", {})}
+
+
 class MonitoringAgent(Agent):
     name = "monitoring"
     description = "Detects anomalies (backlogs, scraper failures, stale data) -> alerts."
@@ -243,5 +255,6 @@ ALL_AGENTS = [
     TempleCleanerAgent(),
     GroceryScraperAgent(),
     GroceryCleanerAgent(),
+    ReportingAgent(),
     MonitoringAgent(),
 ]

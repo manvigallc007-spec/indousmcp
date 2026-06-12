@@ -88,6 +88,26 @@ def fulfill_session(session_id: str) -> dict[str, Any]:
     return _fulfill_from_metadata(_attr(s, "metadata"))
 
 
+def recent_payments(limit: int = 20) -> list[dict[str, Any]]:
+    """Recent Stripe Checkout sessions (read-only, for the admin payments view)."""
+    if not enabled():
+        return []
+    try:
+        listing = _stripe().checkout.Session.list(limit=limit)
+    except Exception:
+        return []
+    out = []
+    for s in getattr(listing, "data", []):
+        out.append({
+            "id": _attr(s, "id"),
+            "amount": _attr(s, "amount_total", 0),
+            "currency": _attr(s, "currency", ""),
+            "status": _attr(s, "payment_status", ""),
+            "created": _attr(s, "created", 0),
+        })
+    return out
+
+
 def handle_webhook(payload: bytes, sig_header: str) -> dict[str, Any]:
     """Verify a Stripe webhook and fulfill featured-listing purchases (idempotent)."""
     if not enabled():
