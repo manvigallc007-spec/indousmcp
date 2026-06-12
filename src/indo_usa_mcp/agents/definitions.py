@@ -13,6 +13,7 @@ from .. import db
 from ..pipeline import feedback, ingest, outreach
 from ..pipeline.scrapers import SCRAPERS
 from ..pipeline.scrapers.metros import METROS
+from ..events import pipeline as events
 from ..groceries import pipeline as groceries
 from ..professionals import pipeline as professionals
 from ..salons import pipeline as salons
@@ -235,6 +236,26 @@ class SalonCleanerAgent(Agent):
         return result
 
 
+class EventScraperAgent(Agent):
+    name = "event_scraper"
+    description = "Ingests Indian-American events from public iCalendar feeds."
+    default_interval_s = 43200  # twice daily (events are time-sensitive)
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        return {"upserted": events.scrape_to_raw()}
+
+
+class EventCleanerAgent(Agent):
+    name = "event_cleaner"
+    description = "Processes raw events; auto-approves high-confidence, queues the rest."
+    default_interval_s = 21600
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        result = events.process_raw()
+        result.update(events.purge_old(days=params.get("retention_days", 550)))
+        return result
+
+
 class ReportingAgent(Agent):
     name = "reporting"
     description = "Computes the daily health & growth report and emails it."
@@ -315,6 +336,8 @@ ALL_AGENTS = [
     ProfessionalCleanerAgent(),
     SalonScraperAgent(),
     SalonCleanerAgent(),
+    EventScraperAgent(),
+    EventCleanerAgent(),
     ReportingAgent(),
     MonitoringAgent(),
 ]

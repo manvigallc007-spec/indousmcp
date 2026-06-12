@@ -24,6 +24,8 @@ from .agents.scheduler import run_loop
 from .pipeline import feedback, ingest, outreach, seed
 from .pipeline.scrapers import SCRAPERS
 from .pipeline.scrapers.metros import SCRAPE_REGIONS
+from .events import pipeline as events
+from .events import queries as event_queries
 from .groceries import pipeline as groceries
 from .groceries import queries as grocery_queries
 from .professionals import pipeline as professionals
@@ -276,6 +278,42 @@ def cmd_salons_query(args: argparse.Namespace) -> None:
             state=args.state, tag=args.tag, limit=args.limit))
 
 
+def cmd_events_scrape(_: argparse.Namespace) -> None:
+    print(f"Ingesting events from {len(events.scraper._feeds())} iCal feed(s)...")
+    print(f"Upserted {events.scrape_to_raw()} raw event observation(s).")
+
+
+def cmd_events_process(_: argparse.Namespace) -> None:
+    _print(events.process_raw())
+
+
+def cmd_events_stats(_: argparse.Namespace) -> None:
+    _print(event_queries.stats())
+
+
+def cmd_events_query(args: argparse.Namespace) -> None:
+    if args.text:
+        _print(event_queries.search_events_by_text(args.text, city=args.city, state=args.state, limit=args.limit))
+    else:
+        _print(event_queries.get_indian_events(
+            city=args.city, state=args.state, category=args.category,
+            include_past=args.include_past, limit=args.limit))
+
+
+def cmd_events_approvals(_: argparse.Namespace) -> None:
+    _print(events.pending())
+
+
+def cmd_events_approve(args: argparse.Namespace) -> None:
+    events.set_status(args.id, "approved")
+    print(f"Approved event #{args.id}.")
+
+
+def cmd_events_reject(args: argparse.Namespace) -> None:
+    events.set_status(args.id, "rejected")
+    print(f"Rejected event #{args.id}.")
+
+
 def cmd_stats(_: argparse.Namespace) -> None:
     _print(queries.stats())
 
@@ -482,6 +520,29 @@ def build_parser() -> argparse.ArgumentParser:
     sq.add_argument("--radius", type=float, default=15.0)
     sq.add_argument("--limit", type=int, default=10)
     sq.set_defaults(func=cmd_salons_query)
+
+    # ---- Phase 2: events vertical (automated iCal ingestion, admin-approved) ----
+    sub.add_parser("events-scrape", help="Ingest events from configured iCal feeds").set_defaults(
+        func=cmd_events_scrape)
+    sub.add_parser("events-process", help="Process raw events -> approval routing").set_defaults(
+        func=cmd_events_process)
+    sub.add_parser("events-stats", help="Event counts (approved/pending/upcoming/past)").set_defaults(
+        func=cmd_events_stats)
+    sub.add_parser("events-approvals", help="List events pending admin approval").set_defaults(
+        func=cmd_events_approvals)
+    ea = sub.add_parser("events-approve"); ea.add_argument("id", type=int)
+    ea.set_defaults(func=cmd_events_approve)
+    er = sub.add_parser("events-reject"); er.add_argument("id", type=int)
+    er.set_defaults(func=cmd_events_reject)
+
+    eq = sub.add_parser("events-query", help="Query upcoming events (as the MCP tool does)")
+    eq.add_argument("--city")
+    eq.add_argument("--state")
+    eq.add_argument("--category")
+    eq.add_argument("--text")
+    eq.add_argument("--include-past", action="store_true", dest="include_past")
+    eq.add_argument("--limit", type=int, default=10)
+    eq.set_defaults(func=cmd_events_query)
 
     sub.add_parser("stats", help="Show row counts & coverage").set_defaults(func=cmd_stats)
     return p

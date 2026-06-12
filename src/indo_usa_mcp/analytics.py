@@ -35,6 +35,8 @@ _TOOL_VERTICAL = {
     "search_professionals_by_text": "professionals",
     "get_indian_salons": "salons", "get_salon_details": "salons",
     "search_salons_by_text": "salons",
+    "get_indian_events": "events", "get_event_details": "events",
+    "search_events_by_text": "events",
 }
 
 

@@ -61,6 +61,14 @@ def extract(vertical: str, rec: dict) -> list[str]:
     if vertical == "professionals":
         out = [rec.get("profession_type"), rec.get("speciality")]
         return sorted({str(x).lower() for x in out if x})
+    if vertical == "events":
+        text = " ".join(str(rec.get(f) or "") for f in ("name", "festival_specials")).lower()
+        festivals = ("diwali", "holi", "navratri", "garba", "dandiya", "onam", "pongal",
+                     "eid", "ganesh", "durga", "ugadi", "baisakhi", "dussehra", "raksha bandhan")
+        found = {f for f in festivals if f in text}
+        if rec.get("category"):
+            found.add(rec["category"].lower())
+        return sorted(found)
     if vertical == "salons":
         text = " ".join(str(rec.get(f) or "") for f in ("name", "salon_type")).lower()
         found = {t for t, kws in _SALON_TAGS.items() if any(k in text for k in kws)}

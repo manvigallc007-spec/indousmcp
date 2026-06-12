@@ -49,6 +49,7 @@ services:
       POSTGRES_PORT: 5432
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-diaspora}
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-fastembed}
+      EVENT_ICAL_FEEDS: ${EVENT_ICAL_FEEDS:-}
     depends_on:
       db:
         condition: service_healthy

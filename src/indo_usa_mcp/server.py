@@ -11,6 +11,7 @@ from mcp.server.fastmcp import FastMCP
 
 from . import queries, verticals
 from .config import settings
+from .events import queries as event_queries
 from .groceries import queries as grocery_queries
 from .pipeline import feedback, outreach
 from .professionals import queries as professional_queries
@@ -273,6 +274,48 @@ def search_salons_by_text(
 ) -> dict[str, Any]:
     """Free-text/semantic search over Indian beauty salons."""
     return salon_queries.search_salons_by_text(query, city=city, state=state, limit=limit)
+
+
+# --------------------------------------------------------------- events (Phase 2)
+@mcp.tool()
+def get_indian_events(
+    lat: float | None = None,
+    lng: float | None = None,
+    radius_miles: float = 25.0,
+    city: str | None = None,
+    state: str | None = None,
+    category: str | None = None,
+    tag: str | None = None,
+    include_past: bool = False,
+    limit: int = 25,
+) -> dict[str, Any]:
+    """Find upcoming Indian-American community events (festivals, garba, concerts, puja).
+
+    Provide a point (`lat`+`lng`, optional `radius_miles`) or `city`/`state`. Filter by
+    `category` ("festival", "garba", "concert", "puja", …) or `tag` ("diwali", "holi", …).
+    Returns UPCOMING events by default (soonest first); set `include_past=true` for history.
+    Each event has `start_at`/`end_at`, venue, category and a description.
+    """
+    return event_queries.get_indian_events(
+        lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
+        category=category, tag=tag, include_past=include_past, limit=limit)
+
+
+@mcp.tool()
+def get_event_details(event_id: int) -> dict[str, Any]:
+    """Full canonical record for one event, plus its version history."""
+    record = event_queries.get_event_details(event_id)
+    if record is None:
+        return {"error": "not_found", "event_id": event_id}
+    return record
+
+
+@mcp.tool()
+def search_events_by_text(
+    query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+) -> dict[str, Any]:
+    """Free-text/semantic search over Indian-American events (incl. past, for history)."""
+    return event_queries.search_events_by_text(query, city=city, state=state, limit=limit)
 
 
 @mcp.tool()

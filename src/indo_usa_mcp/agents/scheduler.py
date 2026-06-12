@@ -27,6 +27,7 @@ _RUN_ORDER = [
     "grocery_scraper", "grocery_cleaner",
     "professional_scraper", "professional_cleaner",
     "salon_scraper", "salon_cleaner",
+    "event_scraper", "event_cleaner",
     "discovery", "outreach", "reporting", "monitoring", "submission",
 ]
 

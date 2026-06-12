@@ -10,6 +10,7 @@ from starlette.routing import Route
 
 from .. import analytics, db, payments, quality, reporting, verticals
 from ..agents import AGENTS, run_agent
+from ..events import pipeline as events
 from ..config import settings
 from ..pipeline import ingest
 from .auth import admin_enabled, login_admin, logout_admin, require_admin
@@ -388,6 +389,50 @@ async def feedback_action(request: Request) -> HTMLResponse:
     return RedirectResponse("/admin/feedback", status_code=303)
 
 
+# ------------------------------------------------------------------------ events
+def events_page(request: Request) -> HTMLResponse:
+    if (r := require_admin(request)):
+        return r
+    pend = events.pending(limit=100)
+    rows = ""
+    for e in pend:
+        rows += (
+            f"<tr><td>{esc(e['name'])}</td><td>{esc(e['category'])}</td>"
+            f"<td>{esc(e['venue_name'])}</td><td>{esc(e['city'])}, {esc(e['state'])}</td>"
+            f"<td class='muted'>{esc(e['start_at'])}</td><td>{e['confidence_score']}</td>"
+            f"<td><a href='{esc(e['source_url'])}'>src</a></td>"
+            f"<td>{_event_btns(e['id'])}</td></tr>")
+    stats = verticals.VERTICALS["events"]["queries"].stats()
+    body = (f"<div class='cards'>"
+            f"<div class='kpi'><b>{stats['upcoming']}</b><span>upcoming (live)</span></div>"
+            f"<div class='kpi'><b class='{'warn' if stats['pending'] else ''}'>{stats['pending']}</b>"
+            f"<span>pending approval</span></div>"
+            f"<div class='kpi'><b>{stats['past']}</b><span>past (kept)</span></div></div>"
+            "<p class='muted'>Events are ingested automatically from iCal feeds; high-confidence "
+            "ones auto-approve, the rest wait here. Past events are kept and date-filtered.</p>"
+            + (f"<h3>Pending approval ({len(pend)})</h3><table><tr><th>Event</th><th>Category</th>"
+               f"<th>Venue</th><th>Location</th><th>When</th><th>Conf</th><th></th><th></th></tr>"
+               f"{rows}</table>" if pend else "<p class='ok'>Nothing pending. 🎉</p>"))
+    return admin_page("Events", body, active="Events")
+
+
+def _event_btns(eid: int) -> str:
+    return (f"<form method='post' action='/admin/events' class='inline'>"
+            f"<input type='hidden' name='id' value='{eid}'><input type='hidden' name='op' value='approve'>"
+            f"<button>Approve</button></form> "
+            f"<form method='post' action='/admin/events' class='inline'>"
+            f"<input type='hidden' name='id' value='{eid}'><input type='hidden' name='op' value='reject'>"
+            f"<button class='btn gray'>Reject</button></form>")
+
+
+async def events_action(request: Request) -> HTMLResponse:
+    if (r := require_admin(request)):
+        return r
+    form = await request.form()
+    events.set_status(int(form.get("id")), "approved" if form.get("op") == "approve" else "rejected")
+    return RedirectResponse("/admin/events", status_code=303)
+
+
 # ----------------------------------------------------------------------- claims
 def claims(request: Request) -> HTMLResponse:
     if (r := require_admin(request)):
@@ -579,6 +624,8 @@ routes = [
     Route("/admin/approvals", approvals_action, methods=["POST"]),
     Route("/admin/feedback", feedback_list, methods=["GET"]),
     Route("/admin/feedback", feedback_action, methods=["POST"]),
+    Route("/admin/events", events_page, methods=["GET"]),
+    Route("/admin/events", events_action, methods=["POST"]),
     Route("/admin/claims", claims, methods=["GET"]),
     Route("/admin/agents", agents_page, methods=["GET"]),
     Route("/admin/agents", agents_action, methods=["POST"]),

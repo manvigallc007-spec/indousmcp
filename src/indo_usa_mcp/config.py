@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     auto_approve_low_risk: bool = True
     auto_approve_min_confidence: float = 0.6
 
+    # Events: public iCalendar (.ics) feed URLs the event agent ingests (comma-separated).
+    event_ical_feeds: str = ""
+
     # Scraper politeness
     overpass_url: str = "https://overpass-api.de/api/interpreter"
     scraper_user_agent: str = "indo-usa-diaspora-mcp/0.1"

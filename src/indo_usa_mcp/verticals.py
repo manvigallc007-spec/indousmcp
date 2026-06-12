@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from . import db, queries as r_queries
+from .events import pipeline as e_pipeline, queries as e_queries
 from .groceries import pipeline as g_pipeline, queries as g_queries
 from .pipeline import clean, ingest
 from .professionals import pipeline as p_pipeline, queries as p_queries
@@ -36,6 +37,10 @@ def _update_professional(existing: dict, diff: dict) -> None:
 
 def _update_salon(existing: dict, diff: dict) -> None:
     s_pipeline._update(existing, {**existing, **diff}, diff)
+
+
+def _update_event(existing: dict, diff: dict) -> None:
+    e_pipeline._update(existing, {**existing, **diff}, diff)
 
 
 # label, queries module, stats fn, scalar edit fields, has_hours, has_dietary, update fn
@@ -73,6 +78,13 @@ VERTICALS: dict[str, dict[str, Any]] = {
         "edit_fields": ["phone", "email", "website", "address_full", "city", "state",
                         "salon_type", "region_tag", "festival_specials"],
         "has_hours": True, "has_dietary": False, "update": _update_salon,
+        "supports_claims": False,
+    },
+    "events": {
+        "label": "Events", "table": "events", "queries": e_queries,
+        "edit_fields": ["category", "organizer", "venue_name", "address_full", "city", "state",
+                        "website", "phone", "email", "region_tag", "festival_specials"],
+        "has_hours": False, "has_dietary": False, "update": _update_event,
         "supports_claims": False,
     },
 }

@@ -80,8 +80,23 @@ def _salon(rec: dict) -> str:
     return s + _hours(rec)
 
 
+def _event(rec: dict) -> str:
+    cat = rec.get("category") or "community"
+    s = f"{rec.get('name', 'This event')} is {_a(cat)} {cat} event"
+    if rec.get("venue_name"):
+        s += f" at {rec['venue_name']}"
+    s += _loc(rec) + "."
+    start = rec.get("start_at")
+    if start is not None:
+        when = start.strftime("%B %d, %Y") if hasattr(start, "strftime") else str(start)[:10]
+        s += f" Date: {when}."
+    if rec.get("organizer"):
+        s += f" Organizer: {rec['organizer']}."
+    return s
+
+
 _BUILDERS = {"restaurants": _restaurant, "temples": _temple, "groceries": _grocery,
-             "professionals": _professional, "salons": _salon}
+             "professionals": _professional, "salons": _salon, "events": _event}
 
 
 def describe(vertical: str, rec: dict) -> str:
