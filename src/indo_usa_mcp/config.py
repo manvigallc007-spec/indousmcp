@@ -83,6 +83,18 @@ class Settings(BaseSettings):
     outreach_contact_email: str = "manvigallc007@gmail.com"
     # Don't re-contact the same restaurant within this many days (anti-spam).
     outreach_cooldown_days: int = 21
+    # CAN-SPAM requires a valid physical postal address in every commercial email.
+    # Auto-send stays OFF until this is set (see `outreach_compliant`).
+    outreach_postal_address: str = ""
+    # Slow ramp: max messages auto-sent per day across the whole platform.
+    outreach_daily_send_cap: int = 15
+
+    @property
+    def outreach_compliant(self) -> bool:
+        """Auto-send is allowed only when delivery AND CAN-SPAM prerequisites are met:
+        SMTP configured + a physical postal address present. Otherwise outreach stays
+        draft-only (messages are prepared for human review but never sent)."""
+        return bool(self.email_enabled and self.outreach_postal_address.strip())
 
     # Email delivery (optional). Leave smtp_host blank to keep outreach in draft-only mode.
     # Works with free providers (e.g. Gmail SMTP + an app password): no cost.

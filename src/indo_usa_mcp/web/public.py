@@ -10,7 +10,7 @@ from starlette.routing import Route
 
 from .. import payments
 from ..config import settings
-from ..pipeline import ingest, outreach
+from ..pipeline import compliance, ingest, outreach
 from .common import _page, esc as _esc
 
 # Text fields shown on the owner edit form (label, restaurant field).
@@ -189,6 +189,32 @@ def upgrade_cancel(request: Request) -> HTMLResponse:
                  "<h2>Checkout cancelled</h2><p class='muted'>No charge was made.</p>")
 
 
+def _optout_apply(request: Request) -> HTMLResponse:
+    """Verify the signed unsubscribe link and suppress the contact (idempotent)."""
+    contact = (request.query_params.get("c") or "").strip()
+    token = (request.query_params.get("t") or "").strip()
+    if not contact or not compliance.verify_opt_out(contact, token):
+        return _page("Unsubscribe",
+                     "<h2 class='err'>Invalid unsubscribe link</h2>"
+                     "<p class='muted'>This link isn't recognized. If you keep getting emails, "
+                     f"reply to {html.escape(settings.outreach_contact_email)} and we'll remove you.</p>",
+                     status=400)
+    compliance.suppress(contact, reason="optout", channel="email")
+    return _page("Unsubscribed",
+                 "<h2 class='ok'>&#10003; You're unsubscribed</h2>"
+                 f"<p>{html.escape(contact)} has been removed. You won't receive further "
+                 "outreach about claiming a listing.</p>")
+
+
+def optout_get(request: Request) -> HTMLResponse:
+    return _optout_apply(request)
+
+
+async def optout_post(request: Request) -> HTMLResponse:
+    # RFC 8058 one-click unsubscribe (Gmail/Outlook button) POSTs to the same URL.
+    return _optout_apply(request)
+
+
 async def stripe_webhook(request: Request) -> HTMLResponse:
     payload = await request.body()
     sig = request.headers.get("stripe-signature", "")
@@ -206,5 +232,7 @@ routes = [
     Route("/upgrade", upgrade_get, methods=["GET"]),
     Route("/upgrade/success", upgrade_success, methods=["GET"]),
     Route("/upgrade/cancel", upgrade_cancel, methods=["GET"]),
+    Route("/optout", optout_get, methods=["GET"]),
+    Route("/optout", optout_post, methods=["POST"]),
     Route("/stripe/webhook", stripe_webhook, methods=["POST"]),
 ]

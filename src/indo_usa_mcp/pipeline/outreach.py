@@ -24,7 +24,7 @@ from urllib.parse import urlencode
 
 from .. import db
 from ..config import settings
-from . import clean
+from . import clean, compliance
 
 
 # ----------------------------------------------------------------- target finding
@@ -55,10 +55,15 @@ def find_unclaimed(limit: int = 20, min_confidence: float = 0.5) -> list[dict[st
         """,
         (min_confidence, settings.outreach_cooldown_days, limit),
     )
+    out = []
     for r in rows:
         r["_channel"] = _pick_channel(r)
         r["_requires_human"] = _requires_human(r)
-    return rows
+        target = _target_for(r, r["_channel"]) if r["_channel"] else None
+        if target and compliance.is_suppressed(target):
+            continue  # respect opt-outs / bounces
+        out.append(r)
+    return out
 
 
 def _pick_channel(restaurant: dict) -> str | None:
@@ -170,13 +175,25 @@ def verify_claim(token: str, owner_email: str | None = None, owner_phone: str | 
 
 
 # ----------------------------------------------------------------------- messaging
-def draft_message(restaurant: dict, claim_link_url: str, channel: str) -> str:
-    """A personalized, honest outreach message. No impersonation, includes opt-out."""
+def draft_message(restaurant: dict, claim_link_url: str, channel: str,
+                  opt_out_url: str | None = None) -> str:
+    """A personalized, honest outreach message — CAN-SPAM shaped.
+
+    No impersonation; a clear unsubscribe (one-click link when available, else reply); and
+    the platform's physical postal address appended when configured (required for email).
+    """
     name = restaurant.get("name", "your restaurant")
     city = restaurant.get("city")
     where = f" in {city}" if city else ""
     platform = settings.platform_name
     greeting = "Hello" if channel in ("email", "form") else "Hi"
+
+    if opt_out_url:
+        optout = f"Don't want these emails? Unsubscribe instantly: {opt_out_url}"
+    else:
+        optout = "If you'd prefer not to be listed or contacted, just reply and we'll remove you."
+    postal = settings.outreach_postal_address.strip()
+    postal_line = f"\n{platform} · {postal}" if postal else ""
 
     return (
         f"{greeting} {name} team,\n\n"
@@ -185,16 +202,19 @@ def draft_message(restaurant: dict, claim_link_url: str, channel: str) -> str:
         f"restaurant is already listed from public data — we'd love for you to "
         f"claim it for free to keep details (hours, menu, photos) accurate.\n\n"
         f"Claim your listing here:\n{claim_link_url}\n\n"
-        f"There's no cost to claim. If you'd prefer not to be listed or contacted, "
-        f"just reply and we'll remove you.\n\n"
+        f"There's no cost to claim. {optout}\n\n"
         f"— The {platform} team ({settings.outreach_contact_email})"
+        f"{postal_line}"
     )
 
 
-def send_email(to_address: str, subject: str, body: str) -> bool:
+def send_email(to_address: str, subject: str, body: str,
+               list_unsubscribe: str | None = None) -> bool:
     """Send one email via SMTP. Returns False (no-op) when SMTP isn't configured.
 
-    Designed for free providers (e.g. Gmail SMTP + an app password). No cost.
+    Designed for free providers (e.g. Gmail SMTP + an app password). No cost. When a
+    `list_unsubscribe` URL is given, sets RFC 8058 one-click unsubscribe headers so Gmail/
+    Outlook show a native "Unsubscribe" button (better deliverability + compliance).
     """
     if not settings.email_enabled:
         return False
@@ -202,6 +222,9 @@ def send_email(to_address: str, subject: str, body: str) -> bool:
     msg["From"] = settings.smtp_from or settings.outreach_contact_email
     msg["To"] = to_address
     msg["Subject"] = subject
+    if list_unsubscribe:
+        msg["List-Unsubscribe"] = f"<{list_unsubscribe}>"
+        msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
     msg.set_content(body)
 
     if settings.smtp_use_tls:
@@ -228,11 +251,11 @@ def record_outreach(
     row = db.query_one(
         """
         INSERT INTO outreach_log
-            (restaurant_id, claim_id, channel, contact_target, message, status, requires_human)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+            (restaurant_id, claim_id, channel, contact_target, message, status, requires_human, sent_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, CASE WHEN %s = 'sent' THEN now() ELSE NULL END)
         RETURNING id
         """,
-        (restaurant_id, claim_id, channel, contact_target, message, status, requires_human),
+        (restaurant_id, claim_id, channel, contact_target, message, status, requires_human, status),
     )
     if claim_id is not None:
         db.execute("UPDATE claims SET status='sent' WHERE id=%s", (claim_id,))
@@ -256,23 +279,30 @@ def run_outreach(limit: int = 20, min_confidence: float = 0.5) -> dict[str, Any]
     """
     items, flagged, sent_count = [], 0, 0
     subject = f"Claim your free listing on {settings.platform_name}"
+    # Compliance gate + slow-ramp daily quota, evaluated once per run.
+    can_send = settings.outreach_compliant
+    quota = compliance.remaining_quota() if can_send else 0
     for r in find_unclaimed(limit=limit, min_confidence=min_confidence):
         channel = r["_channel"]
         if channel is None:
             continue
         target = _target_for(r, channel)
+        opt_out_url = compliance.opt_out_link(target) if (target and channel == "email") else None
         claim = create_claim(r["id"], channel, target)
-        message = draft_message(r, claim["claim_link"], channel)
+        message = draft_message(r, claim["claim_link"], channel, opt_out_url)
         requires_human = r["_requires_human"]
         flagged += int(requires_human)
 
-        # Auto-deliver only via email, only to non-human targets, only if SMTP is set up.
+        # Auto-deliver only via email, to non-human targets, only when compliant and under
+        # the daily cap. Otherwise the message is drafted and left for human review.
         sent = False
-        if channel == "email" and target and not requires_human and settings.email_enabled:
+        if (channel == "email" and target and not requires_human and can_send and quota > 0):
             try:
-                sent = send_email(target, subject, message)
+                sent = send_email(target, subject, message, list_unsubscribe=opt_out_url)
             except Exception:  # delivery failure shouldn't abort the batch
                 sent = False
+            if sent:
+                quota -= 1
         sent_count += int(sent)
 
         outreach_id = record_outreach(
@@ -298,6 +328,8 @@ def run_outreach(limit: int = 20, min_confidence: float = 0.5) -> dict[str, Any]
         "drafted": len(items),
         "sent": sent_count,
         "email_enabled": settings.email_enabled,
+        "compliant": can_send,
+        "gate": compliance.gate_status(),
         "requires_human": flagged,
         "items": items,
     }

@@ -85,6 +85,18 @@ def cmd_verify_claim(args: argparse.Namespace) -> None:
     _print(result)
 
 
+def cmd_outreach_status(_: argparse.Namespace) -> None:
+    from .pipeline import compliance
+    _print(compliance.gate_status())
+
+
+def cmd_suppress(args: argparse.Namespace) -> None:
+    from .pipeline import compliance
+    compliance.suppress(args.contact, reason=args.reason, note="manual via cli")
+    _print({"suppressed": compliance.normalize_contact(args.contact), "reason": args.reason,
+            "total_suppressed": compliance.suppression_count()})
+
+
 def cmd_agents(_: argparse.Namespace) -> None:
     _print(
         [
@@ -363,6 +375,13 @@ def build_parser() -> argparse.ArgumentParser:
     ou.add_argument("--limit", type=int, default=20)
     ou.add_argument("--min-confidence", type=float, default=0.5, dest="min_confidence")
     ou.set_defaults(func=cmd_outreach)
+
+    sub.add_parser("outreach-status", help="Show outreach compliance gate + daily quota").set_defaults(
+        func=cmd_outreach_status)
+    sup = sub.add_parser("suppress", help="Add a contact (email/phone) to the opt-out suppression list")
+    sup.add_argument("contact")
+    sup.add_argument("--reason", default="manual", choices=("optout", "bounce", "complaint", "manual"))
+    sup.set_defaults(func=cmd_suppress)
 
     vc = sub.add_parser("verify-claim", help="Verify a claim token (owner takes ownership)")
     vc.add_argument("token")
