@@ -48,6 +48,19 @@ def test_create_record_guards():
     assert verticals.create_record("apparel", {"name": "   "})["error"] == "name_required"
 
 
+def test_submission_guards_and_submittable():
+    from indo_usa_mcp import submissions
+    assert submissions.submit("events", {"name": "x"})["error"] == "bad_vertical"   # agent-managed
+    assert submissions.submit("apparel", {"name": "  "})["error"] == "name_required"
+    assert "apparel" in submissions.SUBMITTABLE and "events" not in submissions.SUBMITTABLE
+
+
+def test_submit_page_renders():
+    from indo_usa_mcp.web import app as _app
+    r = TestClient(_app).get("/submit")
+    assert r.status_code == 200 and "Add your business" in r.text and "name='vertical'" in r.text
+
+
 def test_report_render_text():
     metrics = {
         "health": {"agent_runs_24h": 1, "agent_errors_24h": 0, "open_alerts": 0,

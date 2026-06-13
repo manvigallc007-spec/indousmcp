@@ -8,7 +8,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Route
 
-from .. import analytics, db, payments, quality, reporting, verticals
+from .. import analytics, db, payments, quality, reporting, submissions, verticals
 from ..agents import AGENTS, run_agent
 from ..events import pipeline as events
 from ..config import settings
@@ -675,6 +675,52 @@ def _scalar(sql: str) -> int:
     return int(list(row.values())[0]) if row else 0
 
 
+def submissions_page(request: Request) -> HTMLResponse:
+    if (r := require_admin(request)):
+        return r
+    s = submissions.summary()
+    pend = submissions.list_pending()
+    rows = ""
+    for x in pend:
+        p = x["payload"] if isinstance(x["payload"], dict) else {}
+        loc = ", ".join(f for f in (p.get("city"), p.get("state")) if f)
+        contact = " · ".join(f for f in (p.get("phone"), p.get("website")) if f)
+        note = f"<div class='muted'>{esc(x.get('note'))}</div>" if x.get("note") else ""
+
+        def act(op, label, gray=False):
+            return (f"<form method='post' action='/admin/submissions' class='inline'>"
+                    f"<input type='hidden' name='id' value='{x['id']}'>"
+                    f"<button class='btn{' gray' if gray else ''}' name='op' value='{op}'>{label}</button></form> ")
+        label = verticals.VERTICALS.get(x["vertical"], {}).get("label", x["vertical"])
+        rows += (f"<tr><td>{esc(label)}</td>"
+                 f"<td><b>{esc(p.get('name'))}</b><br><span class='muted'>{esc(loc)}</span>{note}</td>"
+                 f"<td class='muted'>{esc(contact)}<br>{esc(x.get('contact_email'))}</td>"
+                 f"<td>{act('approve', 'Approve &amp; publish')}{act('reject', 'Reject', True)}</td></tr>")
+    cards = (f"<div class='cards'><div class='kpi'><b>{s['pending']}</b><span>pending</span></div>"
+             f"<div class='kpi'><b>{s['approved']}</b><span>approved</span></div>"
+             f"<div class='kpi'><b>{s['rejected']}</b><span>rejected</span></div></div>")
+    table = (f"<table><tr><th>Category</th><th>Business</th><th>Contact</th><th></th></tr>{rows}</table>"
+             if rows else "<p class='muted'>No pending submissions. Owners add listings at "
+             "<a href='/submit'>/submit</a>.</p>")
+    return admin_page("Submissions", cards + table, active="Submissions")
+
+
+async def submissions_action(request: Request) -> HTMLResponse:
+    if (r := require_admin(request)):
+        return r
+    form = await request.form()
+    try:
+        sid = int(form.get("id"))
+    except (TypeError, ValueError):
+        return RedirectResponse("/admin/submissions", status_code=303)
+    op = form.get("op")
+    if op == "approve":
+        submissions.approve(sid)
+    elif op == "reject":
+        submissions.reject(sid)
+    return RedirectResponse("/admin/submissions", status_code=303)
+
+
 routes = [
     Route("/admin/login", login_get, methods=["GET"]),
     Route("/admin/login", login_post, methods=["POST"]),
@@ -697,6 +743,8 @@ routes = [
     Route("/admin/events", events_page, methods=["GET"]),
     Route("/admin/events", events_action, methods=["POST"]),
     Route("/admin/claims", claims, methods=["GET"]),
+    Route("/admin/submissions", submissions_page, methods=["GET"]),
+    Route("/admin/submissions", submissions_action, methods=["POST"]),
     Route("/admin/agents", agents_page, methods=["GET"]),
     Route("/admin/agents", agents_action, methods=["POST"]),
     Route("/admin/traffic", traffic_page, methods=["GET"]),

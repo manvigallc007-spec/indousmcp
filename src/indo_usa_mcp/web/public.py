@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import html
+import time
 
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 from starlette.routing import Route
 
-from .. import payments, verticals
+from .. import payments, submissions, verticals
 from ..config import settings
 from ..pipeline import compliance, ingest, outreach
 from .chat import _CAT_COLOR, _CAT_ICON
@@ -95,7 +96,7 @@ footer{text-align:center;color:#9aa0a6;font-size:14px;padding:22px 20px 48px;bor
 </style></head><body>
 <header class="topbar">
  <a class="brand" href="/"><span class="logo">🪷</span><span><b>__PLAT__</b><i>__TAGLINE__</i></span></a>
- <nav class="nav"><a class="signin" href="/portal/login">Owner sign in</a><a class="btn" href="/chat">Ask __ANAME__</a></nav>
+ <nav class="nav"><a class="signin" href="/submit">Add your business</a><a class="btn" href="/chat">Ask __ANAME__</a></nav>
 </header>
 <main>
  <section class="hero">
@@ -121,7 +122,7 @@ footer{text-align:center;color:#9aa0a6;font-size:14px;padding:22px 20px 48px;bor
   </div>
  </section>
 </main>
-<footer>Own a business? <a href="/portal/login">Sign in</a> to claim &amp; manage your listing · __PLAT__</footer>
+<footer>Own a business? <a href="/submit">Add your listing</a> or <a href="/portal/login">sign in</a> to manage it · __PLAT__</footer>
 </body></html>"""
 
 
@@ -147,6 +148,71 @@ def home(request: Request) -> HTMLResponse:
     for k, v in repl.items():
         doc = doc.replace(k, v)
     return HTMLResponse(doc)
+
+
+# ----------------------------------------------------------- owner self-submission
+_SUB_HITS: dict[str, list[float]] = {}
+
+
+def _sub_rate_ok(ip: str, limit: int = 5, window: int = 3600) -> bool:
+    now = time.time()
+    w = [t for t in _SUB_HITS.get(ip, []) if now - t < window]
+    if len(w) >= limit:
+        _SUB_HITS[ip] = w
+        return False
+    w.append(now)
+    _SUB_HITS[ip] = w
+    return True
+
+
+def submit_get(request: Request) -> HTMLResponse:
+    pre = request.query_params.get("category")
+    opts = "".join(
+        f"<option value='{v}'{' selected' if v == pre else ''}>"
+        f"{html.escape(verticals.VERTICALS[v]['label'])}</option>"
+        for v in submissions.SUBMITTABLE)
+    body = (
+        "<h2>Add your business</h2>"
+        "<p class='muted'>List your Indian-American business for free. We review each "
+        "submission before it goes live.</p>"
+        "<form method='post' action='/submit'>"
+        f"<label>Category</label><select name='vertical'>{opts}</select>"
+        "<label>Business name *</label><input name='name' required>"
+        "<label>Address</label><input name='address_full'>"
+        "<label>City</label><input name='city'>"
+        "<label>State</label><input name='state' placeholder='NJ'>"
+        "<label>Phone</label><input name='phone' type='tel'>"
+        "<label>Your email *</label><input name='email' type='email' required>"
+        "<label>Website</label><input name='website' placeholder='https://'>"
+        "<label>Anything else? (specialties, region, hours)</label>"
+        "<input name='note'>"
+        # honeypot — bots fill this hidden field; humans don't.
+        "<input type='text' name='company' style='position:absolute;left:-9999px' tabindex='-1' autocomplete='off'>"
+        "<button type='submit'>Submit for review</button></form>")
+    return _page("Add your business", body)
+
+
+async def submit_post(request: Request) -> HTMLResponse:
+    form = await request.form()
+    if (form.get("company") or "").strip():  # honeypot tripped -> accept silently, drop
+        return _page("Thanks", "<h2 class='ok'>Thanks!</h2><p>Your submission was received.</p>")
+    ip = (request.client.host if request.client else "?") or "?"
+    if not _sub_rate_ok(ip):
+        return _page("Slow down", "<h2>Too many submissions</h2>"
+                     "<p class='muted'>Please try again later.</p>", status=429)
+    vertical = (form.get("vertical") or "").strip()
+    payload = {k: (form.get(k) or "").strip()
+               for k in ("name", "address_full", "city", "state", "phone", "email", "website")}
+    res = submissions.submit(vertical, payload, contact_email=payload.get("email"),
+                             note=(form.get("note") or "").strip() or None)
+    if not res.get("ok"):
+        msg = {"name_required": "Please enter your business name.",
+               "bad_vertical": "Please pick a category."}.get(res.get("error"), "Could not submit.")
+        return _page("Could not submit", f"<h2 class='err'>{msg}</h2>"
+                     "<p><a href='/submit'>‹ try again</a></p>", status=400)
+    return _page("Submitted", "<h2 class='ok'>&#10003; Thanks — submitted for review!</h2>"
+                 "<p>We'll review your listing and publish it soon. "
+                 "<a href='/submit'>Add another business</a> · <a href='/chat'>explore the directory</a>.</p>")
 
 
 def claim_get(request: Request) -> HTMLResponse:
@@ -344,6 +410,8 @@ routes = [
     Route("/", home, methods=["GET"]),
     Route("/icon.svg", icon, methods=["GET"]),
     Route("/favicon.ico", icon, methods=["GET"]),
+    Route("/submit", submit_get, methods=["GET"]),
+    Route("/submit", submit_post, methods=["POST"]),
     Route("/claim", claim_get, methods=["GET"]),
     Route("/claim", claim_post, methods=["POST"]),
     Route("/manage", manage_get, methods=["GET"]),
