@@ -160,6 +160,48 @@ def no_results(monkeypatch):
     monkeypatch.setattr(assistant.analytics, "log_call", lambda *a, **k: None)
 
 
+def test_extract_location():
+    assert assistant._extract_location("dallas restaurants") == ("Dallas", "TX")
+    assert assistant._extract_location("biryani in edison, nj") == ("Edison", "NJ")
+    assert assistant._extract_location("indian food in texas") == (None, "TX")
+    assert assistant._extract_location("temples in the bay area") == (None, "CA")
+    assert assistant._extract_location("good dosa near me") == (None, None)
+    assert assistant._extract_location("san jose grocery") == ("San Jose", "CA")
+
+
+def test_chat_scopes_search_to_extracted_city(monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "search")
+    monkeypatch.setattr(assistant.analytics, "log_impressions", lambda *a, **k: None)
+    monkeypatch.setattr(assistant.analytics, "log_call", lambda *a, **k: None)
+    seen = {}
+
+    def fake_search_all(q, **k):
+        seen["city"], seen["state"] = k.get("city"), k.get("state")
+        return {"count": 1, "results": [{"vertical": "restaurants", "name": "Dallas Dhaba",
+                                         "city": "Dallas", "state": "TX"}]}
+    monkeypatch.setattr(assistant.verticals, "search_all", fake_search_all)
+    out = assistant.reply([{"role": "user", "content": "dallas restaurants"}])
+    assert seen["city"] == "Dallas" and seen["state"] == "TX"
+    assert out["cards"][0]["name"] == "Dallas Dhaba"
+
+
+def test_chat_widens_to_state_when_city_empty(monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "search")
+    monkeypatch.setattr(assistant.analytics, "log_impressions", lambda *a, **k: None)
+    monkeypatch.setattr(assistant.analytics, "log_call", lambda *a, **k: None)
+    calls = []
+
+    def fake_search_all(q, **k):
+        calls.append((k.get("city"), k.get("state")))
+        if k.get("city"):                      # first try (city) -> empty
+            return {"count": 0, "results": []}
+        return {"count": 1, "results": [{"vertical": "restaurants", "name": "Plano Tiffins"}]}
+    monkeypatch.setattr(assistant.verticals, "search_all", fake_search_all)
+    out = assistant.reply([{"role": "user", "content": "dallas tiffin"}])
+    assert calls == [("Dallas", "TX"), (None, "TX")]   # narrowed, then widened to the state
+    assert out["cards"][0]["name"] == "Plano Tiffins"
+
+
 def test_is_indian_american_topic():
     assert assistant.is_indian_american_topic("when is diwali this year")
     assert assistant.is_indian_american_topic("best indian restaurant near me")

@@ -100,16 +100,33 @@ def _run_search(args: dict, filters: dict | None = None, geo: dict | None = None
     open_now = bool(filters.get("open_now") or args.get("open_now") or _wants_open_now(query))
     point = _point(geo)
 
-    fn = (getattr(verticals.VERTICALS[vertical]["queries"], f"search_{vertical}_by_text", None)
-          if vertical in verticals.VERTICALS else None)
-    if fn:
-        res = fn(query, city=city, state=state, limit=limit, point=point)
-        for r in res.get("results", []):
-            r["vertical"] = vertical
-    else:
-        res = verticals.search_all(query, city=city, state=state, limit=limit,
-                                   lat=point[0] if point else None,
-                                   lng=point[1] if point else None)
+    # Free-text location: "dallas restaurants" -> city=Dallas; "food in texas" -> state=TX.
+    # Without this the query is just fuzzy-matched across every city (looks random). A named
+    # place also overrides the browser's GPS — if you ask for Dallas from NJ, you want Dallas.
+    auto_city = None
+    if not city and not state and query:
+        ec, es = _extract_location(query)
+        if ec or es:
+            city, state, auto_city = ec, es, ec
+            point = None
+
+    def _do(c: str | None, s: str | None) -> dict:
+        fn = (getattr(verticals.VERTICALS[vertical]["queries"], f"search_{vertical}_by_text", None)
+              if vertical in verticals.VERTICALS else None)
+        if fn:
+            r = fn(query, city=c, state=s, limit=limit, point=point)
+            for row in r.get("results", []):
+                row["vertical"] = vertical
+            return r
+        return verticals.search_all(query, city=c, state=s, limit=limit,
+                                    lat=point[0] if point else None,
+                                    lng=point[1] if point else None)
+
+    res = _do(city, state)
+    # If we narrowed to a specific city and found nothing, widen to its state (covers suburbs).
+    if auto_city and not res.get("results") and state:
+        res = _do(None, state)
+        city = None
 
     rows = res.get("results", [])
     if open_now and rows:
@@ -120,7 +137,8 @@ def _run_search(args: dict, filters: dict | None = None, geo: dict | None = None
 
     try:  # credit human engagement to analytics + per-listing reach (best-effort)
         analytics.log_impressions("search_all", res)
-        analytics.log_call("chat", {"query": query, "vertical": vertical, "open_now": open_now},
+        analytics.log_call("chat", {"query": query, "vertical": vertical, "city": city,
+                                    "state": state, "open_now": open_now},
                            res.get("count"), "web-chat")
     except Exception:
         pass
@@ -421,6 +439,64 @@ _STATES = ("al", "ak", "az", "ar", "ca", "co", "ct", "de", "fl", "ga", "hi", "id
            "nh", "nj", "nm", "ny", "nc", "nd", "oh", "ok", "or", "pa", "ri", "sc", "sd", "tn",
            "tx", "ut", "vt", "va", "wa", "wv", "wi", "wy")
 
+# Full US state names -> USPS code, for "...in texas" style queries.
+_STATE_NAMES = {
+    "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR", "california": "CA",
+    "colorado": "CO", "connecticut": "CT", "delaware": "DE", "florida": "FL", "georgia": "GA",
+    "hawaii": "HI", "idaho": "ID", "illinois": "IL", "indiana": "IN", "iowa": "IA",
+    "kansas": "KS", "kentucky": "KY", "louisiana": "LA", "maine": "ME", "maryland": "MD",
+    "massachusetts": "MA", "michigan": "MI", "minnesota": "MN", "mississippi": "MS",
+    "missouri": "MO", "montana": "MT", "nebraska": "NE", "nevada": "NV", "new hampshire": "NH",
+    "new jersey": "NJ", "new mexico": "NM", "north carolina": "NC", "north dakota": "ND",
+    "ohio": "OH", "oklahoma": "OK", "oregon": "OR", "pennsylvania": "PA", "rhode island": "RI",
+    "south carolina": "SC", "south dakota": "SD", "tennessee": "TN", "texas": "TX", "utah": "UT",
+    "vermont": "VT", "virginia": "VA", "washington": "WA", "west virginia": "WV",
+    "wisconsin": "WI", "wyoming": "WY",
+}
+
+# Diaspora-hub cities/metros people actually type -> (city, state). Metro phrases that span many
+# cities map to (None, state) so we filter by state, not one city.
+_CITY_LOCATIONS = {
+    "dallas": ("Dallas", "TX"), "plano": ("Plano", "TX"), "irving": ("Irving", "TX"),
+    "frisco": ("Frisco", "TX"), "houston": ("Houston", "TX"), "austin": ("Austin", "TX"),
+    "chicago": ("Chicago", "IL"), "naperville": ("Naperville", "IL"), "schaumburg": ("Schaumburg", "IL"),
+    "atlanta": ("Atlanta", "GA"), "seattle": ("Seattle", "WA"), "redmond": ("Redmond", "WA"),
+    "bellevue": ("Bellevue", "WA"), "phoenix": ("Phoenix", "AZ"), "boston": ("Boston", "MA"),
+    "philadelphia": ("Philadelphia", "PA"), "raleigh": ("Raleigh", "NC"), "cary": ("Cary", "NC"),
+    "morrisville": ("Morrisville", "NC"), "durham": ("Durham", "NC"), "detroit": ("Detroit", "MI"),
+    "troy": ("Troy", "MI"), "canton": ("Canton", "MI"), "edison": ("Edison", "NJ"),
+    "iselin": ("Iselin", "NJ"), "jersey city": ("Jersey City", "NJ"), "parsippany": ("Parsippany", "NJ"),
+    "piscataway": ("Piscataway", "NJ"), "san jose": ("San Jose", "CA"), "fremont": ("Fremont", "CA"),
+    "sunnyvale": ("Sunnyvale", "CA"), "santa clara": ("Santa Clara", "CA"), "milpitas": ("Milpitas", "CA"),
+    "cupertino": ("Cupertino", "CA"), "san francisco": ("San Francisco", "CA"),
+    "los angeles": ("Los Angeles", "CA"), "irvine": ("Irvine", "CA"), "artesia": ("Artesia", "CA"),
+    "queens": ("Queens", "NY"),
+}
+_METRO_LOCATIONS = {  # phrase -> (None=any city, state)
+    "bay area": (None, "CA"), "silicon valley": (None, "CA"), "socal": (None, "CA"),
+    "nyc": (None, "NY"), "new york city": (None, "NY"), "new york": (None, "NY"),
+    "dfw": ("Dallas", "TX"), "central jersey": (None, "NJ"), "north jersey": (None, "NJ"),
+}
+
+
+def _extract_location(text: str) -> tuple[str | None, str | None]:
+    """Pull a (city, state) hint from free text. City/metro phrases win (longest first), then a
+    full state name, then a 2-letter code after a comma ("Edison, NJ"). ("", "") -> nothing."""
+    t = (text or "").lower()
+    if not t:
+        return None, None
+    places = sorted({**_CITY_LOCATIONS, **_METRO_LOCATIONS}.items(), key=lambda kv: -len(kv[0]))
+    for phrase, (c, s) in places:
+        if re.search(rf"\b{re.escape(phrase)}\b", t):
+            return c, s
+    for name, abbr in _STATE_NAMES.items():
+        if re.search(rf"\b{name}\b", t):
+            return None, abbr
+    m = re.search(r",\s*([a-z]{2})\b", t)  # only trust a bare 2-letter code after a comma
+    if m and m.group(1) in _STATES:
+        return None, m.group(1).upper()
+    return None, None
+
 
 def _needs_location(messages: list[dict], geo: dict | None, filters: dict | None) -> bool:
     """Ask for a city only ONCE — on the first turn — when there's no geo, clear local intent,
@@ -439,7 +515,8 @@ def _needs_location(messages: list[dict], geo: dict | None, filters: dict | None
     if "near me" in text or "nearby" in text or "around me" in text:
         return True  # wants local but we have no coordinates
     named_place = (bool(re.search(r"\bin\s+[a-z]{3,}", text)) or "," in text
-                   or any(re.search(rf"\b{s}\b", text) for s in _STATES))
+                   or any(re.search(rf"\b{s}\b", text) for s in _STATES)
+                   or _extract_location(text) != (None, None))
     return not named_place
 
 
