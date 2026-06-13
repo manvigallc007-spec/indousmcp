@@ -59,7 +59,9 @@ _CHAT_HTML = """<!doctype html><html lang="en"><head>
 <meta property="og:description" content="__OGDESC__">
 <meta property="og:type" content="website">
 <meta property="og:url" content="__OGURL__">
+<meta property="og:image" content="__OGIMG__">
 <meta name="twitter:card" content="summary">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
 <style>
 :root{--brand:#c1440e;--brand-d:#a2380b;--bg:#f6f4f1;--panel:#fff;--ink:#1f2430;
  --muted:#6b7280;--line:#ececec}
@@ -73,8 +75,13 @@ a{color:var(--brand);text-decoration:none}
 .brand .logo{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;
  background:linear-gradient(135deg,#ffd9a0,#ffb56b);font-size:18px}
 .brand b{font-size:15px;line-height:1.15;display:block}.brand i{font-style:normal;font-size:12px;color:var(--muted)}
+.actions{display:flex;align-items:center;gap:12px}
+.newchat{background:#fff;border:1px solid #e2e0dd;color:var(--ink);border-radius:9px;padding:7px 11px;
+ font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:.15s}
+.newchat:hover{border-color:var(--brand);color:var(--brand)}
 .status{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
 .status .dot{width:8px;height:8px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 3px #16a34a22}
+@media(max-width:600px){.status{display:none}}
 .filterbar{display:flex;gap:8px;overflow-x:auto;white-space:nowrap;padding:10px 16px;
  background:var(--panel);border-bottom:1px solid var(--line);-webkit-overflow-scrolling:touch}
 .filterbar::-webkit-scrollbar{display:none}
@@ -129,7 +136,10 @@ a{color:var(--brand);text-decoration:none}
 </style></head><body>
 <header class="topbar">
  <a class="brand" href="/"><span class="logo">🪷</span><span><b>__PLAT__</b><i>Ask __ANAME__</i></span></a>
- <span class="status"><span class="dot"></span>__MODE__</span>
+ <div class="actions">
+  <button class="newchat" onclick="newChat()" aria-label="Start a new chat">✎ New chat</button>
+  <span class="status"><span class="dot"></span>__MODE__</span>
+ </div>
 </header>
 <div class="filterbar">__FCHIPS__</div>
 <main id="log"><div class="wrap" id="thread">
@@ -153,8 +163,15 @@ a{color:var(--brand);text-decoration:none}
 <script>
 const ICON=__ICONS__, COLOR=__COLORS__;
 const log=document.getElementById('log'), thread=document.getElementById('thread'), ta=document.getElementById('q');
+const WELCOME=thread.innerHTML;
 let history=[], geo=null, lastQuery='', lastBot=null;
 let filters={vertical:null, open_now:false};
+function newChat(){
+  history=[];lastQuery='';lastBot=null;filters={vertical:null,open_now:false};
+  document.querySelectorAll('.fchip').forEach(c=>c.classList.remove('on'));
+  const all=document.querySelector('.fchip[data-v=""]');if(all)all.classList.add('on');
+  thread.innerHTML=WELCOME;ta.value='';ta.style.height='auto';ta.focus();log.scrollTop=0;
+}
 navigator.geolocation && navigator.geolocation.getCurrentPosition(
   p=>{geo={lat:p.coords.latitude,lng:p.coords.longitude};}, ()=>{}, {timeout:4000});
 function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;}
@@ -229,6 +246,7 @@ def chat_page(request: Request) -> HTMLResponse:
     repl = {
         "__PLAT__": plat, "__ANAME__": aname, "__MODE__": html.escape(mode),
         "__FCHIPS__": fchips, "__CHIPS__": chips, "__OGURL__": og_url,
+        "__OGIMG__": html.escape(f"{settings.public_web_url.rstrip('/')}/icon.svg"),
         "__OGDESC__": html.escape(og_desc),
         "__ICONS__": json.dumps(_CAT_ICON, ensure_ascii=False),
         "__COLORS__": json.dumps(_CAT_COLOR),

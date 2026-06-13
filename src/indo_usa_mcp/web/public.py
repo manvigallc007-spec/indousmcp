@@ -5,7 +5,7 @@ from __future__ import annotations
 import html
 
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, RedirectResponse
+from starlette.responses import HTMLResponse, RedirectResponse, Response
 from starlette.routing import Route
 
 from .. import payments, verticals
@@ -24,6 +24,27 @@ _EDIT_FIELDS = [
 _DIETARY_OPTIONS = ["vegetarian", "vegan", "halal", "jain"]
 
 
+# Inline SVG logo (a lotus on a warm gradient tile) — served as a real URL so it works as the
+# browser favicon AND the social share image. Name-agnostic (placeholder brand).
+_ICON_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
+    '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">'
+    '<stop offset="0" stop-color="#ffce93"/><stop offset="1" stop-color="#c1440e"/>'
+    '</linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#g)"/>'
+    '<g fill="#fff" opacity=".95">'
+    '<ellipse cx="32" cy="36" rx="5.5" ry="14"/>'
+    '<ellipse cx="32" cy="36" rx="5.5" ry="14" transform="rotate(38 32 40)"/>'
+    '<ellipse cx="32" cy="36" rx="5.5" ry="14" transform="rotate(-38 32 40)"/>'
+    '<ellipse cx="32" cy="38" rx="5" ry="10.5" transform="rotate(70 32 42)"/>'
+    '<ellipse cx="32" cy="38" rx="5" ry="10.5" transform="rotate(-70 32 42)"/>'
+    '</g></svg>')
+
+
+def icon(request: Request) -> Response:
+    return Response(_ICON_SVG, media_type="image/svg+xml",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
 _LANDING_HTML = """<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__PLAT__ — Find Indian America</title>
@@ -32,7 +53,9 @@ _LANDING_HTML = """<!doctype html><html lang="en"><head>
 <meta property="og:description" content="__OGDESC__">
 <meta property="og:type" content="website">
 <meta property="og:url" content="__OGURL__">
+<meta property="og:image" content="__OGIMG__">
 <meta name="twitter:card" content="summary">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
 <style>
 :root{--brand:#c1440e;--brand-d:#a2380b;--bg:#f6f4f1;--panel:#fff;--ink:#1f2430;--muted:#6b7280;--line:#ececec}
 *{box-sizing:border-box}
@@ -117,6 +140,7 @@ def home(request: Request) -> HTMLResponse:
         "__TAGLINE__": html.escape(settings.platform_tagline),
         "__SUB__": html.escape(desc), "__TILES__": tiles,
         "__OGURL__": html.escape(settings.public_web_url.rstrip("/") + "/"),
+        "__OGIMG__": html.escape(settings.public_web_url.rstrip("/") + "/icon.svg"),
         "__OGDESC__": html.escape(desc),
     }
     doc = _LANDING_HTML
@@ -318,6 +342,8 @@ async def stripe_webhook(request: Request) -> HTMLResponse:
 
 routes = [
     Route("/", home, methods=["GET"]),
+    Route("/icon.svg", icon, methods=["GET"]),
+    Route("/favicon.ico", icon, methods=["GET"]),
     Route("/claim", claim_get, methods=["GET"]),
     Route("/claim", claim_post, methods=["POST"]),
     Route("/manage", manage_get, methods=["GET"]),
