@@ -61,11 +61,7 @@ class ServiceOverpassScraper:
                      f"{_block(s, w, n, e).format(names=_NAMES)}\n);\nout center tags;\n")
             read_timeout = settings.scraper_timeout_seconds + 30
         time.sleep(1)  # politeness
-        resp = httpx.post(
-            settings.overpass_url, data={"data": query},
-            headers={"User-Agent": settings.scraper_user_agent}, timeout=read_timeout)
-        resp.raise_for_status()
-        for element in resp.json().get("elements", []):
+        for element in _osm.overpass_post(query, read_timeout).get("elements", []):
             candidate = self._to_candidate(element, region)
             if candidate is not None:
                 yield candidate

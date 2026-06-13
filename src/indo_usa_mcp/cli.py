@@ -653,8 +653,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from .osm import OverpassError
     args = build_parser().parse_args(argv)
-    args.func(args)
+    try:
+        args.func(args)
+    except OverpassError as exc:
+        print(f"Overpass is rate-limiting / unavailable right now ({exc}).\n"
+              "Wait a few minutes and retry, space scrapes out, or just let the worker scrape "
+              "on its schedule (it retries automatically).")
+        return 2
     return 0
 
 
