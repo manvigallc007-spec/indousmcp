@@ -134,6 +134,7 @@ def _cards(res: dict) -> list[dict]:
             "description": (r.get("description") or "")[:240],
             "open_now": r.get("open_now"),
             "is_featured": bool(r.get("is_featured")),
+            "is_claimed": bool(r.get("is_claimed")),
             "verified_ago": r.get("verified_ago"),
             "distance_miles": r.get("distance_miles"),
             "id": r.get("id"),

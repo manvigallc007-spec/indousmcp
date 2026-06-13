@@ -117,6 +117,7 @@ a{color:var(--brand);text-decoration:none}
  text-transform:capitalize;letter-spacing:.02em}
 .pill{font-size:11px;font-weight:600;border-radius:999px;padding:3px 9px}
 .pill.feat{background:#fff4e5;color:#b45309}.pill.open{background:#e7f6ec;color:#137333}
+.pill.claimed{background:#e8f0fe;color:#1565c0}
 .lc h4{margin:0;font-size:16px}.lc-loc{color:var(--muted);font-size:13px;margin-top:3px}
 .lc-fresh{color:#137333;font-size:12px;margin-top:5px}
 .lc-desc{color:#4b5563;font-size:14px;margin:8px 0 0;line-height:1.45}
@@ -189,6 +190,7 @@ function card(c){
   const head=el('div','lc-head');
   const badge=el('span','badge',icon+' '+v);badge.style.background=color;head.appendChild(badge);
   if(c.is_featured)head.appendChild(el('span','pill feat','★ Featured'));
+  if(c.is_claimed)head.appendChild(el('span','pill claimed','✓ Owner-verified'));
   if(c.open_now)head.appendChild(el('span','pill open','● Open now'));
   d.appendChild(head);d.appendChild(el('h4',null,c.name||''));
   const loc=[c.city,c.state].filter(Boolean).join(', ');

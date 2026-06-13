@@ -62,6 +62,7 @@ def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200)
    padding:14px 16px;margin:10px 0}}
  .lc h3{{margin:0 0 4px;font-size:17px}} .lc p{{margin:5px 0;color:#4b5563;font-size:14px}}
  .lc .meta{{color:#6b7280;font-size:13px}} .lc .feat{{color:#b45309;font-weight:600}}
+ .lc .ver{{color:#1565c0;font-weight:600}}
  .cta{{background:{_BRAND};color:#fff;padding:11px 18px;border-radius:10px;display:inline-block;margin-top:8px}}
  nav.crumbs{{font-size:13px;margin-bottom:14px}}
 </style></head><body>
@@ -125,7 +126,7 @@ def _listings(v: str, state: str, city: str, limit: int = 200) -> list[dict]:
     table = verticals._table(v)
     return db.query(
         f"SELECT name, address_full, city, state, lat, lng, phone, website, description, "
-        f"{_FEATURED} AS is_featured FROM {table} WHERE deleted_at IS NULL AND is_active "
+        f"is_claimed, {_FEATURED} AS is_featured FROM {table} WHERE deleted_at IS NULL AND is_active "
         f"AND LOWER(state) = LOWER(%s) AND LOWER(city) = LOWER(%s) "
         f"ORDER BY {_FEATURED} DESC, confidence_score DESC LIMIT %s", (state, city, limit))
 
@@ -145,6 +146,7 @@ def browse_city(request: Request) -> HTMLResponse:
     for i, r in enumerate(rows, 1):
         addr = ", ".join(x for x in (r.get("address_full"),) if x) or loc
         feat = " <span class='feat'>★ Featured</span>" if r.get("is_featured") else ""
+        feat += " <span class='ver'>✓ Owner-verified</span>" if r.get("is_claimed") else ""
         links = " · ".join(
             x for x in (
                 (f"<a href='{html.escape(r['website'])}' rel='nofollow'>Website</a>" if r.get("website") else ""),

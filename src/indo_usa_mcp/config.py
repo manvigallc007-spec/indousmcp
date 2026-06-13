@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     def payments_enabled(self) -> bool:
         return bool(self.stripe_secret_key)
 
+    # Claiming a listing is FREE (drives adoption + the verified-owner badge). Flip on only
+    # if/when you decide to charge for claims — the paid checkout itself is not built yet.
+    paid_claim_enabled: bool = False
+
     @property
     def featured_for_sale(self) -> bool:
         return bool(self.stripe_secret_key and self.featured_sales_enabled)

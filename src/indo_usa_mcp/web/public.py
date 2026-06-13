@@ -268,7 +268,9 @@ async def claim_post(request: Request) -> HTMLResponse:
                   f"<button>Edit your listing</button></a></p>")
         return _page("Listing claimed",
                      "<h2 class='ok'>&#10003; Listing claimed</h2>"
-                     "<p>Thank you — you now own this listing. Keep your details accurate below.</p>"
+                     "<p>Thank you — you now own this listing. A <b>✓ Owner-verified</b> badge "
+                     "now shows on it in search, the assistant and your city page. Keep your "
+                     "details accurate below.</p>"
                      + manage + upgrade)
 
     reasons = {
