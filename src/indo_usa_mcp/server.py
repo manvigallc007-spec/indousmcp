@@ -11,6 +11,7 @@ from mcp.server.fastmcp import FastMCP
 
 from . import queries, verticals
 from .apparel import queries as apparel_queries
+from .community import queries as community_queries
 from .config import settings
 from .events import queries as event_queries
 from .groceries import queries as grocery_queries
@@ -457,6 +458,41 @@ def search_services_by_text(
 ) -> dict[str, Any]:
     """Free-text/semantic search over Indian community services."""
     return service_queries.search_services_by_text(query, city=city, state=state, limit=limit)
+
+
+# --------------------------------------------------------------- community orgs
+@mcp.tool()
+def get_indian_community(
+    lat: float | None = None, lng: float | None = None, radius_miles: float = 25.0,
+    city: str | None = None, state: str | None = None, tag: str | None = None,
+    open_now: bool = False, limit: int = 25,
+) -> dict[str, Any]:
+    """Find Indian community organizations & cultural associations (regional samaj/sangam,
+    cultural centers, Indo-American associations).
+
+    Provide a point (`lat`+`lng`) or `city`/`state`. Filter by `tag` (e.g. a region like
+    "telugu", "gujarati", or "association"/"cultural_center").
+    """
+    return community_queries.get_indian_community(
+        lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
+        tag=tag, open_now=open_now, limit=limit)
+
+
+@mcp.tool()
+def get_community_details(community_id: int) -> dict[str, Any]:
+    """Full canonical record for one community organization, plus its version history."""
+    record = community_queries.get_community_details(community_id)
+    if record is None:
+        return {"error": "not_found", "community_id": community_id}
+    return record
+
+
+@mcp.tool()
+def search_community_by_text(
+    query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+) -> dict[str, Any]:
+    """Free-text/semantic search over Indian community organizations & associations."""
+    return community_queries.search_community_by_text(query, city=city, state=state, limit=limit)
 
 
 @mcp.tool()

@@ -31,6 +31,7 @@ _RUN_ORDER = [
     "sweets_scraper", "sweets_cleaner",
     "studio_scraper", "studio_cleaner",
     "service_scraper", "service_cleaner",
+    "community_scraper", "community_cleaner",
     "event_feed_discovery", "event_scraper", "event_cleaner",
     "web_enrichment", "link_check", "recommendation", "lifecycle",
     "discovery", "outreach", "reporting", "monitoring", "submission",

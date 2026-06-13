@@ -45,6 +45,8 @@ _TOOL_VERTICAL = {
     "search_studios_by_text": "studios",
     "get_indian_services": "services", "get_service_details": "services",
     "search_services_by_text": "services",
+    "get_indian_community": "community", "get_community_details": "community",
+    "search_community_by_text": "community",
 }
 
 

@@ -38,6 +38,7 @@ from .apparel import pipeline as apparel, queries as apparel_queries
 from .sweets import pipeline as sweets, queries as sweets_queries
 from .studios import pipeline as studios, queries as studio_queries
 from .services import pipeline as services, queries as service_queries
+from .community import pipeline as community, queries as community_queries
 
 
 def _print(obj) -> None:
@@ -313,6 +314,8 @@ _BATCH_VERTICALS = {
                 studio_queries.search_studios_by_text),
     "services": (services, service_queries, service_queries.get_indian_services,
                  service_queries.search_services_by_text),
+    "community": (community, community_queries, community_queries.get_indian_community,
+                  community_queries.search_community_by_text),
 }
 
 

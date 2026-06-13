@@ -13,6 +13,7 @@ from typing import Any, Callable
 
 from . import db, queries as r_queries
 from .apparel import pipeline as ap_pipeline, queries as ap_queries
+from .community import pipeline as co_pipeline, queries as co_queries
 from .events import pipeline as e_pipeline, queries as e_queries
 from .groceries import pipeline as g_pipeline, queries as g_queries
 from .pipeline import clean, ingest
@@ -62,6 +63,10 @@ def _update_studio(existing: dict, diff: dict) -> None:
 
 def _update_service(existing: dict, diff: dict) -> None:
     sv_pipeline._update(existing, {**existing, **diff}, diff)
+
+
+def _update_community(existing: dict, diff: dict) -> None:
+    co_pipeline._update(existing, {**existing, **diff}, diff)
 
 
 # label, queries module, stats fn, scalar edit fields, has_hours, has_dietary, update fn
@@ -134,6 +139,13 @@ VERTICALS: dict[str, dict[str, Any]] = {
         "edit_fields": ["phone", "email", "website", "address_full", "city", "state",
                         "service_type", "region_tag", "festival_specials"],
         "has_hours": True, "has_dietary": False, "update": _update_service,
+        "supports_claims": False,
+    },
+    "community": {
+        "label": "Community & Associations", "table": "community", "queries": co_queries,
+        "edit_fields": ["phone", "email", "website", "address_full", "city", "state",
+                        "org_type", "region_tag", "festival_specials"],
+        "has_hours": True, "has_dietary": False, "update": _update_community,
         "supports_claims": False,
     },
 }

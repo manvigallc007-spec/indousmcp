@@ -14,6 +14,7 @@ from ..pipeline import feedback, ingest, outreach
 from ..pipeline.scrapers import SCRAPERS
 from ..pipeline.scrapers.metros import METROS
 from ..apparel import pipeline as apparel
+from ..community import pipeline as community
 from ..events import pipeline as events
 from ..groceries import pipeline as groceries
 from ..professionals import pipeline as professionals
@@ -355,6 +356,33 @@ class ServiceCleanerAgent(Agent):
         return result
 
 
+class CommunityScraperAgent(Agent):
+    name = "community_scraper"
+    description = "Scrapes Indian community orgs & cultural associations across every metro."
+    default_interval_s = 259200  # every 3 days
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        metros = params.get("metros") or list(METROS)
+        total, errors = 0, []
+        for metro in metros:
+            try:
+                total += community.scrape_to_raw(metro)
+            except Exception as exc:
+                errors.append({"metro": metro, "error": str(exc)})
+        return {"upserted": total, "errors": errors}
+
+
+class CommunityCleanerAgent(Agent):
+    name = "community_cleaner"
+    description = "Processes raw community orgs into canonical; deactivates stale ones."
+    default_interval_s = 86400
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        result = community.process_raw()
+        result.update(community.deactivate_stale(days=params.get("stale_days", 180)))
+        return result
+
+
 class EventFeedDiscoveryAgent(Agent):
     name = "event_feed_discovery"
     description = "Scans org websites for public iCal calendar feeds (auto-finds event sources)."
@@ -520,6 +548,8 @@ ALL_AGENTS = [
     StudioCleanerAgent(),
     ServiceScraperAgent(),
     ServiceCleanerAgent(),
+    CommunityScraperAgent(),
+    CommunityCleanerAgent(),
     EventFeedDiscoveryAgent(),
     EventScraperAgent(),
     EventCleanerAgent(),

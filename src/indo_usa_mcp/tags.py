@@ -133,6 +133,9 @@ def extract(vertical: str, rec: dict) -> list[str]:
         if rec.get("service_type"):
             found.add(rec["service_type"].lower())
         return sorted(found)
+    if vertical == "community":
+        out = [rec.get("org_type"), rec.get("region_tag")]
+        return sorted({str(x).lower() for x in out if x})
 
     text = " ".join(str(rec.get(f) or "") for f in (
         "name", "description", "cuisine_type", "store_type", "region_tag")).lower()

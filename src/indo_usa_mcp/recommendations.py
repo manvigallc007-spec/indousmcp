@@ -33,6 +33,8 @@ _KW = {
     "bharatanatyam": "studios", "money transfer": "services", "remit": "services",
     "remittance": "services", "travel": "services", "visa": "services",
     "immigration": "services", "forex": "services",
+    "association": "community", "samaj": "community", "sangam": "community",
+    "mandal": "community", "cultural center": "community", "community center": "community",
 }
 _MIN_MISSES = 3          # min searches before recommending coverage / a topic
 _NEW_VERTICAL_MIN = 4    # min TOTAL searches across a cluster before proposing a new vertical

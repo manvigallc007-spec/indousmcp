@@ -154,9 +154,20 @@ def _service(rec: dict) -> str:
     return s + _hours(rec)
 
 
+def _community(rec: dict) -> str:
+    region = f"{rec['region_tag']} " if rec.get("region_tag") else ""
+    ot = (rec.get("org_type") or "organization").replace("_", " ")
+    kind = {"association": "community association", "cultural center": "cultural center",
+            "student org": "student organization"}.get(ot, "community organization")
+    s = (f"{rec.get('name', 'This organization')} is {_a(region or kind)} {region}"
+         f"Indian-American {kind}{_loc(rec)}.")
+    return s + _hours(rec)
+
+
 _BUILDERS = {"restaurants": _restaurant, "temples": _temple, "groceries": _grocery,
              "professionals": _professional, "salons": _salon, "events": _event,
-             "apparel": _apparel, "sweets": _sweets, "studios": _studio, "services": _service}
+             "apparel": _apparel, "sweets": _sweets, "studios": _studio, "services": _service,
+             "community": _community}
 
 
 def _rating(rec: dict) -> str:

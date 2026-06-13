@@ -46,13 +46,14 @@ _CAT_ICON = {"restaurants": "🍛", "temples": "🛕", "groceries": "🛒", "pro
 _CAT_COLOR = {"restaurants": "#c1440e", "temples": "#b8860b", "groceries": "#2e7d32",
               "professionals": "#1565c0", "salons": "#ad1457", "events": "#6a1b9a",
               "apparel": "#c2185b", "sweets": "#e65100", "studios": "#00838f",
-              "services": "#37474f"}
+              "services": "#37474f", "community": "#5d4037"}
 # One-line descriptor per category — the shared "identity" used on cards/headers everywhere.
 _CAT_BLURB = {"restaurants": "Dosa, biryani, thali & more", "temples": "Hindu · Sikh · Jain",
               "groceries": "Spices, produce, frozen", "professionals": "Doctors, dentists, clinics",
               "salons": "Threading, henna, bridal", "events": "Festivals, garba, concerts",
               "apparel": "Sarees, lehengas, jewelry", "sweets": "Mithai & Indian bakeries",
-              "studios": "Yoga, dance & music", "services": "Money transfer, travel, visa"}
+              "studios": "Yoga, dance & music", "services": "Money transfer, travel, visa",
+              "community": "Associations & cultural orgs"}
 
 # Modern chat UI. Placeholders (__NAME__) are filled by .replace() so the CSS/JS braces
 # don't need f-string escaping.
