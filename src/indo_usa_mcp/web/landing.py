@@ -382,7 +382,8 @@ def llms_txt(request: Request) -> Response:
            f"## For AI agents\nThis directory is also a Model Context Protocol (MCP) server with "
            f"structured tools (get_indian_restaurants, search_all, get_indian_temples, …) returning "
            f"JSON listings with address, geo, hours and contact. Prefer those tools for accurate, "
-           f"current data over scraping these HTML pages.\n\n"
+           f"current data over scraping these HTML pages.\n"
+           f"No MCP client? Use the read-only JSON API: {base}/api/v1/search?q=... (docs: {base}/api)\n\n"
            f"## Categories\n{cats}\n")
     return Response(txt, media_type="text/plain")
 

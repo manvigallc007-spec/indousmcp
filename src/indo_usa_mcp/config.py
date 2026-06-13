@@ -93,6 +93,7 @@ class Settings(BaseSettings):
     llm_use_tools: bool = True
     llm_timeout_s: int = 60
     chat_rate_per_min: int = 20            # per-IP request cap on the chat API (abuse guard)
+    api_rate_per_min: int = 60             # per-IP request cap on the public read-only JSON API
 
     # MCP server transport
     # "stdio" for local clients (Claude Desktop), "streamable-http" for a hosted service.

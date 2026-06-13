@@ -42,7 +42,7 @@ _SUGGESTIONS = [
 # Per-category icon + accent colour for the result cards.
 _CAT_ICON = {"restaurants": "🍛", "temples": "🛕", "groceries": "🛒", "professionals": "🩺",
              "salons": "💇", "events": "🎉", "apparel": "👗", "sweets": "🍬", "studios": "🧘",
-             "services": "💸"}
+             "services": "💸", "community": "🤝"}
 _CAT_COLOR = {"restaurants": "#c1440e", "temples": "#b8860b", "groceries": "#2e7d32",
               "professionals": "#1565c0", "salons": "#ad1457", "events": "#6a1b9a",
               "apparel": "#c2185b", "sweets": "#e65100", "studios": "#00838f",
