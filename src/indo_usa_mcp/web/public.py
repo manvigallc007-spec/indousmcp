@@ -11,6 +11,7 @@ from starlette.routing import Route
 from .. import payments, verticals
 from ..config import settings
 from ..pipeline import compliance, ingest, outreach
+from .chat import _CAT_COLOR, _CAT_ICON
 from .common import _page, esc as _esc
 
 # Text fields shown on the owner edit form (label, restaurant field).
@@ -23,57 +24,104 @@ _EDIT_FIELDS = [
 _DIETARY_OPTIONS = ["vegetarian", "vegan", "halal", "jain"]
 
 
-_CAT_ICONS = {
-    "restaurants": "🍛", "temples": "🛕", "groceries": "🛒", "professionals": "🩺",
-    "salons": "💇", "events": "🎉", "apparel": "👗", "sweets": "🍬", "studios": "🧘",
-    "services": "💸",
-}
+_LANDING_HTML = """<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__PLAT__ — Find Indian America</title>
+<meta name="description" content="__OGDESC__">
+<meta property="og:title" content="__PLAT__ — Find Indian America">
+<meta property="og:description" content="__OGDESC__">
+<meta property="og:type" content="website">
+<meta property="og:url" content="__OGURL__">
+<meta name="twitter:card" content="summary">
+<style>
+:root{--brand:#c1440e;--brand-d:#a2380b;--bg:#f6f4f1;--panel:#fff;--ink:#1f2430;--muted:#6b7280;--line:#ececec}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);
+ background:var(--bg);line-height:1.55}
+a{color:var(--brand);text-decoration:none}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 22px;max-width:1080px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:11px;color:var(--ink)}
+.brand .logo{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;
+ background:linear-gradient(135deg,#ffd9a0,#ffb56b);font-size:20px}
+.brand b{font-size:17px;display:block;line-height:1.1}.brand i{font-style:normal;font-size:12px;color:var(--muted)}
+.nav{display:flex;align-items:center;gap:16px;font-size:14px}
+.nav .btn{background:var(--brand);color:#fff;padding:9px 16px;border-radius:10px;font-weight:600}
+.nav .btn:hover{background:var(--brand-d)}
+.hero{max-width:760px;margin:0 auto;text-align:center;padding:46px 20px 8px}
+.hero h1{font-size:40px;line-height:1.1;margin:0 0 14px;letter-spacing:-.02em}
+.hero .sub{color:var(--muted);font-size:19px;margin:0 auto 28px;max-width:620px}
+.search{display:flex;align-items:center;gap:10px;max-width:600px;margin:0 auto;background:#fff;
+ border:1px solid #ddd;border-radius:16px;padding:8px 8px 8px 16px;box-shadow:0 6px 22px rgba(0,0,0,.06);text-align:left}
+.search:hover{border-color:var(--brand)}.search .si{font-size:18px}
+.search .sp{flex:1;color:#9aa0a6;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.search .sb{background:var(--brand);color:#fff;padding:10px 16px;border-radius:11px;font-weight:600;font-size:14px;white-space:nowrap}
+.poweredby{color:#9aa0a6;font-size:12px;margin-top:14px}
+.section{max-width:1000px;margin:0 auto;padding:34px 20px}
+.section h2{text-align:center;font-size:13px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0 0 18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:12px}
+.tile{background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px;display:flex;
+ align-items:center;gap:12px;color:var(--ink);font-weight:600;font-size:15px;transition:.15s}
+.tile:hover{border-color:var(--c);transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.06)}
+.tile .ic{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-size:20px;
+ background:#f4f2f0;background:color-mix(in srgb,var(--c) 14%,#fff)}
+.vals{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px}
+.val{text-align:center;padding:10px}.val .vi{font-size:26px}
+.val h3{margin:8px 0 4px;font-size:16px}.val p{color:var(--muted);font-size:14px;margin:0}
+footer{text-align:center;color:#9aa0a6;font-size:14px;padding:22px 20px 48px;border-top:1px solid var(--line);margin-top:14px}
+@media(max-width:600px){.hero h1{font-size:30px}.hero .sub{font-size:16px}.search .sp{display:none}.nav .signin{display:none}}
+</style></head><body>
+<header class="topbar">
+ <a class="brand" href="/"><span class="logo">🪷</span><span><b>__PLAT__</b><i>__TAGLINE__</i></span></a>
+ <nav class="nav"><a class="signin" href="/portal/login">Owner sign in</a><a class="btn" href="/chat">Ask __ANAME__</a></nav>
+</header>
+<main>
+ <section class="hero">
+  <h1>Find Indian America with __ANAME__</h1>
+  <p class="sub">__SUB__</p>
+  <a class="search" href="/chat"><span class="si">🔍</span>
+   <span class="sp">Ask anything… “vegetarian thali in Jersey City”</span>
+   <span class="sb">Ask __ANAME__ →</span></a>
+  <div class="poweredby">Free AI guide · restaurants · temples · groceries · sweets · events &amp; more</div>
+ </section>
+ <section class="section">
+  <h2>Explore by category</h2>
+  <div class="grid">__TILES__</div>
+ </section>
+ <section class="section">
+  <div class="vals">
+   <div class="val"><div class="vi">💬</div><h3>Ask in plain English</h3>
+    <p>“Sweets shop for Diwali near Edison” — no menus or filters to wrestle with.</p></div>
+   <div class="val"><div class="vi">📍</div><h3>Real local listings</h3>
+    <p>Restaurants, temples, groceries, classes, events and more, across the USA.</p></div>
+   <div class="val"><div class="vi">✨</div><h3>Always free</h3>
+    <p>Open to everyone. Own a business? Claim your listing in a tap.</p></div>
+  </div>
+ </section>
+</main>
+<footer>Own a business? <a href="/portal/login">Sign in</a> to claim &amp; manage your listing · __PLAT__</footer>
+</body></html>"""
 
 
 def home(request: Request) -> HTMLResponse:
-    """Public, shareable landing page: hero + category grid + CTA to the assistant."""
+    """Public, shareable landing page: hero + AI search CTA + category grid."""
     plat = html.escape(settings.platform_name)
-    brand = "#c1440e"
-    desc = ("Find Indian restaurants, sweets, temples, events, classes, salons, jewelry and "
-            "more across the USA — with a friendly AI guide.")
-    og_url = html.escape(settings.public_web_url.rstrip("/") + "/")
+    aname = html.escape(settings.assistant_name)
+    desc = (f"Find Indian restaurants, sweets, temples, events, classes, salons, jewelry and more "
+            f"across the USA — with {settings.assistant_name}, your free AI guide.")
     tiles = "".join(
-        f"<a class='tile' href='/chat'><span>{_CAT_ICONS.get(k, '•')}</span>"
-        f"{html.escape(cfg['label'])}</a>"
+        f"<a class='tile' href='/chat' style='--c:{_CAT_COLOR.get(k, '#777')}'>"
+        f"<span class='ic'>{_CAT_ICON.get(k, '•')}</span><span>{html.escape(cfg['label'])}</span></a>"
         for k, cfg in verticals.VERTICALS.items())
-    doc = f"""<!doctype html><html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{plat} — Indian-American directory</title>
-<meta name="description" content="{html.escape(desc)}">
-<meta property="og:title" content="{plat}">
-<meta property="og:description" content="{html.escape(desc)}">
-<meta property="og:type" content="website">
-<meta property="og:url" content="{og_url}">
-<meta name="twitter:card" content="summary">
-<style>
- *{{box-sizing:border-box}}
- body{{font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;margin:0;color:#1a1a1a;
-   background:#faf7f5;line-height:1.5}}
- .hero{{text-align:center;padding:64px 20px 36px;max-width:680px;margin:0 auto}}
- .hero h1{{font-size:34px;margin:0 0 10px}} .hero p{{color:#555;font-size:18px;margin:0 0 24px}}
- .cta{{background:{brand};color:#fff;border:0;padding:15px 28px;border-radius:12px;font-size:17px;
-   text-decoration:none;display:inline-block;cursor:pointer}}
- .grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;
-   max-width:760px;margin:8px auto 50px;padding:0 18px}}
- .tile{{background:#fff;border:1px solid #eee;border-radius:14px;padding:18px;text-decoration:none;
-   color:#1a1a1a;font-weight:600;font-size:15px;display:flex;align-items:center;gap:10px}}
- .tile span{{font-size:24px}} .tile:hover{{border-color:{brand}}}
- footer{{text-align:center;color:#888;font-size:14px;padding:0 20px 40px}}
- footer a{{color:{brand}}}
-</style></head><body>
-<div class="hero">
- <h1>{plat}</h1>
- <p>{html.escape(desc)}</p>
- <a class="cta" href="/chat">Ask the assistant →</a>
-</div>
-<div class="grid">{tiles}</div>
-<footer>Own a business? <a href="/portal/login">Sign in</a> to claim &amp; manage your listing.</footer>
-</body></html>"""
+    repl = {
+        "__PLAT__": plat, "__ANAME__": aname,
+        "__TAGLINE__": html.escape(settings.platform_tagline),
+        "__SUB__": html.escape(desc), "__TILES__": tiles,
+        "__OGURL__": html.escape(settings.public_web_url.rstrip("/") + "/"),
+        "__OGDESC__": html.escape(desc),
+    }
+    doc = _LANDING_HTML
+    for k, v in repl.items():
+        doc = doc.replace(k, v)
     return HTMLResponse(doc)
 
 

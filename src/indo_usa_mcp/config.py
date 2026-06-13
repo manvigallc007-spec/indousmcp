@@ -97,8 +97,12 @@ class Settings(BaseSettings):
     fastembed_model: str = "BAAI/bge-small-en-v1.5"    # fastembed (384-dim, matches column)
     embedding_dim: int = 384                            # must match the embedding vector(N) columns
 
+    # Branding — TEMP placeholders until a real name/domain is chosen (override via env).
+    platform_name: str = "DesiConnect"          # brand shown across pages
+    assistant_name: str = "Dost"                # chatbot persona ("dost" = friend)
+    platform_tagline: str = "Your guide to Indian America"
+
     # Outreach & claiming
-    platform_name: str = "Indian Eats Directory"
     claim_base_url: str = "https://yourdomain.com/claim"
     outreach_contact_email: str = "manvigallc007@gmail.com"
     # Don't re-contact the same restaurant within this many days (anti-spam).
