@@ -98,6 +98,7 @@ a{color:var(--brand);text-decoration:none}
  padding:7px 13px;font-size:13px;cursor:pointer;transition:.15s}
 .fchip:hover{border-color:#cfcdca}.fchip.on{background:var(--brand);color:#fff;border-color:var(--brand)}
 .fchip.open.on{background:#137333;border-color:#137333}
+.fchip.loc{color:var(--brand);border-color:#e7c3b6}
 #log{flex:1;overflow-y:auto;scroll-behavior:smooth}
 .wrap{max-width:760px;margin:0 auto;padding:18px 16px 8px;width:100%}
 .welcome{max-width:620px;margin:6vh auto 0;padding:0 20px;text-align:center}
@@ -153,7 +154,7 @@ a{color:var(--brand);text-decoration:none}
   <span class="status"><span class="dot"></span>__MODE__</span>
  </div>
 </header>
-<div class="filterbar">__FCHIPS__</div>
+<div class="filterbar"><button class="fchip loc" onclick="useLocation()">📍 Near me</button>__FCHIPS__</div>
 <main id="log"><div class="wrap" id="thread">
  <section id="welcome" class="welcome">
   <div class="hero-avatar">🪷</div>
@@ -193,6 +194,14 @@ function typing(){const t=el('div','typing');for(let i=0;i<3;i++)t.appendChild(e
 function setVertical(b){document.querySelectorAll('.fchip:not(.open)').forEach(c=>c.classList.remove('on'));b.classList.add('on');filters.vertical=b.dataset.v||null;if(lastQuery)rerun();}
 function toggleOpen(b){filters.open_now=!filters.open_now;b.classList.toggle('on',filters.open_now);if(lastQuery)rerun();}
 function rerun(){if(lastQuery&&lastBot)send(lastQuery,true);}
+function useLocation(){
+  if(!navigator.geolocation){fillBot(addBot(),'Location isn’t available — type a city like “Edison, NJ”.',[]);return;}
+  navigator.geolocation.getCurrentPosition(
+    function(p){geo={lat:p.coords.latitude,lng:p.coords.longitude};
+      if(lastQuery){rerun();} else {fillBot(addBot(),'📍 Got your location — what are you looking for nearby?',[]);}},
+    function(){fillBot(addBot(),'Couldn’t get your location — just type a city like “Edison, NJ”.',[]);},
+    {timeout:8000});
+}
 function lnk(href,label,blank){const a=el('a','lc-btn',label);a.href=href;if(blank){a.target='_blank';a.rel='noopener';}return a;}
 function card(c){
   const v=c.vertical||'',color=COLOR[v]||'#777',icon=ICON[v]||'•';

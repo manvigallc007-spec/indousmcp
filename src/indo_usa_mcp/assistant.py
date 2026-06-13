@@ -61,6 +61,15 @@ _TOOLS = [{
 
 
 # ---------------------------------------------------------------- directory search
+_OPEN_NOW_PHRASES = ("open now", "open right now", "currently open", "whats open",
+                     "what's open", "open late", "open today", "still open")
+
+
+def _wants_open_now(query: str) -> bool:
+    q = (query or "").lower()
+    return any(p in q for p in _OPEN_NOW_PHRASES)
+
+
 def _point(geo: dict | None) -> tuple[float, float] | None:
     if not geo:
         return None
@@ -80,7 +89,8 @@ def _run_search(args: dict, filters: dict | None = None, geo: dict | None = None
     city = filters.get("city") or args.get("city") or None
     state = filters.get("state") or args.get("state") or None
     vertical = filters.get("vertical") or args.get("vertical") or None
-    open_now = bool(filters.get("open_now") or args.get("open_now"))
+    # Honor an explicit chip OR a free-text "open now" in the query itself.
+    open_now = bool(filters.get("open_now") or args.get("open_now") or _wants_open_now(query))
     point = _point(geo)
 
     fn = (getattr(verticals.VERTICALS[vertical]["queries"], f"search_{vertical}_by_text", None)

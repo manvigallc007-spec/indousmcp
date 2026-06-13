@@ -147,6 +147,12 @@ def test_location_clarification(no_db, monkeypatch):
     assert out2["provider"] != "clarify"
 
 
+def test_wants_open_now():
+    assert assistant._wants_open_now("indian restaurant open now")
+    assert assistant._wants_open_now("what's open near me")
+    assert not assistant._wants_open_now("indian restaurant in edison")
+
+
 def test_no_clarify_loop(no_db, monkeypatch):
     monkeypatch.setattr(settings, "llm_provider", "search")
     out1 = assistant.reply([{"role": "user", "content": "restaurants near me"}])
