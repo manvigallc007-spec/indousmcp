@@ -29,3 +29,20 @@ def test_robots_has_sitemap():
 
 def test_unknown_vertical_404():
     assert TestClient(app).get("/browse/notavertical").status_code == 404
+
+
+def test_pwa_manifest_and_service_worker():
+    c = TestClient(app)
+    m = c.get("/manifest.webmanifest")
+    assert m.status_code == 200 and '"display": "standalone"' in m.text
+    assert "manifest" in m.headers["content-type"]
+    sw = c.get("/sw.js")
+    assert sw.status_code == 200 and "addEventListener" in sw.text
+    assert "javascript" in sw.headers["content-type"]
+
+
+def test_pages_register_pwa():
+    c = TestClient(app)
+    for path in ("/chat", "/", "/browse"):
+        body = c.get(path).text
+        assert 'rel="manifest"' in body and "serviceWorker" in body

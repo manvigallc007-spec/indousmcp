@@ -62,6 +62,8 @@ _CHAT_HTML = """<!doctype html><html lang="en"><head>
 <meta property="og:image" content="__OGIMG__">
 <meta name="twitter:card" content="summary">
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
+<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#c1440e">
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}</script>
 <style>
 :root{--brand:#c1440e;--brand-d:#a2380b;--bg:#f6f4f1;--panel:#fff;--ink:#1f2430;
  --muted:#6b7280;--line:#ececec}

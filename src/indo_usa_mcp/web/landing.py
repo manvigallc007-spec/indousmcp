@@ -46,6 +46,8 @@ def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200)
 <meta property="og:description" content="{html.escape(desc)}">
 <meta property="og:type" content="website">
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
+<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#c1440e">
+<script>if('serviceWorker' in navigator){{window.addEventListener('load',function(){{navigator.serviceWorker.register('/sw.js').catch(function(){{}})}})}}</script>
 {ld}
 <style>
  *{{box-sizing:border-box}}
@@ -274,6 +276,41 @@ def robots(request: Request) -> Response:
                     media_type="text/plain")
 
 
+# ------------------------------------------------------------------------ PWA
+def manifest(request: Request) -> Response:
+    data = {
+        "name": settings.platform_name, "short_name": settings.platform_name[:12],
+        "description": settings.platform_tagline,
+        "start_url": "/", "scope": "/", "display": "standalone",
+        "background_color": "#f6f4f1", "theme_color": "#c1440e",
+        "icons": [{"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml",
+                   "purpose": "any maskable"}],
+    }
+    return Response(json.dumps(data), media_type="application/manifest+json")
+
+
+_SW_JS = """
+const C='dc-shell-v1';
+const SHELL=['/','/chat','/browse','/events','/icon.svg','/manifest.webmanifest'];
+self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()))});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==C).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
+self.addEventListener('fetch',e=>{
+  const req=e.request; if(req.method!=='GET') return;
+  const p=new URL(req.url).pathname;
+  if(p.startsWith('/chat/api')||p.startsWith('/admin')||p.startsWith('/portal')) return; // never cache dynamic/auth
+  e.respondWith(
+    fetch(req).then(res=>{const cp=res.clone();caches.open(C).then(c=>c.put(req,cp));return res;})
+              .catch(()=>caches.match(req).then(m=>m||caches.match('/')))
+  );
+});
+"""
+
+
+def service_worker(request: Request) -> Response:
+    return Response(_SW_JS, media_type="application/javascript",
+                    headers={"Cache-Control": "no-cache"})
+
+
 def llms_txt(request: Request) -> Response:
     base = _base()
     cats = "\n".join(f"- {cfg['label']}: {base}/browse/{v}" for v, cfg in verticals.VERTICALS.items())
@@ -298,4 +335,6 @@ routes = [
     Route("/sitemap.xml", sitemap, methods=["GET"]),
     Route("/robots.txt", robots, methods=["GET"]),
     Route("/llms.txt", llms_txt, methods=["GET"]),
+    Route("/manifest.webmanifest", manifest, methods=["GET"]),
+    Route("/sw.js", service_worker, methods=["GET"]),
 ]
