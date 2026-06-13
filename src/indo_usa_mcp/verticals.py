@@ -389,29 +389,31 @@ def merge_duplicates(vertical: str, keep_id: int, drop_ids: list[int]) -> dict[s
 
 
 def search_all(query: str, city: str | None = None, state: str | None = None,
-               limit: int = 20) -> dict[str, Any]:
-    """Search every vertical at once and merge results (featured first, then relevance).
+               limit: int = 20, lat: float | None = None, lng: float | None = None) -> dict[str, Any]:
+    """Search every vertical at once and merge by the hybrid score (exact-match first, then
+    relevance/proximity/freshness — see ranking.py).
 
-    Each result is tagged with its `vertical`. Lets an agent answer broad "Indian things
-    near me" queries without choosing a vertical first.
+    Each result is tagged with its `vertical`. Optional `lat`/`lng` enable proximity ranking.
     """
     from . import embeddings
     qvec = embeddings.to_vector_literal(embeddings.embed(query)) if embeddings.enabled() else None
+    point = (lat, lng) if lat is not None and lng is not None else None
 
     merged: list[dict] = []
-    ranking = "trigram"
+    ranking_mode = "trigram"
     for key, cfg in VERTICALS.items():
         fn = getattr(cfg["queries"], f"search_{key}_by_text", None)
         if fn is None:
             continue
-        res = fn(query, city=city, state=state, limit=limit, precomputed_qvec=qvec)
-        ranking = res.get("ranking", ranking)
+        res = fn(query, city=city, state=state, limit=limit, point=point, precomputed_qvec=qvec)
+        ranking_mode = res.get("ranking", ranking_mode)
         for r in res["results"]:
-            r["vertical"] = key
+            r.setdefault("vertical", key)
             merged.append(r)
-    merged.sort(key=lambda r: (not r.get("is_featured"), -(r.get("match_score") or 0)))
+    # Hybrid-ranked verticals carry `score`; events (date-first) carry only `match_score`.
+    merged.sort(key=lambda r: r.get("score", r.get("match_score") or 0.0), reverse=True)
     merged = merged[:limit]
-    return {"count": len(merged), "query": query, "ranking": ranking, "results": merged}
+    return {"count": len(merged), "query": query, "ranking": ranking_mode, "results": merged}
 
 
 def featured_summary() -> dict[str, Any]:

@@ -84,7 +84,7 @@ def dashboard(request: Request) -> HTMLResponse:
         status = ("<span class='ok'>★ featured</span>" if x["is_featured"]
                   else ("active" if x["is_active"] else "<span class='err'>inactive</span>"))
         upgrade = ""
-        if x["vertical"] == "restaurants" and not x["is_featured"] and payments.enabled():
+        if x["vertical"] == "restaurants" and not x["is_featured"] and settings.featured_for_sale:
             upgrade = f" · <a href='/upgrade?id={x['id']}'>Get featured</a>"
         reach = analytics.reach_for(x["vertical"], x["id"], days=30)
         rows += (f"<tr><td><a href='/portal/edit/{x['vertical']}/{x['id']}'>{esc(x['name'])}</a></td>"

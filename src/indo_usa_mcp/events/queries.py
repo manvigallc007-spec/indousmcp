@@ -88,8 +88,9 @@ def get_event_details(event_id: int) -> dict[str, Any] | None:
 
 def search_events_by_text(
     query_text: str, *, city: str | None = None, state: str | None = None, limit: int = 25,
-    precomputed_qvec: str | None = None,
+    point: tuple[float, float] | None = None, precomputed_qvec: str | None = None,
 ) -> dict[str, Any]:
+    # `point` accepted for a uniform search_all signature; events stay date-first (not reranked).
     filters = [_BASE]
     geo: list[Any] = []
     if city:

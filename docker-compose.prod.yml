@@ -112,6 +112,8 @@ services:
       STRIPE_PRICE_CENTS: ${STRIPE_PRICE_CENTS:-3000}
       STRIPE_CURRENCY: ${STRIPE_CURRENCY:-usd}
       FEATURED_DAYS: ${FEATURED_DAYS:-30}
+      # Selling Featured stays OFF until a city+vertical has traffic (Stripe plumbing intact).
+      FEATURED_SALES_ENABLED: ${FEATURED_SALES_ENABLED:-false}
     ports:
       - "8080:8080"
     depends_on:

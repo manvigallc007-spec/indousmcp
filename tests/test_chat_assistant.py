@@ -116,6 +116,7 @@ def test_filter_scopes_to_vertical(monkeypatch):
     monkeypatch.setattr(r_queries, "search_restaurants_by_text",
                         lambda q, **k: {"count": 1, "results": [{"id": 9, "name": "Scoped Diner"}]})
     out = assistant.reply([{"role": "user", "content": "dinner"}],
+                          geo={"lat": 40.0, "lng": -74.0},
                           filters={"vertical": "restaurants", "open_now": False})
     assert len(out["cards"]) == 1
     assert out["cards"][0]["name"] == "Scoped Diner" and out["cards"][0]["vertical"] == "restaurants"
@@ -132,8 +133,18 @@ def test_open_now_filter(monkeypatch):
     monkeypatch.setattr(hours, "annotate",
                         lambda rows: [r.__setitem__("open_now", r.get("_o", False)) for r in rows])
     out = assistant.reply([{"role": "user", "content": "food"}],
-                          filters={"vertical": None, "open_now": True})
+                          geo={"lat": 40.0, "lng": -74.0}, filters={"vertical": None, "open_now": True})
     assert [c["name"] for c in out["cards"]] == ["Open Place"]
+
+
+def test_location_clarification(no_db, monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "search")
+    # local intent, no geo, no place named -> ask for a city instead of national results
+    out = assistant.reply([{"role": "user", "content": "good vegetarian restaurant"}])
+    assert out["provider"] == "clarify" and out["cards"] == []
+    # but a named place proceeds to search (no clarification)
+    out2 = assistant.reply([{"role": "user", "content": "vegetarian restaurant in Edison"}])
+    assert out2["provider"] != "clarify"
 
 
 def test_landing_page_renders_with_share_meta():

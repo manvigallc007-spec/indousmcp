@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import math
 from typing import Any
 
-from .. import db, embeddings, hours
+from .. import db, ranking
 
 _PUBLIC_COLS = [
     "id", "name", "address_full", "city", "state", "country", "lat", "lng",
@@ -17,57 +16,15 @@ _FEATURED = "(is_featured AND (featured_until IS NULL OR featured_until > now())
 _COLS_SQL = ", ".join(_PUBLIC_COLS) + f", {_FEATURED} AS is_featured"
 
 
-def _haversine_miles(lat1, lng1, lat2, lng2) -> float:
-    r = 3958.8
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    dp, dl = math.radians(lat2 - lat1), math.radians(lng2 - lng1)
-    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    return r * 2 * math.asin(math.sqrt(a))
-
-
 def get_indian_salons(
     *, lat: float | None = None, lng: float | None = None, radius_miles: float = 15.0,
     city: str | None = None, state: str | None = None, tag: str | None = None,
     open_now: bool = False, limit: int = 25,
 ) -> dict[str, Any]:
-    """List active Indian beauty salons by geo-radius and/or filters (incl. tag, open_now)."""
-    where = ["deleted_at IS NULL", "is_active = true"]
-    params: list[Any] = []
-    if tag:
-        where.append("tags @> %s")
-        params.append([tag.lower()])
-    if city:
-        where.append("LOWER(city) = LOWER(%s)")
-        params.append(city)
-    if state:
-        where.append("LOWER(state) = LOWER(%s)")
-        params.append(state)
-    if lat is not None and lng is not None:
-        deg = radius_miles / 69.0
-        where.append("lat BETWEEN %s AND %s AND lng BETWEEN %s AND %s")
-        params += [lat - deg, lat + deg, lng - deg * 1.5, lng + deg * 1.5]
-
-    sql = (f"SELECT {_COLS_SQL} FROM salons WHERE {' AND '.join(where)} "
-           f"ORDER BY {_FEATURED} DESC, confidence_score DESC LIMIT %s")
-    params.append(max(limit * 4, limit))
-    rows = db.query(sql, params)
-
-    if lat is not None and lng is not None:
-        kept = []
-        for row in rows:
-            if row["lat"] is None or row["lng"] is None:
-                continue
-            d = _haversine_miles(lat, lng, row["lat"], row["lng"])
-            if d <= radius_miles:
-                row["distance_miles"] = round(d, 2)
-                kept.append(row)
-        kept.sort(key=lambda r: (not r["is_featured"], r["distance_miles"]))
-        rows = kept
-    hours.annotate(rows)
-    if open_now:
-        rows = [r for r in rows if r.get("open_now")]
-    rows = rows[:limit]
-    return {"count": len(rows), "results": rows}
+    """List active Indian beauty salons, ranked by proximity + freshness + Featured."""
+    point = (lat, lng) if lat is not None and lng is not None else None
+    return ranking.geo_list("salons", _COLS_SQL, point=point, city=city, state=state,
+                            tag=tag, open_now=open_now, limit=limit, radius_miles=radius_miles)
 
 
 def get_salon_details(salon_id: int) -> dict[str, Any] | None:
@@ -83,32 +40,10 @@ def get_salon_details(salon_id: int) -> dict[str, Any] | None:
 
 def search_salons_by_text(
     query_text: str, *, city: str | None = None, state: str | None = None, limit: int = 25,
-    precomputed_qvec: str | None = None,
+    point: tuple[float, float] | None = None, precomputed_qvec: str | None = None,
 ) -> dict[str, Any]:
-    filters = ["deleted_at IS NULL", "is_active = true"]
-    geo: list[Any] = []
-    if city:
-        filters.append("LOWER(city) = LOWER(%s)")
-        geo.append(city)
-    if state:
-        filters.append("LOWER(state) = LOWER(%s)")
-        geo.append(state)
-
-    if embeddings.enabled():
-        qvec = precomputed_qvec or embeddings.to_vector_literal(embeddings.embed(query_text))
-        where = " AND ".join([*filters, "embedding IS NOT NULL"])
-        sql = (f"SELECT {_COLS_SQL}, 1 - (embedding <=> %s::vector) AS match_score "
-               f"FROM salons WHERE {where} "
-               f"ORDER BY {_FEATURED} DESC, embedding <=> %s::vector LIMIT %s")
-        rows = db.query(sql, [qvec, *geo, qvec, limit])
-        if rows:
-            return {"count": len(rows), "query": query_text, "ranking": "semantic", "results": rows}
-
-    where = " AND ".join(filters)
-    sql = (f"SELECT {_COLS_SQL}, similarity(name, %s) AS match_score FROM salons "
-           f"WHERE {where} ORDER BY {_FEATURED} DESC, match_score DESC, confidence_score DESC LIMIT %s")
-    rows = db.query(sql, [query_text, *geo, limit])
-    return {"count": len(rows), "query": query_text, "ranking": "trigram", "results": rows}
+    return ranking.text_search("salons", _COLS_SQL, query_text, city=city, state=state,
+                               point=point, limit=limit, precomputed_qvec=precomputed_qvec)
 
 
 def stats() -> dict[str, Any]:

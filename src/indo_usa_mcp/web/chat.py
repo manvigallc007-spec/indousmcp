@@ -118,6 +118,7 @@ a{color:var(--brand);text-decoration:none}
 .pill{font-size:11px;font-weight:600;border-radius:999px;padding:3px 9px}
 .pill.feat{background:#fff4e5;color:#b45309}.pill.open{background:#e7f6ec;color:#137333}
 .lc h4{margin:0;font-size:16px}.lc-loc{color:var(--muted);font-size:13px;margin-top:3px}
+.lc-fresh{color:#137333;font-size:12px;margin-top:5px}
 .lc-desc{color:#4b5563;font-size:14px;margin:8px 0 0;line-height:1.45}
 .lc-act{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}
 .lc-btn{border:1px solid #e2e0dd;border-radius:9px;padding:6px 12px;font-size:13px;font-weight:500;
@@ -191,8 +192,11 @@ function card(c){
   if(c.open_now)head.appendChild(el('span','pill open','● Open now'));
   d.appendChild(head);d.appendChild(el('h4',null,c.name||''));
   const loc=[c.city,c.state].filter(Boolean).join(', ');
-  if(loc)d.appendChild(el('div','lc-loc','📍 '+loc));
+  let locline=loc;
+  if(c.distance_miles!=null) locline+=(loc?' · ':'')+c.distance_miles+' mi';
+  if(locline)d.appendChild(el('div','lc-loc','📍 '+locline));
   if(c.description)d.appendChild(el('p','lc-desc',c.description));
+  if(c.verified_ago)d.appendChild(el('div','lc-fresh','✓ '+c.verified_ago));
   const act=el('div','lc-act');
   if(c.phone)act.appendChild(lnk('tel:'+c.phone,'Call'));
   if(c.website)act.appendChild(lnk(c.website,'Visit website',true));

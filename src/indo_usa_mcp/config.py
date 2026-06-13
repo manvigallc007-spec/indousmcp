@@ -58,10 +58,17 @@ class Settings(BaseSettings):
     stripe_price_cents: int = 3000      # $30.00 for a featured listing
     stripe_currency: str = "usd"
     featured_days: int = 30
+    # Sell Featured placement? Kept OFF until a city+vertical has provable traffic — Stripe
+    # plumbing stays intact, but the "Get Featured" buttons + /upgrade are hidden meanwhile.
+    featured_sales_enabled: bool = False
 
     @property
     def payments_enabled(self) -> bool:
         return bool(self.stripe_secret_key)
+
+    @property
+    def featured_for_sale(self) -> bool:
+        return bool(self.stripe_secret_key and self.featured_sales_enabled)
 
     # Human chatbot front-end (/chat). Pluggable LLM via the OpenAI-compatible chat API:
     #   llm_provider = "search"  -> no LLM, templated semantic-search replies (free, default)

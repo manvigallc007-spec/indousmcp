@@ -12,6 +12,7 @@ impressions — the same reach signal that makes featured placements valuable.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import httpx
@@ -60,24 +61,38 @@ _TOOLS = [{
 
 
 # ---------------------------------------------------------------- directory search
-def _run_search(args: dict, filters: dict | None = None, limit: int = 8) -> dict:
+def _point(geo: dict | None) -> tuple[float, float] | None:
+    if not geo:
+        return None
+    try:
+        return (float(geo["lat"]), float(geo["lng"]))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _run_search(args: dict, filters: dict | None = None, geo: dict | None = None,
+                limit: int = 8) -> dict:
     """Search the directory. `filters` (from the chat UI chips) override the LLM's args:
-    a `vertical` scopes to one category; `open_now` keeps only currently-open listings."""
+    a `vertical` scopes to one category; `open_now` keeps only currently-open listings.
+    `geo` enables proximity ranking ("near me")."""
     filters = filters or {}
     query = (args.get("query") or "").strip()
     city = filters.get("city") or args.get("city") or None
     state = filters.get("state") or args.get("state") or None
     vertical = filters.get("vertical") or args.get("vertical") or None
     open_now = bool(filters.get("open_now") or args.get("open_now"))
+    point = _point(geo)
 
     fn = (getattr(verticals.VERTICALS[vertical]["queries"], f"search_{vertical}_by_text", None)
           if vertical in verticals.VERTICALS else None)
     if fn:
-        res = fn(query, city=city, state=state, limit=limit)
+        res = fn(query, city=city, state=state, limit=limit, point=point)
         for r in res.get("results", []):
             r["vertical"] = vertical
     else:
-        res = verticals.search_all(query, city=city, state=state, limit=limit)
+        res = verticals.search_all(query, city=city, state=state, limit=limit,
+                                   lat=point[0] if point else None,
+                                   lng=point[1] if point else None)
 
     rows = res.get("results", [])
     if open_now and rows:
@@ -119,6 +134,8 @@ def _cards(res: dict) -> list[dict]:
             "description": (r.get("description") or "")[:240],
             "open_now": r.get("open_now"),
             "is_featured": bool(r.get("is_featured")),
+            "verified_ago": r.get("verified_ago"),
+            "distance_miles": r.get("distance_miles"),
             "id": r.get("id"),
         })
     return out
@@ -192,7 +209,7 @@ def _llm_reply(messages: list[dict], geo: dict | None, filters: dict | None) -> 
                 args = json.loads(fn.get("arguments") or "{}")
             except Exception:
                 args = {}
-            res = _run_search(args, filters)
+            res = _run_search(args, filters, geo)
             cards = _cards(res)  # newest search wins for the card panel
             convo.append({"role": "tool", "tool_call_id": call.get("id"),
                           "content": _results_for_llm(res)})
@@ -207,7 +224,7 @@ def _grounded_reply(messages: list[dict], geo: dict | None, filters: dict | None
     results. No tool-calling — works with Gemma and any small model, and is faster on a CPU
     VPS (one LLM call instead of several tool round-trips)."""
     query = _last_user(messages)
-    res = _run_search({"query": query}, filters) if query else {"results": [], "count": 0}
+    res = _run_search({"query": query}, filters, geo) if query else {"results": [], "count": 0}
     convo: list[dict] = [{"role": "system", "content": _SYSTEM_GROUNDED}]
     for extra in (_location_note(geo), _filter_note(filters)):
         if extra:
@@ -233,7 +250,7 @@ def _search_reply(messages: list[dict], geo: dict | None, filters: dict | None) 
     if not query:
         return {"reply": "Tell me what you're looking for — a restaurant, temple, sweets shop, "
                 "event, and a city.", "cards": [], "provider": "search"}
-    res = _run_search({"query": query}, filters)
+    res = _run_search({"query": query}, filters, geo)
     n = res.get("count", 0)
     if n == 0:
         text = (f"I couldn't find anything for “{query}”. Try adding a city/state, "
@@ -252,9 +269,41 @@ def llm_active() -> bool:
     return settings.llm_provider == "llm" and bool(settings.llm_base_url and settings.llm_model)
 
 
+# Local-intent words that benefit from a location; and a crude "did they name a place" check.
+_LOCAL_WORDS = ("restaurant", "food", "eat", "dinner", "lunch", "thali", "temple", "mandir",
+                "grocery", "store", "salon", "threading", "doctor", "clinic", "dentist",
+                "studio", "yoga", "dance", "class", "sweets", "mithai", "bakery", "jewelry",
+                "jeweler", "saree", "near me", "nearby", "around me")
+_STATES = ("al", "ak", "az", "ar", "ca", "co", "ct", "de", "fl", "ga", "hi", "id", "il", "in",
+           "ia", "ks", "ky", "la", "me", "md", "ma", "mi", "mn", "ms", "mo", "mt", "ne", "nv",
+           "nh", "nj", "nm", "ny", "nc", "nd", "oh", "ok", "or", "pa", "ri", "sc", "sd", "tn",
+           "tx", "ut", "vt", "va", "wa", "wv", "wi", "wy")
+
+
+def _needs_location(messages: list[dict], geo: dict | None, filters: dict | None) -> bool:
+    """Conservative: ask for a city only when there's no geo, clear local intent, and no
+    location hint anywhere in the conversation. Never blocks a query that names a place."""
+    if geo:
+        return False
+    text = " ".join(m.get("content", "") for m in messages if m.get("role") == "user").lower()
+    if not text:
+        return False
+    has_intent = any(w in text for w in _LOCAL_WORDS) or bool((filters or {}).get("vertical"))
+    if not has_intent:
+        return False
+    if "near me" in text or "nearby" in text or "around me" in text:
+        return True  # wants local but we have no coordinates
+    named_place = (bool(re.search(r"\bin\s+[a-z]{3,}", text)) or "," in text
+                   or any(re.search(rf"\b{s}\b", text) for s in _STATES))
+    return not named_place
+
+
 def reply(messages: list[dict], geo: dict | None = None, filters: dict | None = None) -> dict:
     """Produce an assistant reply for a chat history. Never raises into the web layer."""
     messages = [m for m in (messages or []) if m.get("role") in ("user", "assistant")][-12:]
+    if _needs_location(messages, geo, filters):
+        return {"reply": "Happy to help! Which city or area should I look in — or tap “share "
+                "location” so I can find places near you?", "cards": [], "provider": "clarify"}
     if llm_active():
         try:
             engine = _llm_reply if settings.llm_use_tools else _grounded_reply

@@ -461,17 +461,19 @@ def search_services_by_text(
 
 @mcp.tool()
 def search_all(
-    query: str, city: str | None = None, state: str | None = None, limit: int = 20,
+    query: str, city: str | None = None, state: str | None = None,
+    lat: float | None = None, lng: float | None = None, limit: int = 20,
 ) -> dict[str, Any]:
     """Search across ALL Indian-American verticals at once — restaurants, temples, groceries,
     healthcare professionals, beauty salons, events, apparel & jewelry, sweets & bakeries,
     yoga/dance studios, and community services.
 
     Use for broad queries like "Indian things near me in Edison NJ" or "vegetarian South
-    Indian". Each result is tagged with its `vertical`; featured listings rank first, then by
-    relevance. Optionally constrain by `city`/`state`.
+    Indian". Results are ranked by relevance: an exact name match ranks first, then by
+    keyword/semantic similarity, proximity (pass `lat`+`lng`) and freshness. Each result is
+    tagged with its `vertical`. Optionally constrain by `city`/`state`.
     """
-    return verticals.search_all(query, city=city, state=state, limit=limit)
+    return verticals.search_all(query, city=city, state=state, lat=lat, lng=lng, limit=limit)
 
 
 # ---------------------------------------------------- agent traffic analytics

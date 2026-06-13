@@ -255,7 +255,7 @@ async def claim_post(request: Request) -> HTMLResponse:
     result = outreach.verify_claim(token, owner_email=email, owner_phone=phone)
     if result.get("ok"):
         upgrade = ""
-        if payments.enabled():
+        if settings.featured_for_sale:
             rid = result["restaurant_id"]
             price = f"${settings.stripe_price_cents / 100:.0f}"
             upgrade = (
@@ -340,9 +340,10 @@ async def manage_post(request: Request) -> HTMLResponse:
 
 
 def upgrade_get(request: Request) -> HTMLResponse:
-    if not payments.enabled():
-        return _page("Unavailable", "<h2>Featured upgrades aren't enabled yet</h2>"
-                     "<p class='muted'>Please check back soon.</p>", status=503)
+    if not settings.featured_for_sale:
+        return _page("Unavailable", "<h2>Featured upgrades aren't available yet</h2>"
+                     "<p class='muted'>We're focused on growing our audience first — check "
+                     "back soon.</p>", status=503)
     try:
         rid = int(request.query_params.get("id", ""))
     except ValueError:
