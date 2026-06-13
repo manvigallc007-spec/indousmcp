@@ -675,6 +675,26 @@ def _scalar(sql: str) -> int:
     return int(list(row.values())[0]) if row else 0
 
 
+def misses_page(request: Request) -> HTMLResponse:
+    if (r := require_admin(request)):
+        return r
+    misses = analytics.top_misses(days=60, limit=40)
+    rows = "".join(
+        f"<tr><td><b>{esc(m['query'])}</b></td>"
+        f"<td>{esc(', '.join(x for x in (m.get('city'), m.get('state')) if x))}</td>"
+        f"<td>{m['n']}</td><td>{m['sources']}</td>"
+        f"<td class='muted'>{esc(str(m['last_seen'])[:16])}</td></tr>"
+        for m in misses)
+    body = ("<p class='muted'>Searches (from AI agents and the chatbot) that returned "
+            "<b>zero</b> results in the last 60 days — your ranked “what to add next” list. "
+            "Fill the top ones via <a href='/admin/data/restaurants/new'>Add listing</a>, owner "
+            "<a href='/submit'>submissions</a>, or by scraping that metro.</p>"
+            + (f"<table><tr><th>Query / filter</th><th>Location</th><th>Misses</th>"
+               f"<th>Sources</th><th>Last</th></tr>{rows}</table>"
+               if rows else "<p class='muted'>No unmet-demand searches recorded yet.</p>"))
+    return admin_page("Unmet demand", body, active="Misses")
+
+
 def submissions_page(request: Request) -> HTMLResponse:
     if (r := require_admin(request)):
         return r
@@ -748,6 +768,7 @@ routes = [
     Route("/admin/agents", agents_page, methods=["GET"]),
     Route("/admin/agents", agents_action, methods=["POST"]),
     Route("/admin/traffic", traffic_page, methods=["GET"]),
+    Route("/admin/misses", misses_page, methods=["GET"]),
     Route("/admin/payments", payments_page, methods=["GET"]),
     Route("/admin/reports", reports_page, methods=["GET"]),
     Route("/admin/reports", reports_action, methods=["POST"]),

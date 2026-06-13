@@ -42,7 +42,8 @@ _ADMIN_NAV = [
     ("Approvals", "/admin/approvals"), ("Feedback", "/admin/feedback"),
     ("Submissions", "/admin/submissions"),
     ("Events", "/admin/events"), ("Claims", "/admin/claims"), ("Agents", "/admin/agents"),
-    ("Traffic", "/admin/traffic"), ("Payments", "/admin/payments"), ("Reports", "/admin/reports"),
+    ("Traffic", "/admin/traffic"), ("Misses", "/admin/misses"),
+    ("Payments", "/admin/payments"), ("Reports", "/admin/reports"),
 ]
 
 

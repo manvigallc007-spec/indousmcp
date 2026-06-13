@@ -114,6 +114,22 @@ def traffic_summary(days: int = 30) -> dict[str, Any]:
     }
 
 
+def top_misses(days: int = 30, limit: int = 25) -> list[dict]:
+    """Demand signal: searches that returned ZERO results, ranked by frequency. Reuses
+    tool_log (every search — MCP tools + chatbot — logs its query/filters + result_count),
+    so this is the ranked 'what to add next' list, by query and location."""
+    win = f"created_at > now() - interval '{int(days)} days'"
+    return db.query(
+        "SELECT COALESCE(NULLIF(args->>'query',''), NULLIF(args->>'tag',''), '(geo/filter)') AS query, "
+        "args->>'city' AS city, args->>'state' AS state, "
+        "count(*) AS n, max(created_at) AS last_seen, "
+        "count(DISTINCT client) AS sources "
+        "FROM tool_log "
+        f"WHERE result_count = 0 AND {win} "
+        "AND (tool LIKE 'search\\_%%' OR tool LIKE 'get\\_indian\\_%%' OR tool IN ('search_all', 'chat')) "
+        "GROUP BY 1, 2, 3 ORDER BY n DESC, last_seen DESC LIMIT %s", (limit,))
+
+
 def recent_calls(limit: int = 50) -> list[dict]:
     return db.query(
         "SELECT tool, client, args, result_count, created_at FROM tool_log "

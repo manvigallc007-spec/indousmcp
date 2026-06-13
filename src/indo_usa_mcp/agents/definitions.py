@@ -43,7 +43,14 @@ class DiscoveryAgent(Agent):
             for m in METROS
             if coverage[m] < params.get("min_per_metro", 10)
         ]
-        return {"total_restaurants": total, "metros": len(METROS), "suggested_targets": targets}
+        # Demand-driven: surface the top zero-result searches so coverage follows real demand.
+        try:
+            from .. import analytics
+            unmet = analytics.top_misses(days=60, limit=15)
+        except Exception:
+            unmet = []
+        return {"total_restaurants": total, "metros": len(METROS),
+                "suggested_targets": targets, "unmet_demand": unmet}
 
 
 class ScraperAgent(Agent):
