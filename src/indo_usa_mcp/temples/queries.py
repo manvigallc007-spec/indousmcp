@@ -13,7 +13,7 @@ _PUBLIC_COLS = [
     "version", "source_name", "source_url", "last_seen_at",
 ]
 _FEATURED = "(is_featured AND (featured_until IS NULL OR featured_until > now()))"
-_COLS_SQL = ", ".join(_PUBLIC_COLS) + f", {_FEATURED} AS is_featured"
+_COLS_SQL = ", ".join(_PUBLIC_COLS) + f", rating, rating_count, {_FEATURED} AS is_featured"
 
 
 def get_indian_temples(

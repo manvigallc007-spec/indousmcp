@@ -121,6 +121,7 @@ a{color:var(--brand);text-decoration:none}
 .pill.feat{background:#fff4e5;color:#b45309}.pill.open{background:#e7f6ec;color:#137333}
 .pill.claimed{background:#e8f0fe;color:#1565c0}
 .lc h4{margin:0;font-size:16px}.lc-loc{color:var(--muted);font-size:13px;margin-top:3px}
+.lc-rate{color:#b45309;font-size:13px;font-weight:600;margin-top:3px}
 .lc-fresh{color:#137333;font-size:12px;margin-top:5px}
 .lc-desc{color:#4b5563;font-size:14px;margin:8px 0 0;line-height:1.45}
 .lc-act{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}
@@ -195,6 +196,7 @@ function card(c){
   if(c.is_claimed)head.appendChild(el('span','pill claimed','✓ Owner-verified'));
   if(c.open_now)head.appendChild(el('span','pill open','● Open now'));
   d.appendChild(head);d.appendChild(el('h4',null,c.name||''));
+  if(c.rating){const rt=el('div','lc-rate','★ '+c.rating+(c.rating_count?(' ('+c.rating_count+')'):'')+'/5');d.appendChild(rt);}
   const loc=[c.city,c.state].filter(Boolean).join(', ');
   let locline=loc;
   if(c.distance_miles!=null) locline+=(loc?' · ':'')+c.distance_miles+' mi';

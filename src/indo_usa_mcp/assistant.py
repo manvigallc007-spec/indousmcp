@@ -135,6 +135,8 @@ def _cards(res: dict) -> list[dict]:
             "open_now": r.get("open_now"),
             "is_featured": bool(r.get("is_featured")),
             "is_claimed": bool(r.get("is_claimed")),
+            "rating": float(r["rating"]) if r.get("rating") is not None else None,
+            "rating_count": r.get("rating_count"),
             "verified_ago": r.get("verified_ago"),
             "distance_miles": r.get("distance_miles"),
             "id": r.get("id"),

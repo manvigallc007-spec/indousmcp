@@ -22,8 +22,9 @@ import httpx
 
 from .config import settings
 
-# Verticals that have a real website to scrape (all of them carry a `website` column).
-FETCHABLE = ("restaurants", "temples", "groceries", "professionals", "salons", "events")
+# Verticals that have a real website to scrape (all carry a `website` + enrichment columns).
+FETCHABLE = ("restaurants", "temples", "groceries", "professionals", "salons", "events",
+             "apparel", "sweets", "studios", "services")
 
 _JSONLD_RE = re.compile(
     r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', re.I | re.S)
