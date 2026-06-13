@@ -105,7 +105,7 @@ footer{text-align:center;color:#9aa0a6;font-size:14px;padding:22px 20px 48px;bor
   <a class="search" href="/chat"><span class="si">🔍</span>
    <span class="sp">Ask anything… “vegetarian thali in Jersey City”</span>
    <span class="sb">Ask __ANAME__ →</span></a>
-  <div class="poweredby">Free AI guide · restaurants · temples · groceries · sweets · events &amp; more</div>
+  <div class="poweredby">Free AI guide · or <a href="/browse">browse by city</a> · restaurants · temples · groceries · sweets · events &amp; more</div>
  </section>
  <section class="section">
   <h2>Explore by category</h2>
