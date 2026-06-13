@@ -34,7 +34,29 @@ _KW = {
     "remittance": "services", "travel": "services", "visa": "services",
     "immigration": "services", "forex": "services",
 }
-_MIN_MISSES = 3  # only recommend something searched at least this many times
+_MIN_MISSES = 3          # min searches before recommending coverage / a topic
+_NEW_VERTICAL_MIN = 4    # min TOTAL searches across a cluster before proposing a new vertical
+
+# Candidate NEW verticals (not in today's set) -> signal keywords. Unmapped misses that match
+# are clustered into a single "consider this vertical" proposal, so scattered demand
+# ("photographer", "decorator", "dj") rolls up into one actionable recommendation.
+_CANDIDATE_VERTICALS: dict[str, tuple[str, ...]] = {
+    "Priests & pandits": ("priest", "pandit", "purohit", "pujari", "panditji"),
+    "Caterers": ("caterer", "catering"),
+    "Wedding services": ("photographer", "videographer", "wedding planner", "decorator",
+                         "mandap", "dj", "dhol", "makeup artist", "mehndi artist", "bridal"),
+    "Tutors & coaching": ("tutor", "tutoring", "coaching", "sat prep", "kumon", "tuition"),
+    "Tiffin & meal services": ("tiffin", "home cooked", "home food", "meal service", "dabba"),
+    "Realtors": ("realtor", "real estate", "realty"),
+    "Finance & legal": ("cpa", "tax preparer", "accountant", "financial advisor",
+                        "insurance agent", "immigration attorney", "lawyer", "attorney"),
+    "Matrimony": ("matrimony", "matchmaker", "matchmaking", "rishta", "biodata"),
+    "Cargo & shipping to India": ("cargo", "shipping to india", "courier to india",
+                                  "excess baggage", "ship to india"),
+    "Astrology & vastu": ("astrologer", "jyotish", "vastu", "horoscope", "kundli"),
+    "Child & elder care": ("babysitter", "nanny", "daycare", "preschool", "child care",
+                           "elder care", "assisted living", "senior care"),
+}
 
 
 def _match_vertical(query: str) -> str | None:
@@ -42,6 +64,14 @@ def _match_vertical(query: str) -> str | None:
     for kw, v in _KW.items():
         if kw in q:
             return v
+    return None
+
+
+def _match_candidate(query: str) -> str | None:
+    q = (query or "").lower()
+    for label, kws in _CANDIDATE_VERTICALS.items():
+        if any(k in q for k in kws):
+            return label
     return None
 
 
@@ -69,42 +99,64 @@ def generate(days: int = 90) -> dict[str, int]:
     """Build/refresh recommendations from the current miss-log. Returns counts."""
     misses = analytics.top_misses(days=days, limit=200)
     created = updated = 0
-    for m in misses:
-        n = m["n"]
-        if n < _MIN_MISSES:
-            continue
-        query = (m.get("query") or "").strip()
-        city, state = m.get("city"), m.get("state")
-        loc = ", ".join(x for x in (city, state) if x) or "an unspecified location"
-        vertical = _match_vertical(query)
+    clusters: dict[str, dict[str, Any]] = {}  # candidate vertical -> {n, examples}
 
-        if vertical:
-            kind, action = "coverage", None
-            label = verticals.VERTICALS.get(vertical, {}).get("label", vertical)
-            metro = _metro_for(city, state)
-            suggestion = (f"Grow {label} coverage in {loc}: {n} unanswered searches. "
-                          + (f"Scrape the '{metro}' metro for {vertical}, "
-                             if metro else "Solicit owner submissions / add manually, ")
-                          + "or run targeted outreach there.")
-            if metro:
-                action = f"scrape:{metro}:{vertical}"
-        else:
-            kind, action = "new_topic", None
-            suggestion = (f"“{query}” ({n} searches) doesn’t map to any current category — "
-                          "consider a new vertical, or whether it's a phrasing we should handle.")
-
-        sig = f"{kind}|{vertical or ''}|{state or ''}|{city or ''}|{query}".lower()[:300]
+    def _upsert(sig, kind, vertical, city, state, query, n, suggestion, action):
+        nonlocal created, updated
         row = db.query_one(
             "INSERT INTO recommendations (signature, kind, vertical, city, state, query, "
             "n_misses, suggestion, action) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) "
             "ON CONFLICT (signature) DO UPDATE SET n_misses = EXCLUDED.n_misses, "
             "suggestion = EXCLUDED.suggestion WHERE recommendations.status = 'pending' "
             "RETURNING (xmax = 0) AS inserted",
-            (sig, kind, vertical, city, state, query, n, suggestion, action))
+            (sig[:300], kind, vertical, city, state, query, n, suggestion, action))
         if row is not None:
             created += int(row["inserted"])
             updated += int(not row["inserted"])
-    return {"scanned": len(misses), "created": created, "updated": updated}
+
+    for m in misses:
+        n = m["n"]
+        query = (m.get("query") or "").strip()
+        city, state = m.get("city"), m.get("state")
+        loc = ", ".join(x for x in (city, state) if x) or "an unspecified location"
+        vertical = _match_vertical(query)
+
+        if vertical:
+            if n < _MIN_MISSES:
+                continue
+            label = verticals.VERTICALS.get(vertical, {}).get("label", vertical)
+            metro = _metro_for(city, state)
+            suggestion = (f"Grow {label} coverage in {loc}: {n} unanswered searches. "
+                          + (f"Scrape the '{metro}' metro for {vertical}, "
+                             if metro else "Solicit owner submissions / add manually, ")
+                          + "or run targeted outreach there.")
+            _upsert(f"coverage|{vertical}|{state or ''}|{city or ''}|{query}".lower(),
+                    "coverage", vertical, city, state, query, n,
+                    suggestion, f"scrape:{metro}:{vertical}" if metro else None)
+            continue
+
+        candidate = _match_candidate(query)
+        if candidate:  # roll up into a new-vertical proposal (don't emit per-query)
+            c = clusters.setdefault(candidate, {"n": 0, "examples": set()})
+            c["n"] += n
+            c["examples"].add(query)
+        elif n >= _MIN_MISSES:  # truly novel phrasing
+            _upsert(f"new_topic||{state or ''}|{city or ''}|{query}".lower(), "new_topic",
+                    None, city, state, query, n,
+                    f"“{query}” ({n} searches) doesn’t map to any category — consider a new "
+                    "vertical or a phrasing we should handle.", None)
+
+    # Proposed NEW verticals, aggregated across the cluster.
+    for label, c in clusters.items():
+        if c["n"] < _NEW_VERTICAL_MIN:
+            continue
+        eg = ", ".join(sorted(c["examples"])[:3])
+        _upsert(f"new_vertical|{label}".lower(), "new_vertical", None, None, None, label, c["n"],
+                f"Consider a new “{label}” vertical — {c['n']} unanswered searches across "
+                f"e.g. {eg}. Not in OSM; would be submission/outreach-fed.", None)
+
+    return {"scanned": len(misses), "created": created, "updated": updated,
+            "proposed_verticals": [k for k, v in clusters.items() if v["n"] >= _NEW_VERTICAL_MIN]}
 
 
 def list_pending(limit: int = 100) -> list[dict]:

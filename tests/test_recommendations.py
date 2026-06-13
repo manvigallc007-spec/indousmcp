@@ -16,6 +16,13 @@ def test_metro_mapping_no_false_substring():
     assert rec._metro_for("San Francisco", "CA") == "bay_area"
 
 
+def test_candidate_vertical_clustering():
+    assert rec._match_candidate("indian wedding photographer near me") == "Wedding services"
+    assert rec._match_candidate("pandit for griha pravesh") == "Priests & pandits"
+    assert rec._match_candidate("tiffin service") == "Tiffin & meal services"
+    assert rec._match_candidate("dosa restaurant") is None  # maps to an existing vertical, not a proposal
+
+
 def test_recommendation_agent_registered():
     from indo_usa_mcp.agents.registry import AGENTS
     from indo_usa_mcp.agents.scheduler import _RUN_ORDER

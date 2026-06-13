@@ -683,7 +683,8 @@ def recommendations_page(request: Request) -> HTMLResponse:
     rows = ""
     for x in recs:
         loc = ", ".join(f for f in (x.get("city"), x.get("state")) if f)
-        tag = "🆕 new category" if x["kind"] == "new_topic" else f"📈 {esc(x.get('vertical'))}"
+        tag = {"new_vertical": "🧩 new vertical", "new_topic": "❓ new topic"}.get(
+            x["kind"], f"📈 {esc(x.get('vertical'))}")
 
         def btn(op, label, gray=False):
             return (f"<form method='post' action='/admin/recommendations' class='inline'>"
