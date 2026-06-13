@@ -6,6 +6,21 @@ from urllib.parse import quote
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Free / OpenAI-compatible LLM presets. Selecting one by name (LLM_PROVIDER=groq) fills in the
+# base URL + a sensible default model + tool-calling capability, so enabling a chatbot LLM is
+# just LLM_PROVIDER + LLM_API_KEY. Any field can still be overridden explicitly via env.
+#  - ollama: self-hosted, truly $0 forever, slow on CPU. Key is ignored ("ollama").
+#  - groq:   free tier, ~1s, no credit card. Fast + good quality. Needs a free LLM_API_KEY.
+#  - gemini: Google AI Studio free tier, OpenAI-compatible endpoint. Needs a free LLM_API_KEY.
+_LLM_PRESETS: dict[str, dict] = {
+    "ollama": {"llm_base_url": "http://localhost:11434/v1",
+               "llm_model": "gemma2:2b", "llm_use_tools": False},
+    "groq": {"llm_base_url": "https://api.groq.com/openai/v1",
+             "llm_model": "llama-3.3-70b-versatile", "llm_use_tools": True},
+    "gemini": {"llm_base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+               "llm_model": "gemini-2.0-flash", "llm_use_tools": False},
+}
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -74,14 +89,13 @@ class Settings(BaseSettings):
     def featured_for_sale(self) -> bool:
         return bool(self.stripe_secret_key and self.featured_sales_enabled)
 
-    # Human chatbot front-end (/chat). Pluggable LLM via the OpenAI-compatible chat API:
-    #   llm_provider = "search"  -> no LLM, templated semantic-search replies (free, default)
-    #   llm_provider = "llm"     -> real tool-calling chatbot against llm_base_url
-    # For self-hosted Ollama (free): llm_provider=llm, llm_base_url=http://localhost:11434/v1,
-    #   llm_api_key=ollama, llm_model=<model> (run `ollama serve` + `ollama pull <model>`).
-    #   Models: llama3.1 / qwen2.5 support tool-calling; gemma2:2b / gemma3 do not — for those
-    #   (and small models on a CPU VPS) set llm_use_tools=false (grounded single-call mode).
-    # For a hosted API: set llm_base_url + a real llm_api_key + llm_model (it meters/bills).
+    # Human chatbot front-end (/chat). Pluggable LLM via the OpenAI-compatible chat API.
+    #   llm_provider = "search"           -> no LLM, templated semantic-search replies (default, $0)
+    #   llm_provider = "ollama"|"groq"|"gemini" -> a preset (see _LLM_PRESETS): just add LLM_API_KEY
+    #   llm_provider = "llm"              -> fully custom: set llm_base_url + llm_model yourself
+    # The API key NEVER lives in code — set LLM_API_KEY via .env / environment only.
+    #   Quick start (free, fast): LLM_PROVIDER=groq + LLM_API_KEY=<your free Groq key>.
+    #   Zero-cost-forever: LLM_PROVIDER=ollama (self-hosted; slower on CPU, key ignored).
     chat_enabled: bool = True
     llm_provider: str = "search"
     llm_base_url: str = "http://localhost:11434/v1"
@@ -89,9 +103,44 @@ class Settings(BaseSettings):
     llm_model: str = "llama3.1"
     # True = function/tool-calling (needs a tool-capable model). False = grounded RAG: search
     # first, then one LLM call to phrase the answer — works with Gemma & any small model, and
-    # is faster on a no-GPU VPS. Recommended for self-hosted small models.
+    # is faster on a no-GPU VPS. A preset sets a sensible default; override here if needed.
     llm_use_tools: bool = True
     llm_timeout_s: int = 60
+
+    @property
+    def _llm_preset(self) -> dict:
+        return _LLM_PRESETS.get(self.llm_provider.strip().lower(), {})
+
+    @property
+    def llm_enabled(self) -> bool:
+        """Any non-'search' provider means a real LLM should be used."""
+        return self.llm_provider.strip().lower() != "search"
+
+    def _llm_resolved_str(self, field: str) -> str:
+        """For a preset provider: an explicit, NON-EMPTY env value wins; otherwise the preset's
+        value. (Blank is treated as 'use the preset' — compose can inject empty defaults.)
+        For 'search'/'llm' there's no preset, so the explicit field is used as-is."""
+        preset = self._llm_preset
+        if preset:
+            explicit = getattr(self, field)
+            if field in self.model_fields_set and explicit:
+                return explicit
+            return preset[field]
+        return getattr(self, field)
+
+    @property
+    def effective_llm_base_url(self) -> str:
+        return self._llm_resolved_str("llm_base_url")
+
+    @property
+    def effective_llm_model(self) -> str:
+        return self._llm_resolved_str("llm_model")
+
+    @property
+    def effective_llm_use_tools(self) -> bool:
+        # A preset knows the right mode for its model (Groq tool-calls; Gemma/Gemini grounded).
+        preset = self._llm_preset
+        return bool(preset["llm_use_tools"]) if preset else self.llm_use_tools
     chat_rate_per_min: int = 20            # per-IP request cap on the chat API (abuse guard)
     api_rate_per_min: int = 60             # per-IP request cap on the public read-only JSON API
     # When the directory has no answer but the question is relevant to Indian-American life in

@@ -83,15 +83,16 @@ services:
       CLAIM_BASE_URL: ${CLAIM_BASE_URL:-https://yourdomain.com/claim}
       PLATFORM_NAME: ${PLATFORM_NAME:-Indian Eats Directory}
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:8080}
-      # Human chatbot (/chat). Default = free no-LLM semantic search. For a real conversational
-      # bot set LLM_PROVIDER=llm and point at Ollama (free, self-hosted) or a hosted API key.
+      # Human chatbot (/chat). Default = free no-LLM semantic search ($0). For a real bot pick a
+      # preset and add a key: LLM_PROVIDER=groq + LLM_API_KEY=<free Groq key> (fast, free), or
+      # LLM_PROVIDER=ollama (self-hosted via the `llm` profile below, $0 but slow on CPU).
+      # NOTE: leave LLM_BASE_URL/LLM_MODEL BLANK for a preset — the preset fills them. Set them
+      # only for LLM_PROVIDER=llm (fully custom) or to override a preset's default model.
       CHAT_ENABLED: ${CHAT_ENABLED:-true}
       LLM_PROVIDER: ${LLM_PROVIDER:-search}
-      # Containerized default points at the opt-in `ollama` service below (enable with the
-      # `llm` profile). For host-installed Ollama use http://host.docker.internal:11434/v1.
-      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434/v1}
       LLM_API_KEY: ${LLM_API_KEY:-ollama}
-      LLM_MODEL: ${LLM_MODEL:-gemma2:2b}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
       LLM_USE_TOOLS: ${LLM_USE_TOOLS:-false}
       # Admin dashboard + owner portal sessions (set these to enable /admin).
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}

@@ -194,13 +194,13 @@ def _location_note(geo: dict | None) -> str | None:
 
 # ------------------------------------------------------------------- LLM transport
 def _chat(messages: list[dict], use_tools: bool) -> dict:
-    payload: dict[str, Any] = {"model": settings.llm_model, "messages": messages,
+    payload: dict[str, Any] = {"model": settings.effective_llm_model, "messages": messages,
                                "temperature": 0.3}
     if use_tools:
         payload["tools"] = _TOOLS
         payload["tool_choice"] = "auto"
     resp = httpx.post(
-        f"{settings.llm_base_url.rstrip('/')}/chat/completions",
+        f"{settings.effective_llm_base_url.rstrip('/')}/chat/completions",
         headers={"Authorization": f"Bearer {settings.llm_api_key}"},
         json=payload, timeout=settings.llm_timeout_s)
     resp.raise_for_status()
@@ -407,7 +407,8 @@ def enabled() -> bool:
 
 
 def llm_active() -> bool:
-    return settings.llm_provider == "llm" and bool(settings.llm_base_url and settings.llm_model)
+    return settings.llm_enabled and bool(settings.effective_llm_base_url
+                                         and settings.effective_llm_model)
 
 
 # Local-intent words that benefit from a location; and a crude "did they name a place" check.
@@ -451,7 +452,7 @@ def reply(messages: list[dict], geo: dict | None = None, filters: dict | None = 
     query = _search_query(messages)
     if llm_active():
         try:
-            engine = _llm_reply if settings.llm_use_tools else _grounded_reply
+            engine = _llm_reply if settings.effective_llm_use_tools else _grounded_reply
             out = engine(messages, geo, filters)
         except Exception as exc:  # LLM unreachable/misconfigured -> degrade to search
             out = _search_reply(messages, geo, filters)
