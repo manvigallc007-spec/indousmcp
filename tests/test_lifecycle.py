@@ -9,7 +9,8 @@ def test_events_excluded_from_lifecycle():
     assert set(vs) == set(verticals.VERTICALS) - {"events"}
 
 
-def test_lifecycle_agent_registered():
+def test_lifecycle_and_linkcheck_agents_registered():
     from indo_usa_mcp.agents.registry import AGENTS
     from indo_usa_mcp.agents.scheduler import _RUN_ORDER
-    assert "lifecycle" in AGENTS and "lifecycle" in _RUN_ORDER
+    for a in ("lifecycle", "link_check"):
+        assert a in AGENTS and a in _RUN_ORDER

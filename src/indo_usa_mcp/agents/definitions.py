@@ -399,6 +399,18 @@ class WebEnrichmentAgent(Agent):
         )
 
 
+class LinkCheckAgent(Agent):
+    name = "link_check"
+    description = "Probes listing websites; removes a URL after it's confirmed dead twice (trust)."
+    default_interval_s = 604800  # weekly
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from .. import linkcheck
+        return linkcheck.check_links(
+            limit_per_vertical=params.get("limit_per_vertical", 50),
+            max_age_days=params.get("max_age_days", 14))
+
+
 class LifecycleAgent(Agent):
     name = "lifecycle"
     description = ("Archives listings unseen for a very long time (soft-delete, reversible) and "
@@ -502,6 +514,7 @@ ALL_AGENTS = [
     EventScraperAgent(),
     EventCleanerAgent(),
     WebEnrichmentAgent(),
+    LinkCheckAgent(),
     LifecycleAgent(),
     ReportingAgent(),
     MonitoringAgent(),
