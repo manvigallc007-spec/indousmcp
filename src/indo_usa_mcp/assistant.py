@@ -224,7 +224,7 @@ def _grounded_reply(messages: list[dict], geo: dict | None, filters: dict | None
     """RAG-style single-call reply: search first, then have the LLM write the answer over the
     results. No tool-calling — works with Gemma and any small model, and is faster on a CPU
     VPS (one LLM call instead of several tool round-trips)."""
-    query = _last_user(messages)
+    query = _search_query(messages)
     res = _run_search({"query": query}, filters, geo) if query else {"results": [], "count": 0}
     convo: list[dict] = [{"role": "system", "content": _SYSTEM_GROUNDED}]
     for extra in (_location_note(geo), _filter_note(filters)):
@@ -246,8 +246,24 @@ def _last_user(messages: list[dict]) -> str:
     return ""
 
 
+def _is_clarify(content: str) -> bool:
+    return (content or "").startswith("Which city or area")
+
+
+def _search_query(messages: list[dict]) -> str:
+    """The text to search. If our previous turn asked for a location, merge the original
+    request with the location the user just gave (so 'restaurants' + 'Edison' -> both)."""
+    users = [m.get("content", "") for m in messages if m.get("role") == "user"]
+    asst = [m.get("content", "") for m in messages if m.get("role") == "assistant"]
+    if not users:
+        return ""
+    if asst and _is_clarify(asst[-1]) and len(users) >= 2:
+        return f"{users[-2]} {users[-1]}".strip()[:300]
+    return users[-1].strip()
+
+
 def _search_reply(messages: list[dict], geo: dict | None, filters: dict | None) -> dict:
-    query = _last_user(messages)
+    query = _search_query(messages)
     if not query:
         return {"reply": "Tell me what you're looking for — a restaurant, temple, sweets shop, "
                 "event, and a city.", "cards": [], "provider": "search"}
@@ -282,11 +298,14 @@ _STATES = ("al", "ak", "az", "ar", "ca", "co", "ct", "de", "fl", "ga", "hi", "id
 
 
 def _needs_location(messages: list[dict], geo: dict | None, filters: dict | None) -> bool:
-    """Conservative: ask for a city only when there's no geo, clear local intent, and no
-    location hint anywhere in the conversation. Never blocks a query that names a place."""
+    """Ask for a city only ONCE — on the first turn — when there's no geo, clear local intent,
+    and no place named. After we've replied at all, never re-ask: the user's next message is
+    taken as the location (see _search_query). This prevents the clarify loop."""
     if geo:
         return False
-    text = " ".join(m.get("content", "") for m in messages if m.get("role") == "user").lower()
+    if any(m.get("role") == "assistant" for m in messages):
+        return False  # we've already responded once — don't loop; treat next msg as the answer
+    text = _last_user(messages).lower()
     if not text:
         return False
     has_intent = any(w in text for w in _LOCAL_WORDS) or bool((filters or {}).get("vertical"))
@@ -303,8 +322,8 @@ def reply(messages: list[dict], geo: dict | None = None, filters: dict | None = 
     """Produce an assistant reply for a chat history. Never raises into the web layer."""
     messages = [m for m in (messages or []) if m.get("role") in ("user", "assistant")][-12:]
     if _needs_location(messages, geo, filters):
-        return {"reply": "Happy to help! Which city or area should I look in — or tap “share "
-                "location” so I can find places near you?", "cards": [], "provider": "clarify"}
+        return {"reply": "Which city or area should I look in? For example: “Edison, NJ”, "
+                "“Jersey City”, or “Bay Area”.", "cards": [], "provider": "clarify"}
     if llm_active():
         try:
             engine = _llm_reply if settings.llm_use_tools else _grounded_reply

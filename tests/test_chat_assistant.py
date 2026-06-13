@@ -147,6 +147,24 @@ def test_location_clarification(no_db, monkeypatch):
     assert out2["provider"] != "clarify"
 
 
+def test_no_clarify_loop(no_db, monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "search")
+    out1 = assistant.reply([{"role": "user", "content": "restaurants near me"}])
+    assert out1["provider"] == "clarify"               # turn 1 asks once
+    history = [{"role": "user", "content": "restaurants near me"},
+               {"role": "assistant", "content": out1["reply"]},
+               {"role": "user", "content": "Edison NJ"}]
+    out2 = assistant.reply(history)
+    assert out2["provider"] != "clarify"               # turn 2 proceeds (no loop)
+
+
+def test_search_query_merges_location_followup():
+    msgs = [{"role": "user", "content": "vegetarian restaurant"},
+            {"role": "assistant", "content": "Which city or area should I look in? ..."},
+            {"role": "user", "content": "Edison"}]
+    assert assistant._search_query(msgs) == "vegetarian restaurant Edison"
+
+
 def test_landing_page_renders_with_share_meta():
     r = TestClient(app).get("/")
     assert r.status_code == 200 and "/chat" in r.text and 'property="og:title"' in r.text
