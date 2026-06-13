@@ -399,6 +399,17 @@ class WebEnrichmentAgent(Agent):
         )
 
 
+class LifecycleAgent(Agent):
+    name = "lifecycle"
+    description = ("Archives listings unseen for a very long time (soft-delete, reversible) and "
+                  "restores any the scraper has re-seen. Decay, never hard-delete.")
+    default_interval_s = 604800  # weekly
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from .. import lifecycle
+        return lifecycle.run(unseen_days=params.get("unseen_days", 180))
+
+
 class ReportingAgent(Agent):
     name = "reporting"
     description = "Computes the daily health & growth report and emails it."
@@ -491,6 +502,7 @@ ALL_AGENTS = [
     EventScraperAgent(),
     EventCleanerAgent(),
     WebEnrichmentAgent(),
+    LifecycleAgent(),
     ReportingAgent(),
     MonitoringAgent(),
 ]
