@@ -12,7 +12,7 @@ from starlette.routing import Route
 from .. import payments, submissions, verticals
 from ..config import settings
 from ..pipeline import compliance, ingest, outreach
-from .chat import _CAT_COLOR, _CAT_ICON
+from .landing import CATEGORY_CSS, category_grid
 from .common import _page, esc as _esc
 
 # Text fields shown on the owner edit form (label, restaurant field).
@@ -84,12 +84,7 @@ a{color:var(--brand);text-decoration:none}
 .poweredby{color:#9aa0a6;font-size:12px;margin-top:14px}
 .section{max-width:1000px;margin:0 auto;padding:34px 20px}
 .section h2{text-align:center;font-size:13px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0 0 18px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:12px}
-.tile{background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px;display:flex;
- align-items:center;gap:12px;color:var(--ink);font-weight:600;font-size:15px;transition:.15s}
-.tile:hover{border-color:var(--c);transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.06)}
-.tile .ic{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-size:20px;
- background:#f4f2f0;background:color-mix(in srgb,var(--c) 14%,#fff)}
+__CATCSS__
 .vals{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px}
 .val{text-align:center;padding:10px}.val .vi{font-size:26px}
 .val h3{margin:8px 0 4px;font-size:16px}.val p{color:var(--muted);font-size:14px;margin:0}
@@ -111,7 +106,7 @@ footer{text-align:center;color:#9aa0a6;font-size:14px;padding:22px 20px 48px;bor
  </section>
  <section class="section">
   <h2>Explore by category</h2>
-  <div class="grid">__TILES__</div>
+  __TILES__
  </section>
  <section class="section">
   <div class="vals">
@@ -134,14 +129,10 @@ def home(request: Request) -> HTMLResponse:
     aname = html.escape(settings.assistant_name)
     desc = (f"Find Indian restaurants, sweets, temples, events, classes, salons, jewelry and more "
             f"across the USA — with {settings.assistant_name}, your free AI guide.")
-    tiles = "".join(
-        f"<a class='tile' href='/chat' style='--c:{_CAT_COLOR.get(k, '#777')}'>"
-        f"<span class='ic'>{_CAT_ICON.get(k, '•')}</span><span>{html.escape(cfg['label'])}</span></a>"
-        for k, cfg in verticals.VERTICALS.items())
     repl = {
         "__PLAT__": plat, "__ANAME__": aname,
         "__TAGLINE__": html.escape(settings.platform_tagline),
-        "__SUB__": html.escape(desc), "__TILES__": tiles,
+        "__SUB__": html.escape(desc), "__TILES__": category_grid(), "__CATCSS__": CATEGORY_CSS,
         "__OGURL__": html.escape(settings.public_web_url.rstrip("/") + "/"),
         "__OGIMG__": html.escape(settings.public_web_url.rstrip("/") + "/icon.svg"),
         "__OGDESC__": html.escape(desc),

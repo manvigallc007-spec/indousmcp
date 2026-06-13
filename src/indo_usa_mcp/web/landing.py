@@ -18,9 +18,63 @@ from starlette.routing import Route
 
 from .. import db, verticals
 from ..config import settings
+from .chat import _CAT_BLURB, _CAT_COLOR, _CAT_ICON
 
 _BRAND = "#c1440e"
 _FEATURED = "(is_featured AND (featured_until IS NULL OR featured_until > now()))"
+
+# Shared CSS for the category identity (rich cards + category header band). Reused on the
+# home page and every browse page so categories look consistent everywhere.
+CATEGORY_CSS = """
+.catgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(225px,1fr));gap:12px;margin:16px 0}
+.catcard{display:flex;align-items:center;gap:13px;background:#fff;border:1px solid #ececec;
+ border-radius:14px;padding:15px;color:#1f2430;transition:.15s}
+.catcard:hover{border-color:var(--c);transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.07)}
+.catcard .cc-ic{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;font-size:24px;
+ background:#f4f2f0;background:color-mix(in srgb,var(--c) 16%,#fff);flex:0 0 auto}
+.catcard .cc-tx{display:flex;flex-direction:column;line-height:1.3;min-width:0}
+.catcard .cc-tx b{font-size:15px} .catcard .cc-n{color:var(--c);font-size:12px;font-weight:700}
+.catcard .cc-bl{color:#6b7280;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cathead{display:flex;align-items:center;gap:14px;border:1px solid #ececec;border-left:5px solid var(--c);
+ background:color-mix(in srgb,var(--c) 8%,#fff);border-radius:14px;padding:14px 16px;margin:6px 0 18px}
+.cathead .ch-ic{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;font-size:25px;background:#fff}
+.cathead b{font-size:21px;line-height:1.15}
+"""
+
+
+def _counts() -> dict[str, int]:
+    out: dict[str, int] = {}
+    for v in verticals.VERTICALS:
+        try:
+            out[v] = db.query_one(
+                f"SELECT count(*) AS n FROM {verticals._table(v)} "
+                f"WHERE deleted_at IS NULL AND is_active")["n"]
+        except Exception:
+            out[v] = 0
+    return out
+
+
+def category_grid() -> str:
+    """Rich category cards (icon + name + live count + blurb) — used on home and /browse."""
+    counts = _counts()
+    cells = []
+    for v, cfg in verticals.VERTICALS.items():
+        href = "/events" if v == "events" else f"/browse/{v}"
+        n = counts.get(v, 0)
+        cells.append(
+            f"<a class='catcard' href='{href}' style='--c:{_CAT_COLOR.get(v, '#777')}'>"
+            f"<span class='cc-ic'>{_CAT_ICON.get(v, '•')}</span>"
+            f"<span class='cc-tx'><b>{html.escape(cfg['label'])}</b>"
+            f"<span class='cc-n'>{n} listing{'s' if n != 1 else ''}</span>"
+            f"<span class='cc-bl'>{html.escape(_CAT_BLURB.get(v, ''))}</span></span></a>")
+    return f"<div class='catgrid'>{''.join(cells)}</div>"
+
+
+def _cathead(v: str) -> str:
+    return (f"<div class='cathead' style='--c:{_CAT_COLOR.get(v, '#777')}'>"
+            f"<span class='ch-ic'>{_CAT_ICON.get(v, '•')}</span>"
+            f"<span><b>{html.escape(_label(v))}</b><br>"
+            f"<span class='muted'>{html.escape(_CAT_BLURB.get(v, ''))}</span></span></div>")
 
 
 def _slug(s: str) -> str:
@@ -67,6 +121,7 @@ def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200)
  .lc .ver{{color:#1565c0;font-weight:600}} .lc .rate{{color:#b45309;font-weight:600}}
  .cta{{background:{_BRAND};color:#fff;padding:11px 18px;border-radius:10px;display:inline-block;margin-top:8px}}
  nav.crumbs{{font-size:13px;margin-bottom:14px}}
+{CATEGORY_CSS}
 </style></head><body>
 <header><a href="/">{plat}</a> &nbsp;·&nbsp; <a href="/browse">Browse</a> &nbsp;·&nbsp; <a href="/chat">Ask the assistant</a></header>
 <main>{body}</main></body></html>"""
@@ -79,14 +134,11 @@ def _label(v: str) -> str:
 
 # ---------------------------------------------------------------- browse indexes
 def browse_root(request: Request) -> HTMLResponse:
-    chips = "".join(
-        f"<a class='chip' href='{'/events' if v == 'events' else '/browse/' + v}'>"
-        f"{html.escape(cfg['label'])}</a>" for v, cfg in verticals.VERTICALS.items())
     body = ("<h1>Browse the Indian-American directory</h1>"
             "<p class='muted'>Find restaurants, temples, groceries, events and more by city, "
             "across the USA.</p>"
-            f"<div class='chips'>{chips}</div>"
-            "<p style='margin-top:18px'><a class='cta' href='/events'>📅 Upcoming events &amp; festivals →</a></p>")
+            f"{category_grid()}"
+            "<p style='margin-top:6px'><a class='cta' href='/events'>📅 Upcoming events &amp; festivals →</a></p>")
     return _page(f"Browse · {settings.platform_name}",
                  "Browse Indian-American businesses, temples and events by category and city.", body)
 
@@ -102,7 +154,7 @@ def browse_vertical(request: Request) -> HTMLResponse:
         f"<a class='chip' href='/browse/{v}/{_slug(r['state'])}'>{html.escape(r['state'])} "
         f"<span class='muted'>({r['n']})</span></a>" for r in rows if r["state"] and r["state"] != "(unknown)")
     body = (f"<nav class='crumbs'><a href='/browse'>Browse</a> › {html.escape(_label(v))}</nav>"
-            f"<h1>Indian {html.escape(_label(v))} in the USA</h1>"
+            f"{_cathead(v)}"
             "<p class='muted'>Pick a state to see cities.</p>"
             f"<div class='chips'>{items}</div>")
     return _page(f"Indian {_label(v)} in the USA · {settings.platform_name}",
@@ -120,6 +172,7 @@ def browse_state(request: Request) -> HTMLResponse:
     label = _label(v)
     body = (f"<nav class='crumbs'><a href='/browse'>Browse</a> › "
             f"<a href='/browse/{v}'>{html.escape(label)}</a> › {html.escape(state.upper())}</nav>"
+            f"{_cathead(v)}"
             f"<h1>Indian {html.escape(label)} in {html.escape(state.upper())}</h1>"
             "<p class='muted'>Pick a city.</p>"
             f"<div class='chips'>{items or '<span class=muted>No listings yet.</span>'}</div>")
@@ -191,6 +244,7 @@ def browse_city(request: Request) -> HTMLResponse:
     body = (f"<nav class='crumbs'><a href='/browse'>Browse</a> › "
             f"<a href='/browse/{v}'>{html.escape(label)}</a> › "
             f"<a href='/browse/{v}/{_slug(state)}'>{html.escape(state.upper())}</a> › {html.escape(city.title())}</nav>"
+            f"{_cathead(v)}"
             f"<h1>{html.escape(h1)}</h1>"
             f"<p class='muted'>{len(rows)} listing{'s' if len(rows) != 1 else ''}. "
             f"<a href='/chat'>Ask {html.escape(settings.assistant_name)}</a> for personalized picks.</p>"
