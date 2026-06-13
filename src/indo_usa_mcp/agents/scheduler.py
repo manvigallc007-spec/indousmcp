@@ -32,7 +32,7 @@ _RUN_ORDER = [
     "studio_scraper", "studio_cleaner",
     "service_scraper", "service_cleaner",
     "event_feed_discovery", "event_scraper", "event_cleaner",
-    "web_enrichment", "link_check", "lifecycle",
+    "web_enrichment", "link_check", "recommendation", "lifecycle",
     "discovery", "outreach", "reporting", "monitoring", "submission",
 ]
 

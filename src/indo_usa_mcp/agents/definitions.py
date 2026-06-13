@@ -399,6 +399,16 @@ class WebEnrichmentAgent(Agent):
         )
 
 
+class RecommendationAgent(Agent):
+    name = "recommendation"
+    description = "Turns unanswered searches (miss-log) into reviewable build recommendations."
+    default_interval_s = 86400  # daily
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from .. import recommendations
+        return recommendations.generate(days=params.get("days", 90))
+
+
 class LinkCheckAgent(Agent):
     name = "link_check"
     description = "Probes listing websites; removes a URL after it's confirmed dead twice (trust)."
@@ -515,6 +525,7 @@ ALL_AGENTS = [
     EventCleanerAgent(),
     WebEnrichmentAgent(),
     LinkCheckAgent(),
+    RecommendationAgent(),
     LifecycleAgent(),
     ReportingAgent(),
     MonitoringAgent(),

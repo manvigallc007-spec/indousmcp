@@ -8,7 +8,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Route
 
-from .. import analytics, db, payments, quality, reporting, submissions, verticals
+from .. import analytics, db, payments, quality, recommendations, reporting, submissions, verticals
 from ..agents import AGENTS, run_agent
 from ..events import pipeline as events
 from ..config import settings
@@ -675,6 +675,58 @@ def _scalar(sql: str) -> int:
     return int(list(row.values())[0]) if row else 0
 
 
+def recommendations_page(request: Request) -> HTMLResponse:
+    if (r := require_admin(request)):
+        return r
+    s = recommendations.summary()
+    recs = recommendations.list_pending()
+    rows = ""
+    for x in recs:
+        loc = ", ".join(f for f in (x.get("city"), x.get("state")) if f)
+        tag = "🆕 new category" if x["kind"] == "new_topic" else f"📈 {esc(x.get('vertical'))}"
+
+        def btn(op, label, gray=False):
+            return (f"<form method='post' action='/admin/recommendations' class='inline'>"
+                    f"<input type='hidden' name='id' value='{x['id']}'>"
+                    f"<button class='btn{' gray' if gray else ''}' name='op' value='{op}'>{label}</button></form> ")
+        actions = btn("dismiss", "Dismiss", True)
+        if (x.get("action") or "").startswith("scrape:"):
+            actions = btn("approve_scrape", "Approve &amp; scrape") + actions
+        else:
+            actions = btn("approve", "Approve") + actions
+        rows += (f"<tr><td>{tag}<br><span class='muted'>{esc(loc)}</span></td>"
+                 f"<td>{esc(x['suggestion'])}</td><td>{x['n_misses']}</td><td>{actions}</td></tr>")
+    cards = (f"<div class='cards'><div class='kpi'><b>{s['pending']}</b><span>pending</span></div>"
+             f"<div class='kpi'><b>{s['approved']}</b><span>approved</span></div>"
+             f"<div class='kpi'><b>{s['done']}</b><span>done</span></div>"
+             f"<div class='kpi'><b>{s['dismissed']}</b><span>dismissed</span></div></div>")
+    table = (f"<table><tr><th>Type / area</th><th>Recommendation</th><th>Demand</th><th></th></tr>{rows}</table>"
+             if rows else "<p class='muted'>No pending recommendations. The agent generates these "
+             "from unanswered searches (see <a href='/admin/misses'>Misses</a>).</p>")
+    body = ("<p class='muted'>Demand-driven build suggestions, generated from searches that "
+            "returned nothing. Approve to act (scrape / add / outreach), or dismiss.</p>"
+            + cards + table)
+    return admin_page("Recommendations", body, active="Recommendations")
+
+
+async def recommendations_action(request: Request) -> HTMLResponse:
+    if (r := require_admin(request)):
+        return r
+    form = await request.form()
+    try:
+        rid = int(form.get("id"))
+    except (TypeError, ValueError):
+        return RedirectResponse("/admin/recommendations", status_code=303)
+    op = form.get("op")
+    if op == "approve":
+        recommendations.approve(rid)
+    elif op == "approve_scrape":
+        recommendations.approve(rid, run_scrape=True)
+    elif op == "dismiss":
+        recommendations.dismiss(rid)
+    return RedirectResponse("/admin/recommendations", status_code=303)
+
+
 def misses_page(request: Request) -> HTMLResponse:
     if (r := require_admin(request)):
         return r
@@ -769,6 +821,8 @@ routes = [
     Route("/admin/agents", agents_action, methods=["POST"]),
     Route("/admin/traffic", traffic_page, methods=["GET"]),
     Route("/admin/misses", misses_page, methods=["GET"]),
+    Route("/admin/recommendations", recommendations_page, methods=["GET"]),
+    Route("/admin/recommendations", recommendations_action, methods=["POST"]),
     Route("/admin/payments", payments_page, methods=["GET"]),
     Route("/admin/reports", reports_page, methods=["GET"]),
     Route("/admin/reports", reports_action, methods=["POST"]),
