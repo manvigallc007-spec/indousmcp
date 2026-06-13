@@ -13,7 +13,7 @@ import html
 import json
 
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, Response
+from starlette.responses import HTMLResponse, RedirectResponse, Response
 from starlette.routing import Route
 
 from .. import db, verticals
@@ -78,12 +78,13 @@ def _label(v: str) -> str:
 # ---------------------------------------------------------------- browse indexes
 def browse_root(request: Request) -> HTMLResponse:
     chips = "".join(
-        f"<a class='chip' href='/browse/{v}'>{html.escape(cfg['label'])}</a>"
-        for v, cfg in verticals.VERTICALS.items())
+        f"<a class='chip' href='{'/events' if v == 'events' else '/browse/' + v}'>"
+        f"{html.escape(cfg['label'])}</a>" for v, cfg in verticals.VERTICALS.items())
     body = ("<h1>Browse the Indian-American directory</h1>"
             "<p class='muted'>Find restaurants, temples, groceries, events and more by city, "
             "across the USA.</p>"
-            f"<div class='chips'>{chips}</div>")
+            f"<div class='chips'>{chips}</div>"
+            "<p style='margin-top:18px'><a class='cta' href='/events'>📅 Upcoming events &amp; festivals →</a></p>")
     return _page(f"Browse · {settings.platform_name}",
                  "Browse Indian-American businesses, temples and events by category and city.", body)
 
@@ -92,6 +93,8 @@ def browse_vertical(request: Request) -> HTMLResponse:
     v = request.path_params["vertical"]
     if v not in verticals.VERTICALS:
         return _page("Not found", "Unknown category.", "<h1>Not found</h1>", status=404)
+    if v == "events":  # events are date-based — send to the calendar
+        return RedirectResponse("/events", status_code=307)
     rows = verticals.geo_summary(v)  # states with active counts
     items = "".join(
         f"<a class='chip' href='/browse/{v}/{_slug(r['state'])}'>{html.escape(r['state'])} "
@@ -188,10 +191,67 @@ def browse_city(request: Request) -> HTMLResponse:
                  body, jsonld=jsonld)
 
 
+def _when(dt) -> str:
+    if not hasattr(dt, "strftime"):
+        return str(dt)[:16]
+    return dt.strftime("%a, %b %d, %Y · %I:%M %p")
+
+
+def events_page(request: Request) -> HTMLResponse:
+    """Public upcoming-events / festival calendar (chronological), with schema.org Event JSON-LD."""
+    from ..events import queries as eq
+    state = request.query_params.get("state") or None
+    city = request.query_params.get("city") or None
+    category = request.query_params.get("category") or None
+    res = eq.get_indian_events(city=city, state=state, category=category, limit=80)
+    rows = res.get("results", [])
+    where = ", ".join(x for x in (city, (state.upper() if state else None)) if x) or "the USA"
+    h1 = f"Upcoming Indian-American events in {where}"
+
+    if not rows:
+        body = (f"<h1>{html.escape(h1)}</h1><p class='muted'>No upcoming events listed yet — "
+                f"<a href='/chat'>ask the assistant</a> or check back soon. Organizers: publish a "
+                f"public calendar (.ics) and our agents pick it up automatically.</p>")
+        return _page(f"{h1} · {settings.platform_name}", "Upcoming Indian-American festivals and events.", body)
+
+    cards, graph = "", []
+    for r in rows:
+        loc = ", ".join(x for x in (r.get("venue_name"), r.get("city"), r.get("state")) if x)
+        cat = f" <span class='feat'>{html.escape(r['category'])}</span>" if r.get("category") else ""
+        link = f"<a href='{html.escape(r['website'])}' rel='nofollow'>details</a>" if r.get("website") else ""
+        cards += (f"<div class='lc'><div class='meta'>{html.escape(_when(r.get('start_at')))}</div>"
+                  f"<h3>{html.escape(r['name'])}{cat}</h3>"
+                  + (f"<div class='meta'>📍 {html.escape(loc)}</div>" if loc else "")
+                  + (f"<p>{html.escape((r.get('description') or '')[:200])}</p>" if r.get("description") else "")
+                  + (f"<div class='meta'>{link}</div>" if link else "") + "</div>")
+        ev = {"@type": "Event", "name": r["name"]}
+        if hasattr(r.get("start_at"), "isoformat"):
+            ev["startDate"] = r["start_at"].isoformat()
+        if hasattr(r.get("end_at"), "isoformat"):
+            ev["endDate"] = r["end_at"].isoformat()
+        if r.get("venue_name") or r.get("city"):
+            ev["location"] = {"@type": "Place", "name": r.get("venue_name") or r.get("city"),
+                              "address": ", ".join(x for x in (r.get("address_full"), r.get("city"),
+                                                               r.get("state")) if x)}
+        if r.get("website"):
+            ev["url"] = r["website"]
+        graph.append(ev)
+
+    jsonld = json.dumps({"@context": "https://schema.org", "@graph": graph})
+    body = (f"<nav class='crumbs'><a href='/browse'>Browse</a> › Events</nav>"
+            f"<h1>{html.escape(h1)}</h1>"
+            f"<p class='muted'>{len(rows)} upcoming · festivals, garba, concerts, pujas and more. "
+            f"<a href='/chat'>Ask {html.escape(settings.assistant_name)}</a> what's on near you.</p>"
+            f"{cards}")
+    return _page(f"{h1} · {settings.platform_name}",
+                 f"Upcoming Indian-American festivals & events in {where} — dates, venues, details.",
+                 body, jsonld=jsonld)
+
+
 # -------------------------------------------------------------- crawler files
 def sitemap(request: Request) -> Response:
     base = _base()
-    urls = [f"{base}/", f"{base}/browse", f"{base}/chat"]
+    urls = [f"{base}/", f"{base}/browse", f"{base}/chat", f"{base}/events"]
     urls += [f"{base}/browse/{v}" for v in verticals.VERTICALS]
     # All (vertical × city) pages that actually have active listings.
     for v in verticals.VERTICALS:
@@ -231,6 +291,7 @@ def llms_txt(request: Request) -> Response:
 
 routes = [
     Route("/browse", browse_root, methods=["GET"]),
+    Route("/events", events_page, methods=["GET"]),
     Route("/browse/{vertical}", browse_vertical, methods=["GET"]),
     Route("/browse/{vertical}/{state}", browse_state, methods=["GET"]),
     Route("/browse/{vertical}/{state}/{city}", browse_city, methods=["GET"]),
