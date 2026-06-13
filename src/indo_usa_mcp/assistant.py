@@ -40,6 +40,13 @@ _SYSTEM_GROUNDED = (
     "cards below your reply."
 )
 
+_SYSTEM_WEB = (
+    "You are a warm, concise guide for Indian-Americans living in the USA. Answer the user's "
+    "question in plain English in 2-4 sentences, using ONLY the reference material provided "
+    "below. This is GENERAL information, NOT from a verified directory — so never list, name, "
+    "or invent any specific business, phone number, address, or price. If the references don't "
+    "actually answer the question, say you're not sure.")
+
 _TOOLS = [{
     "type": "function",
     "function": {
@@ -238,6 +245,10 @@ def _grounded_reply(messages: list[dict], geo: dict | None, filters: dict | None
     VPS (one LLM call instead of several tool round-trips)."""
     query = _search_query(messages)
     res = _run_search({"query": query}, filters, geo) if query else {"results": [], "count": 0}
+    if not res.get("results"):
+        # No directory hit: skip the LLM call here and let reply() run the relevance gate +
+        # free web fallback (avoids spending a slow CPU LLM call just to say "nothing matched").
+        return {"reply": "", "cards": [], "provider": "llm", "_empty": True}
     convo: list[dict] = [{"role": "system", "content": _SYSTEM_GROUNDED}]
     for extra in (_location_note(geo), _filter_note(filters)):
         if extra:
@@ -289,6 +300,107 @@ def _search_reply(messages: list[dict], geo: dict | None, filters: dict | None) 
     return {"reply": text, "cards": _cards(res), "provider": "search"}
 
 
+# --------------------------------------------- relevance gate + free web fallback
+# Signals that a free-text question is about Indian / Indian-American life in the USA. Used ONLY
+# when the directory returns nothing, to decide between a web answer and a polite decline.
+_TOPIC_SIGNALS = (
+    "india", "indian", "indo", "desi", "hindustani", "bharat", "south asian", "subcontinent",
+    "hindu", "sikh", "jain", "mandir", "gurdwara", "gurudwara", "puja", "pooja", "aarti",
+    "bhajan", "swaminarayan", "iskcon",
+    "telugu", "tamil", "gujarati", "punjabi", "bengali", "marathi", "kannada", "malayalam",
+    "hindi", "urdu", "odia", "konkani", "sindhi", "andhra", "kerala", "rajasthani", "assamese",
+    "diwali", "deepavali", "holi", "navratri", "garba", "dussehra", "rakhi", "raksha bandhan",
+    "onam", "pongal", "ganesh", "durga", "ugadi", "baisakhi", "lohri", "sankranti", "janmashtami",
+    "biryani", "dosa", "idli", "samosa", "paneer", "masala", "tandoori", "naan", "chaat",
+    "thali", "mithai", "ladoo", "jalebi", "gulab jamun", "vada", "lassi", "halal", "tiffin",
+    "bollywood", "cricket", "bharatanatyam", "kathak", "carnatic", "sitar", "tabla", "raga",
+    "saree", "sari", "lehenga", "kurta", "sherwani", "mehndi", "henna", "rangoli", "ayurveda",
+    "bhangra", "kirtan", "shaadi", "matrimony", "rishta", "pandit", "priest",
+    "h1b", "h-1b", "green card", "oci", " pio ", "nri", "visa", "remittance",
+    "samaj", "sangam", "mandal", "association",
+)
+
+_VERTICAL_HINTS = {
+    "restaurants": ("restaurant", "food", "eat", "dinner", "lunch", "thali", "biryani", "dosa", "cafe"),
+    "groceries": ("grocery", "spice", "vegetables", "atta", "lentil"),
+    "temples": ("temple", "mandir", "gurdwara", "puja", "worship"),
+    "professionals": ("doctor", "dentist", "clinic", "lawyer", "attorney", "accountant", "cpa", "physician"),
+    "salons": ("salon", "threading", "henna", "mehndi", "beauty", "hairdresser", "bridal"),
+    "sweets": ("sweets", "mithai", "bakery", "ladoo", "jalebi", "halwa"),
+    "studios": ("yoga", "dance", "music", "studio", "bharatanatyam", "tabla", "kathak", "class"),
+    "apparel": ("saree", "sari", "lehenga", "jewelry", "jeweler", "clothing", "boutique"),
+    "services": ("money transfer", "remittance", "travel", "cargo", "shipping", "visa"),
+    "community": ("association", "samaj", "sangam", "organization", "cultural"),
+}
+
+
+def is_indian_american_topic(text: str) -> bool:
+    """Heuristic, free relevance check (no LLM). Permissive toward diaspora topics; rejects
+    clearly off-topic questions (e.g. car repair, generic coding) so we can decline politely."""
+    t = (text or "").lower()
+    if not t:
+        return False
+    return any(s in t for s in _TOPIC_SIGNALS) or any(w in t for w in _LOCAL_WORDS)
+
+
+def _guess_vertical(query: str) -> str | None:
+    t = (query or "").lower()
+    for v, words in _VERTICAL_HINTS.items():
+        if any(w in t for w in words):
+            return v
+    return None
+
+
+def _suggest_add(query: str) -> dict:
+    base = settings.public_web_url.rstrip("/")
+    v = _guess_vertical(query)
+    url = f"{base}/submit" + (f"?vertical={v}" if v else "")
+    return {"label": "➕ Add it to the directory", "url": url, "vertical": v}
+
+
+def _decline(query: str) -> dict:
+    """Politely refuse off-topic questions (kept narrow to Indian-American life in the USA)."""
+    return {"reply": ("I'm focused on Indian-American life in the USA — restaurants, groceries, "
+                      "temples, events, professionals, classes, community groups and the like. I "
+                      "don't have a good answer for that one. Try asking about an Indian business, "
+                      "place, festival, or community topic and I'll do my best!"),
+            "cards": [], "provider": "offtopic"}
+
+
+def _web_snippets_text(snips: list[dict]) -> str:
+    return "\n\n".join(f"[{s.get('source')}] {s.get('title', '')}: {s.get('text', '')}"
+                       for s in snips)
+
+
+def _web_fallback(query: str, geo: dict | None, filters: dict | None) -> dict:
+    """Relevant question the directory can't answer → answer from free web sources (labelled as
+    general info, never as a verified listing) + suggest adding it to the directory."""
+    from . import websearch
+    snips = websearch.lookup(query) if settings.web_fallback_enabled else []
+    answer = ""
+    if snips:
+        if llm_active():
+            try:
+                msg = _chat([{"role": "system", "content": _SYSTEM_WEB},
+                             {"role": "user", "content":
+                              f"Question: {query}\n\nReference material:\n{_web_snippets_text(snips)}"}],
+                            use_tools=False)
+                answer = (msg.get("content") or "").strip()
+            except Exception:
+                answer = ""
+        if not answer:  # no LLM (or it failed): show the top snippet directly
+            top = snips[0]
+            answer = top["text"][:600] + f"\n\n— {top.get('source')}"
+        reply = ("ℹ️ I don't have this in our verified directory, but here's some general "
+                 f"information:\n\n{answer}")
+    else:
+        reply = ("I don't have this in our directory yet, and couldn't find a quick answer "
+                 "online.")
+    add = _suggest_add(query)
+    reply += f"\n\nKnow a place like this? Help others find it — {add['label'].lower()}."
+    return {"reply": reply, "cards": [], "provider": "web", "suggest_add": add}
+
+
 # ----------------------------------------------------------------------- entrypoint
 def enabled() -> bool:
     return settings.chat_enabled
@@ -336,14 +448,23 @@ def reply(messages: list[dict], geo: dict | None = None, filters: dict | None = 
     if _needs_location(messages, geo, filters):
         return {"reply": "Which city or area should I look in? For example: “Edison, NJ”, "
                 "“Jersey City”, or “Bay Area”.", "cards": [], "provider": "clarify"}
+    query = _search_query(messages)
     if llm_active():
         try:
             engine = _llm_reply if settings.llm_use_tools else _grounded_reply
-            return engine(messages, geo, filters)
+            out = engine(messages, geo, filters)
         except Exception as exc:  # LLM unreachable/misconfigured -> degrade to search
             out = _search_reply(messages, geo, filters)
             out["reply"] = ("(Live assistant is unavailable right now — showing a direct "
                             f"search instead.) {out['reply']}")
             out["llm_error"] = type(exc).__name__
-            return out
-    return _search_reply(messages, geo, filters)
+    else:
+        out = _search_reply(messages, geo, filters)
+
+    # Directory found nothing for a real query: gate relevance, then either answer from free
+    # web sources (relevant) or decline politely (off-topic). Both paths suggest adding a listing.
+    if query and not out.get("cards"):
+        if not is_indian_american_topic(query):
+            return _decline(query)
+        return _web_fallback(query, geo, filters)
+    return out

@@ -94,6 +94,10 @@ class Settings(BaseSettings):
     llm_timeout_s: int = 60
     chat_rate_per_min: int = 20            # per-IP request cap on the chat API (abuse guard)
     api_rate_per_min: int = 60             # per-IP request cap on the public read-only JSON API
+    # When the directory has no answer but the question is relevant to Indian-American life in
+    # the USA, fetch a general-info answer from free, key-less web sources (Wikipedia + DuckDuckGo)
+    # and have the LLM phrase it. Answers are labelled "general info, not from our directory".
+    web_fallback_enabled: bool = True
 
     # MCP server transport
     # "stdio" for local clients (Claude Desktop), "streamable-http" for a hosted service.

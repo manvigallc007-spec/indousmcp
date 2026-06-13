@@ -135,6 +135,8 @@ a{color:var(--brand);text-decoration:none}
 .lc-act{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}
 .lc-btn{border:1px solid #e2e0dd;border-radius:9px;padding:6px 12px;font-size:13px;font-weight:500;
  color:var(--ink);transition:.15s}.lc-btn:hover{border-color:var(--brand);color:var(--brand)}
+.addcta{display:inline-block;margin-top:10px;background:var(--brand);color:#fff;border-radius:10px;
+ padding:8px 14px;font-size:13px;font-weight:600;transition:.15s}.addcta:hover{background:var(--brand-d);color:#fff}
 .composer{background:var(--panel);border-top:1px solid var(--line);padding:12px 16px;
  padding-bottom:max(12px,env(safe-area-inset-bottom))}
 .composer-inner{max-width:760px;margin:0 auto;display:flex;align-items:flex-end;gap:10px;background:#fff;
@@ -230,8 +232,10 @@ function addUser(text){const m=el('div','msg user');m.appendChild(el('div','bubb
 function addBot(){const m=el('div','msg bot');m.appendChild(el('div','avatar','🪷'));
   const content=el('div','content');const b=el('div','bubble');b.appendChild(typing());content.appendChild(b);
   m.appendChild(content);thread.appendChild(m);scroll();return content;}
-function fillBot(content,reply,cards){content.innerHTML='';content.appendChild(el('div','bubble',reply||'…'));
-  if(cards&&cards.length){const w=el('div','cards');cards.forEach(c=>w.appendChild(card(c)));content.appendChild(w);}scroll();}
+function fillBot(content,reply,cards,suggest){content.innerHTML='';content.appendChild(el('div','bubble',reply||'…'));
+  if(cards&&cards.length){const w=el('div','cards');cards.forEach(c=>w.appendChild(card(c)));content.appendChild(w);}
+  if(suggest&&suggest.url){const a=el('a','addcta',suggest.label||'➕ Add to directory');a.href=suggest.url;a.target='_blank';a.rel='noopener';content.appendChild(a);}
+  scroll();}
 async function send(text,isRerun){
   hideWelcome();let content;
   if(!isRerun){addUser(text);history.push({role:'user',content:text});lastQuery=text;content=addBot();lastBot=content;}
@@ -239,7 +243,7 @@ async function send(text,isRerun){
   try{
     const r=await fetch('/chat/api',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({messages:history,geo:geo,filters:filters})});
-    const data=await r.json();fillBot(content,data.reply,data.cards);
+    const data=await r.json();fillBot(content,data.reply,data.cards,data.suggest_add);
     if(!isRerun)history.push({role:'assistant',content:data.reply||''});
   }catch(e){fillBot(content,'Sorry, something went wrong. Please try again.',[]);}
 }

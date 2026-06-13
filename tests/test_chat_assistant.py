@@ -153,6 +153,63 @@ def test_wants_open_now():
     assert not assistant._wants_open_now("indian restaurant in edison")
 
 
+@pytest.fixture
+def no_results(monkeypatch):
+    monkeypatch.setattr(assistant.verticals, "search_all", lambda *a, **k: {"count": 0, "results": []})
+    monkeypatch.setattr(assistant.analytics, "log_impressions", lambda *a, **k: None)
+    monkeypatch.setattr(assistant.analytics, "log_call", lambda *a, **k: None)
+
+
+def test_is_indian_american_topic():
+    assert assistant.is_indian_american_topic("when is diwali this year")
+    assert assistant.is_indian_american_topic("best indian restaurant near me")
+    assert not assistant.is_indian_american_topic("how do I debug this python error")
+
+
+def test_offtopic_question_is_declined(no_results, monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "search")
+    out = assistant.reply([{"role": "user", "content": "how do I fix my car engine"}])
+    assert out["provider"] == "offtopic" and out["cards"] == []
+    assert "indian" in out["reply"].lower()
+
+
+def test_relevant_miss_uses_web_fallback_and_suggests_add(no_results, monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "search")  # no LLM -> snippet shown directly
+    import indo_usa_mcp.websearch as ws
+    monkeypatch.setattr(ws, "lookup", lambda q, **k: [
+        {"source": "Wikipedia", "title": "Diwali", "text": "Diwali is the festival of lights.",
+         "url": "http://x"}])
+    out = assistant.reply([{"role": "user", "content": "what is diwali about"}])
+    assert out["provider"] == "web"
+    assert "festival of lights" in out["reply"]
+    assert out["suggest_add"]["url"].endswith("/submit")
+
+
+def test_relevant_miss_without_web_data_still_suggests(no_results, monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "search")
+    import indo_usa_mcp.websearch as ws
+    monkeypatch.setattr(ws, "lookup", lambda q, **k: [])
+    out = assistant.reply([{"role": "user", "content": "telugu association in austin"}])
+    assert out["provider"] == "web" and out["cards"] == []
+    assert out["suggest_add"]["vertical"] == "community"
+    assert "directory" in out["reply"].lower()
+
+
+def test_grounded_empty_composes_web_answer_via_llm(no_results, monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "llm")
+    monkeypatch.setattr(settings, "llm_base_url", "http://x")
+    monkeypatch.setattr(settings, "llm_model", "gemma2:2b")
+    monkeypatch.setattr(settings, "llm_use_tools", False)
+    import indo_usa_mcp.websearch as ws
+    monkeypatch.setattr(ws, "lookup", lambda q, **k: [
+        {"source": "Wikipedia", "title": "Holi", "text": "Holi is a spring festival.", "url": ""}])
+    # the only _chat call should be the web-compose one (grounded short-circuits on empty search)
+    monkeypatch.setattr(assistant, "_chat",
+                        lambda convo, use_tools: {"content": "Holi is a Hindu festival of colors."})
+    out = assistant.reply([{"role": "user", "content": "tell me about holi"}])
+    assert out["provider"] == "web" and "colors" in out["reply"]
+
+
 def test_no_clarify_loop(no_db, monkeypatch):
     monkeypatch.setattr(settings, "llm_provider", "search")
     out1 = assistant.reply([{"role": "user", "content": "restaurants near me"}])
