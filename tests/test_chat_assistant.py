@@ -288,6 +288,32 @@ def test_relevant_miss_without_web_data_still_suggests(no_results, monkeypatch):
     assert "directory" in out["reply"].lower()
 
 
+def test_web_fallback_serves_from_cache_without_calling_web(no_results, monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "search")
+    import indo_usa_mcp.learning as learning
+    import indo_usa_mcp.websearch as ws
+    monkeypatch.setattr(learning, "lookup", lambda q: "Cached: Diwali is the festival of lights.")
+    monkeypatch.setattr(ws, "lookup",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("cache hit must skip web")))
+    out = assistant.reply([{"role": "user", "content": "what is diwali"}])
+    assert out["provider"] == "web" and out.get("cached") is True
+    assert "Cached:" in out["reply"]
+
+
+def test_web_fallback_stores_fresh_answer(no_results, monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "search")
+    import indo_usa_mcp.learning as learning
+    import indo_usa_mcp.websearch as ws
+    monkeypatch.setattr(learning, "lookup", lambda q: None)             # cache miss
+    monkeypatch.setattr(ws, "lookup", lambda q, **k: [
+        {"source": "Wikipedia", "title": "Holi", "text": "Holi is a spring festival.", "url": ""}])
+    saved = {}
+    monkeypatch.setattr(learning, "store", lambda q, reply, **k: saved.update(q=q, reply=reply))
+    out = assistant.reply([{"role": "user", "content": "tell me about holi"}])
+    assert out["provider"] == "web" and "spring festival" in out["reply"]
+    assert saved.get("q") == "tell me about holi"   # the fresh answer was learned
+
+
 def test_grounded_empty_composes_web_answer_via_llm(no_results, monkeypatch):
     monkeypatch.setattr(settings, "llm_provider", "llm")
     monkeypatch.setattr(settings, "llm_base_url", "http://x")

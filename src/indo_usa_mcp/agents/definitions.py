@@ -460,6 +460,18 @@ class LifecycleAgent(Agent):
         return lifecycle.run(unseen_days=params.get("unseen_days", 180))
 
 
+class LearningAgent(Agent):
+    name = "learning"
+    description = ("Maintains the semantic answer cache (so repeat general questions are answered "
+                  "locally, not by the external LLM): prunes stale/rarely-used entries.")
+    default_interval_s = 86400  # daily
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from .. import learning
+        return learning.prune(max_age_days=params.get("max_age_days", 120),
+                              max_rows=params.get("max_rows", 5000))
+
+
 class ReportingAgent(Agent):
     name = "reporting"
     description = "Computes the daily health & growth report and emails it."
@@ -557,6 +569,7 @@ ALL_AGENTS = [
     LinkCheckAgent(),
     RecommendationAgent(),
     LifecycleAgent(),
+    LearningAgent(),
     ReportingAgent(),
     MonitoringAgent(),
 ]

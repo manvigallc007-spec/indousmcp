@@ -405,8 +405,17 @@ def _web_snippets_text(snips: list[dict]) -> str:
 
 def _web_fallback(query: str, geo: dict | None, filters: dict | None) -> dict:
     """Relevant question the directory can't answer → answer from free web sources (labelled as
-    general info, never as a verified listing) + suggest adding it to the directory."""
-    from . import websearch
+    general info, never as a verified listing) + suggest adding it to the directory.
+
+    Learning: a semantically-equivalent question answered before is served from the local cache
+    (no LLM/web call); fresh general answers are stored so the same question won't need the LLM
+    again."""
+    from . import learning, websearch
+    add = _suggest_add(query)
+    cached = learning.lookup(query)
+    if cached is not None:
+        return {"reply": cached, "cards": [], "provider": "web", "suggest_add": add, "cached": True}
+
     snips = websearch.lookup(query) if settings.web_fallback_enabled else []
     answer = ""
     if snips:
@@ -427,8 +436,9 @@ def _web_fallback(query: str, geo: dict | None, filters: dict | None) -> dict:
     else:
         reply = ("I don't have this in our directory yet, and couldn't find a quick answer "
                  "online.")
-    add = _suggest_add(query)
     reply += f"\n\nKnow a place like this? Help others find it — {add['label'].lower()}."
+    if snips:  # only cache real general answers (not transient "couldn't find" misses)
+        learning.store(query, reply, provider="web")
     return {"reply": reply, "cards": [], "provider": "web", "suggest_add": add}
 
 
