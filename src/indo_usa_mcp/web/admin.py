@@ -31,9 +31,16 @@ def login_get(request: Request) -> HTMLResponse:
 
 
 async def login_post(request: Request) -> HTMLResponse:
+    from .security import too_many_attempts, record_attempt, clear_attempts
+    ip = (request.client.host if request.client else "?") or "?"
+    if too_many_attempts(ip):
+        return _page("Admin login", "<h2 class='err'>Too many attempts</h2>"
+                     "<p class='muted'>Please wait a few minutes and try again.</p>", status=429)
     form = await request.form()
     if login_admin(request, (form.get("password") or "")):
+        clear_attempts(ip)
         return RedirectResponse("/admin", status_code=303)
+    record_attempt(ip)
     return _page("Admin login", "<h2 class='err'>Wrong password</h2>"
                  "<p><a href='/admin/login'>Try again</a></p>", status=401)
 

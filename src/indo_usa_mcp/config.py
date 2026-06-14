@@ -62,6 +62,8 @@ class Settings(BaseSettings):
     # Admin dashboard + sessions/magic-links. Blank admin_password disables /admin.
     admin_password: str = ""
     secret_key: str = "dev-insecure-change-me"   # signs session cookies + magic-links
+    # Mark session cookies Secure (HTTPS-only). Flip True once the site is served over TLS (Caddy).
+    session_https_only: bool = False
     report_email: str = ""                       # daily report recipient (defaults to contact)
     magic_link_ttl_minutes: int = 30
     # Public base URL of the web app (for Stripe redirect URLs), e.g. https://yourdomain.com

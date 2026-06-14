@@ -91,7 +91,9 @@ def _base() -> str:
 
 def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200) -> HTMLResponse:
     plat = html.escape(settings.platform_name)
-    ld = f'<script type="application/ld+json">{jsonld}</script>' if jsonld else ""
+    # Escape "<" so a listing name containing "</script>" can't break out of the JSON-LD block.
+    ld = (f'<script type="application/ld+json">{jsonld.replace("<", chr(92) + "u003c")}</script>'
+          if jsonld else "")
     doc = f"""<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)}</title>

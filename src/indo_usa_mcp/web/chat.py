@@ -304,7 +304,7 @@ def chat_page(request: Request) -> HTMLResponse:
          "potentialAction": {"@type": "SearchAction",
                              "target": f"{og_url}?q={{search_term_string}}",
                              "query-input": "required name=search_term_string"}},
-    ], ensure_ascii=False)
+    ], ensure_ascii=False).replace("<", "\\u003c")  # can't break out of the <script> block
     repl = {
         "__PLAT__": plat, "__ANAME__": aname, "__MODE__": html.escape(mode),
         "__ATAG__": html.escape(settings.assistant_tagline),
