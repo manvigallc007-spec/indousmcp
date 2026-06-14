@@ -329,6 +329,11 @@ async def chat_api(request: Request) -> JSONResponse:
         body = {}
     messages = body.get("messages") or []
     geo = body.get("geo") if isinstance(body.get("geo"), dict) else None
+    if geo is None:  # browser didn't share GPS -> approximate from IP so we can still go nearest-first
+        from . import geoip
+        pt = geoip.approx_point(geoip.client_ip(request))
+        if pt:
+            geo = {"lat": pt[0], "lng": pt[1], "approx": True}
     raw = body.get("filters") if isinstance(body.get("filters"), dict) else {}
     filters = {
         "vertical": raw.get("vertical") if isinstance(raw.get("vertical"), str) else None,

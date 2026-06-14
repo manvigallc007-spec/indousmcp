@@ -147,6 +147,10 @@ class Settings(BaseSettings):
     # the USA, fetch a general-info answer from free, key-less web sources (Wikipedia + DuckDuckGo)
     # and have the LLM phrase it. Answers are labelled "general info, not from our directory".
     web_fallback_enabled: bool = True
+    # When the browser won't share GPS, approximate the visitor's area from their IP (free,
+    # no-key, city-level) so the chatbot can still show nearest-first results. Falls back to
+    # asking for a city if this is off or fails. Set False to disable the IP lookup entirely.
+    geoip_enabled: bool = True
 
     # MCP server transport
     # "stdio" for local clients (Claude Desktop), "streamable-http" for a hosted service.

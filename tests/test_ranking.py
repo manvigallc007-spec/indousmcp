@@ -58,6 +58,26 @@ def test_featured_breaks_ties():
     assert out[0]["id"] == 2  # equal relevance -> Featured wins
 
 
+def test_nearest_first_orders_by_distance_regardless_of_relevance():
+    base = (40.0, -74.0)
+    rows = [
+        _row(id=1, name="Far Biryani House", match_score=0.95, lat=40.6, lng=-74.0),   # ~41 mi
+        _row(id=2, name="Close Biryani Corner", match_score=0.4, lat=40.04, lng=-74.0),  # ~3 mi
+    ]
+    out = ranking.rerank(rows, "biryani", point=base, nearest_first=True)
+    assert out[0]["id"] == 2  # nearest wins even with lower relevance (distance doesn't matter)
+
+
+def test_nearest_first_still_lets_exact_name_lead():
+    base = (40.0, -74.0)
+    rows = [
+        _row(id=1, name="Tasty Biryani", match_score=0.4, lat=40.02, lng=-74.0),       # closest, not exact
+        _row(id=2, name="Mughlai Express", match_score=0.6, lat=41.0, lng=-74.0),      # far, exact name
+    ]
+    out = ranking.rerank(rows, "mughlai express", point=base, nearest_first=True)
+    assert out[0]["id"] == 2  # an exact-name match still leads, even under nearest-first
+
+
 def test_verified_label():
     assert ranking.verified_label(_NOW) == "verified today"
     assert "days ago" in ranking.verified_label(_NOW - dt.timedelta(days=5))

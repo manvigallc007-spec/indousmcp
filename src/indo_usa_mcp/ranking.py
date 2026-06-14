@@ -121,8 +121,15 @@ def score_row(row: dict, q_norm: str, q_terms: set[str],
     )
 
 
-def rerank(rows: list[dict], query: str, point: tuple[float, float] | None = None) -> list[dict]:
-    """Score + sort rows in place-ish; annotates each with score/distance/verified_ago."""
+def rerank(rows: list[dict], query: str, point: tuple[float, float] | None = None,
+           nearest_first: bool = False) -> list[dict]:
+    """Score + sort rows; annotates each with score/distance/verified_ago.
+
+    Default: by hybrid relevance score (exact-name first, then keyword/vector/proximity/fresh).
+    `nearest_first` (we know where the user is): the relevance candidates are ordered by **distance
+    ascending** — "show me the nearest ones, distance doesn't matter" — with the relevance score as
+    a tie-break, and an exact-name match still allowed to lead. Rows without coordinates sort last.
+    """
     q_norm = _norm(query)
     q_terms = set(q_norm.split())
     for r in rows:
@@ -134,7 +141,14 @@ def rerank(rows: list[dict], query: str, point: tuple[float, float] | None = Non
         vs = float(vs) if vs is not None else 0.0
         r["score"] = round(score_row(r, q_norm, q_terms, vs, dist), 4)
         r["verified_ago"] = verified_label(r.get("last_seen_at"))
-    rows.sort(key=lambda r: r["score"], reverse=True)
+    if nearest_first and point:
+        # exact-name hits first; then nearest; score breaks ties; no-coord rows last.
+        rows.sort(key=lambda r: (
+            0 if r["score"] >= W_EXACT else 1,
+            r.get("distance_miles") if r.get("distance_miles") is not None else float("inf"),
+            -r["score"]))
+    else:
+        rows.sort(key=lambda r: r["score"], reverse=True)
     return rows
 
 
@@ -157,24 +171,31 @@ def _filters(city, state, extra_where):
 def text_search(table: str, cols_sql: str, query: str, *, city: str | None = None,
                 state: str | None = None, point: tuple[float, float] | None = None,
                 limit: int = 25, extra_where: list | None = None,
-                precomputed_qvec: str | None = None) -> dict[str, Any]:
+                precomputed_qvec: str | None = None,
+                nearest_first: bool | None = None) -> dict[str, Any]:
     """Hybrid text search: relevance candidates (vector or trigram) UNION an exact/keyword
     pull (so exact names are never missed by vector recall), reranked by the hybrid score.
-    `precomputed_qvec` lets a caller (e.g. search_all) embed the query once and reuse it."""
+    `precomputed_qvec` lets a caller (e.g. search_all) embed the query once and reuse it.
+    `nearest_first` defaults to ON whenever a `point` is known (we know where the user is →
+    "show the nearest, distance doesn't matter"): relevance picks the candidates, distance orders
+    them, so a wider pool is gathered to avoid missing the genuinely-closest matches. Pass
+    `nearest_first=False` to force pure hybrid-relevance ordering."""
+    near = (point is not None) if nearest_first is None else nearest_first
     where, params = _filters(city, state, extra_where)
     where_sql = " AND ".join(where)
     cand: dict[Any, dict] = {}
+    n_cand = 300 if (near and point) else _CANDIDATES  # wider net when ordering by distance
 
     if embeddings.enabled():
         qvec = precomputed_qvec or embeddings.to_vector_literal(embeddings.embed(query))
         sql = (f"SELECT {cols_sql}, 1 - (embedding <=> %s::vector) AS match_score FROM {table} "
                f"WHERE {where_sql} AND embedding IS NOT NULL ORDER BY embedding <=> %s::vector LIMIT %s")
-        rows = db.query(sql, [qvec, *params, qvec, _CANDIDATES])
+        rows = db.query(sql, [qvec, *params, qvec, n_cand])
         ranking = "semantic"
     else:
         sql = (f"SELECT {cols_sql}, similarity(name, %s) AS match_score FROM {table} "
                f"WHERE {where_sql} ORDER BY match_score DESC LIMIT %s")
-        rows = db.query(sql, [query, *params, _CANDIDATES])
+        rows = db.query(sql, [query, *params, n_cand])
         ranking = "trigram"
     for r in rows:
         cand[r["id"]] = r
@@ -185,16 +206,17 @@ def text_search(table: str, cols_sql: str, query: str, *, city: str | None = Non
     for r in db.query(kw, [query, *params, f"%{query}%", [query.lower()]]):
         cand.setdefault(r["id"], r)  # keep vector match_score if already present
 
-    results = rerank(list(cand.values()), query, point)[:limit]
+    results = rerank(list(cand.values()), query, point, nearest_first=near)[:limit]
     return {"count": len(results), "query": query, "ranking": ranking, "results": results}
 
 
 def geo_list(table: str, cols_sql: str, *, point: tuple[float, float] | None = None,
              city: str | None = None, state: str | None = None, tag: str | None = None,
-             open_now: bool = False, limit: int = 25, radius_miles: float = 15.0,
+             open_now: bool = False, limit: int = 25, radius_miles: float = 150.0,
              extra_where: list | None = None) -> dict[str, Any]:
-    """Geo/filter listing reranked by proximity decay + freshness + featured (no text query).
-    `radius_miles` still bounds results (the tool's contract) but ordering is by hybrid score."""
+    """Geo/filter listing ordered NEAREST-FIRST when a point is given (distance doesn't matter —
+    show the closest). `radius_miles` is a generous prefilter (default 150) so we don't pull the
+    whole table, not a hard 'too far' cutoff; pass a smaller value to bound it tightly."""
     ew = list(extra_where or [])
     if tag:
         ew.append(("tags @> %s", [[tag.lower()]]))
@@ -204,19 +226,12 @@ def geo_list(table: str, cols_sql: str, *, point: tuple[float, float] | None = N
         where.append("lat BETWEEN %s AND %s AND lng BETWEEN %s AND %s")
         params += [point[0] - deg, point[0] + deg, point[1] - deg * 1.5, point[1] + deg * 1.5]
     sql = f"SELECT {cols_sql} FROM {table} WHERE {' AND '.join(where)} LIMIT %s"
-    rows = db.query(sql, params + [max(limit * 6, 200)])
+    rows = db.query(sql, params + [max(limit * 12, 400)])
 
     if point:
-        kept = []
-        for r in rows:
-            if r.get("lat") is None or r.get("lng") is None:
-                continue
-            d = _haversine_miles(point[0], point[1], r["lat"], r["lng"])
-            if d <= radius_miles:
-                kept.append(r)
-        rows = kept
+        rows = [r for r in rows if r.get("lat") is not None and r.get("lng") is not None]
     hours.annotate(rows)
     if open_now:
         rows = [r for r in rows if r.get("open_now")]
-    results = rerank(rows, "", point)[:limit]
+    results = rerank(rows, "", point, nearest_first=bool(point))[:limit]
     return {"count": len(results), "results": results}
