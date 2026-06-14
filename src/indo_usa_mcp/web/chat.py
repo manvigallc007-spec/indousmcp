@@ -126,6 +126,10 @@ a{color:var(--brand);text-decoration:none}
 .chips{display:flex;flex-wrap:wrap;gap:9px;justify-content:center}
 .chip{background:#fff;border:1px solid #e2e0dd;color:#374151;border-radius:999px;padding:9px 14px;
  font-size:13px;cursor:pointer;transition:.15s}.chip:hover{border-color:var(--brand);color:var(--brand)}
+.voicecta{margin:22px auto 4px;display:inline-flex;align-items:center;gap:8px;background:var(--accent);
+ color:#fff;border:0;border-radius:999px;padding:11px 22px;font-size:15px;font-weight:600;cursor:pointer;
+ box-shadow:0 6px 18px #0f9b8e33;transition:.15s}.voicecta:hover{background:var(--accent-d)}
+.voicetip{color:var(--muted);font-size:13px;margin:6px 0 0}
 .msg{display:flex;gap:10px;margin:14px 0;align-items:flex-start}.msg.user{justify-content:flex-end}
 .avatar{flex:0 0 auto;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
  font-size:16px;background:linear-gradient(135deg,#ffd9a0,#ffb56b)}
@@ -195,6 +199,8 @@ a{color:var(--brand);text-decoration:none}
    sweets, temples, events, classes, salons, doctors, jewelry and more across the USA. Tell me what
    you're looking for and roughly where, and I'll find the closest ones.</p>
   <div class="chips">__CHIPS__</div>
+  <button class="voicecta" onclick="startConvo()">🎙️ <span class="voicebtn-t">Talk to Dost</span></button>
+  <p class="voicetip">Hands-free voice — speak in English, हिंदी or తెలుగు</p>
   <p class="welcome-contrib">New here? Help the community grow — add a place you love and others
    will find it too:</p>
   <div class="chips">
@@ -236,21 +242,24 @@ const I18N={
   cRest:"➕ A restaurant I love",cGro:"➕ My go-to grocery",cTemple:"➕ My temple",
   placeholder:"Ask anything… e.g. vegetarian thali in Jersey City",
   hint:"Dost searches a live directory · Enter to send",
-  nearme:"Near me",opennow:"Open now",newchat:"New chat",mic:"Speak",spk:"Read answers aloud"},
+  nearme:"Near me",opennow:"Open now",newchat:"New chat",mic:"Speak",spk:"Read answers aloud",
+  voiceBtn:"Talk to Dost",voiceTip:"Hands-free voice — speak in English, हिंदी or తెలుగు"},
  hi:{hero:"नमस्ते! मैं दोस्त हूँ — यानी आपका “मित्र”।",
   heroSub:"बताइए आप क्या ढूँढ़ रहे हैं और किस शहर में — मैं आपके सबसे नज़दीकी जगहें खोज दूँगा।",
   contribLine:"नए हैं? अपनी पसंदीदा जगह जोड़ें ताकि और लोग भी उसे पा सकें:",
   cRest:"➕ मेरा पसंदीदा रेस्टोरेंट",cGro:"➕ मेरी रोज़ की ग्रोसरी",cTemple:"➕ मेरा मंदिर",
   placeholder:"कुछ भी पूछें… जैसे जर्सी सिटी में वेज थाली",
   hint:"दोस्त एक लाइव डायरेक्टरी खोजता है · भेजने के लिए Enter",
-  nearme:"मेरे पास",opennow:"अभी खुला",newchat:"नई चैट",mic:"बोलें",spk:"जवाब सुनाएँ"},
+  nearme:"मेरे पास",opennow:"अभी खुला",newchat:"नई चैट",mic:"बोलें",spk:"जवाब सुनाएँ",
+  voiceBtn:"दोस्त से बात करें",voiceTip:"हैंड्स-फ़्री आवाज़ — अंग्रेज़ी, हिंदी या तेलुगु में बोलें"},
  te:{hero:"నమస్తే! నేను దోస్త్ — అంటే మీ “స్నేహితుడు”.",
   heroSub:"మీరు ఏమి వెతుకుతున్నారో, ఏ నగరంలోనో చెప్పండి — దగ్గర్లోని వాటిని నేను చూపిస్తాను.",
   contribLine:"కొత్తగా వచ్చారా? మీకు నచ్చిన ప్రదేశాన్ని జోడించండి, ఇతరులూ కనుగొంటారు:",
   cRest:"➕ నాకు ఇష్టమైన రెస్టారెంట్",cGro:"➕ నా రోజువారీ గ్రోసరీ",cTemple:"➕ నా ఆలయం",
   placeholder:"ఏదైనా అడగండి… ఉదా: జెర్సీ సిటీలో వెజ్ తాలి",
   hint:"దోస్త్ లైవ్ డైరెక్టరీని వెతుకుతుంది · పంపడానికి Enter",
-  nearme:"నా దగ్గర",opennow:"ఇప్పుడు తెరిచి ఉంది",newchat:"కొత్త చాట్",mic:"మాట్లాడండి",spk:"సమాధానాలు చదవండి"}
+  nearme:"నా దగ్గర",opennow:"ఇప్పుడు తెరిచి ఉంది",newchat:"కొత్త చాట్",mic:"మాట్లాడండి",spk:"సమాధానాలు చదవండి",
+  voiceBtn:"దోస్త్‌తో మాట్లాడండి",voiceTip:"హ్యాండ్స్-ఫ్రీ వాయిస్ — ఇంగ్లీష్, హిందీ లేదా తెలుగులో మాట్లాడండి"}
 };
 function T(){return I18N[lang]||I18N.en;}
 function setLang(v){lang=I18N[v]?v:'en';localStorage.setItem('dost_lang',lang);applyLang();}
@@ -258,6 +267,8 @@ function applyLang(){const t=T();
  const set=(sel,val)=>{const e=document.querySelector(sel);if(e)e.textContent=val;};
  set('#welcome h1',t.hero);set('#welcome .heroSub',t.heroSub);set('#welcome .welcome-contrib',t.contribLine);
  const cc=document.querySelectorAll('#welcome .contribchip');if(cc[0])cc[0].textContent=t.cRest;if(cc[1])cc[1].textContent=t.cGro;if(cc[2])cc[2].textContent=t.cTemple;
+ const vb=document.querySelector('#welcome .voicebtn-t');if(vb)vb.textContent=t.voiceBtn;
+ const vt=document.querySelector('#welcome .voicetip');if(vt)vt.textContent=t.voiceTip;
  if(ta)ta.placeholder=t.placeholder;
  const hint=document.querySelector('.hint');if(hint)hint.textContent=t.hint;
  const loc=document.querySelector('.fchip.loc');if(loc)loc.textContent='📍 '+t.nearme;
