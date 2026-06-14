@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import html
+import pathlib
 import time
 
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, RedirectResponse, Response
+from starlette.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from starlette.routing import Route
+
+# Drop the real brand logo here (e.g. static/logo.png) and it's served at /logo automatically.
+_STATIC_DIR = pathlib.Path(__file__).resolve().parent / "static"
 
 from .. import payments, submissions, verticals
 from ..config import settings
@@ -44,6 +48,15 @@ _ICON_SVG = (
 def icon(request: Request) -> Response:
     return Response(_ICON_SVG, media_type="image/svg+xml",
                     headers={"Cache-Control": "public, max-age=86400"})
+
+
+def brand_logo(request: Request) -> Response:
+    """The Namaste America logo. Serves static/logo.<ext> once added; falls back to the lotus mark."""
+    for ext in ("svg", "png", "webp", "jpg", "jpeg"):
+        f = _STATIC_DIR / f"logo.{ext}"
+        if f.exists():
+            return FileResponse(f, headers={"Cache-Control": "public, max-age=86400"})
+    return icon(request)
 
 
 def og_image(request: Request) -> Response:
@@ -439,6 +452,7 @@ routes = [
     Route("/icon.svg", icon, methods=["GET"]),
     Route("/favicon.ico", icon, methods=["GET"]),
     Route("/og-image.svg", og_image, methods=["GET"]),
+    Route("/logo", brand_logo, methods=["GET"]),
     Route("/submit", submit_get, methods=["GET"]),
     Route("/submit", submit_post, methods=["POST"]),
     Route("/claim", claim_get, methods=["GET"]),

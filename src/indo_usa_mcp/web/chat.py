@@ -88,6 +88,7 @@ a{color:var(--brand);text-decoration:none}
 .brand{display:flex;align-items:center;gap:10px;color:var(--ink)}
 .brand .logo{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;
  background:linear-gradient(135deg,#ffd9a0,#ffb56b);font-size:18px}
+.brand .brandlogo{height:34px;width:auto;max-width:170px;border-radius:8px;display:block}
 .brand b{font-size:15px;line-height:1.15;display:block}.brand i{font-style:normal;font-size:12px;color:var(--muted)}
 .actions{display:flex;align-items:center;gap:12px}
 .newchat{background:#fff;border:1px solid #e2e0dd;color:var(--ink);border-radius:9px;padding:7px 11px;
@@ -170,7 +171,7 @@ a{color:var(--brand);text-decoration:none}
 @media(max-width:600px){.welcome{margin-top:4vh}.welcome h1{font-size:21px}}
 </style></head><body>
 <header class="topbar">
- <a class="brand" href="/"><span class="logo">🪷</span><span><b>__ANAME__</b><i>__AMEAN__</i></span></a>
+ <a class="brand" href="/"><img class="brandlogo" src="/logo" alt="__PLAT__"><span><b>__ANAME__</b><i>__AMEAN__</i></span></a>
  <div class="actions">
   <select id="lang" class="langsel" onchange="setLang(this.value)" aria-label="Language">
    <option value="en">English</option><option value="hi">हिंदी</option><option value="te">తెలుగు</option>

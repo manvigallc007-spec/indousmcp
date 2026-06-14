@@ -144,6 +144,11 @@ def test_og_image_renders():
     assert "Dost" in r.text and "1200" in r.text
 
 
+def test_logo_route_falls_back_to_lotus_when_no_file():
+    r = TestClient(app).get("/logo")
+    assert r.status_code == 200   # serves the inline lotus SVG until static/logo.* is added
+
+
 def test_chat_welcome_invites_contribution():
     t = TestClient(app).get("/chat").text
     assert "openContribute" in t and "A restaurant I love" in t   # greeting invites adding favorites
