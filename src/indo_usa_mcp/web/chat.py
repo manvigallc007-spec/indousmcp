@@ -261,6 +261,8 @@ function ask(text){send(text,false);}
 ta.addEventListener('input',()=>{ta.style.height='auto';ta.style.height=Math.min(ta.scrollHeight,140)+'px';});
 ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submitForm(e);}});
 ta.focus();
+// Deep-link / SEO SearchAction: /chat?q=... prefills and runs the search automatically.
+(function(){var q=new URLSearchParams(location.search).get('q');if(q&&q.trim()){send(q.trim(),false);}})();
 </script></body></html>"""
 
 
