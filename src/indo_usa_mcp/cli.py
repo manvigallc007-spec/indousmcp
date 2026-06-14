@@ -135,6 +135,11 @@ def cmd_deactivate_stale(args: argparse.Namespace) -> None:
     _print(ingest.deactivate_stale(days=args.days))
 
 
+def cmd_purge_non_diaspora(args: argparse.Namespace) -> None:
+    from . import verticals
+    _print(verticals.purge_excluded(dry_run=not args.apply))
+
+
 def cmd_approval_digest(_: argparse.Namespace) -> None:
     _print(ingest.summarize_approvals())
 
@@ -460,6 +465,12 @@ def build_parser() -> argparse.ArgumentParser:
     ds = sub.add_parser("deactivate-stale", help="Mark unclaimed listings not seen recently inactive")
     ds.add_argument("--days", type=int, default=60)
     ds.set_defaults(func=cmd_deactivate_stale)
+
+    pnd = sub.add_parser("purge-non-diaspora",
+                         help="Find/remove Native-American & other non-India-'Indian' listings")
+    pnd.add_argument("--apply", action="store_true",
+                     help="Actually soft-delete (default: dry-run, just report matches)")
+    pnd.set_defaults(func=cmd_purge_non_diaspora)
 
     sub.add_parser("approval-digest", help="Human-readable summary of pending approvals").set_defaults(
         func=cmd_approval_digest

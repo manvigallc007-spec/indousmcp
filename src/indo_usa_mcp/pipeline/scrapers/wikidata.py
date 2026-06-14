@@ -12,6 +12,7 @@ from typing import Iterator
 
 import httpx
 
+from ... import osm as _osm
 from ...config import settings
 from .metros import bbox, state_for
 
@@ -58,7 +59,7 @@ class WikidataScraper:
     def _binding_to_candidate(self, b: dict, region: str, bbox_: tuple | None) -> dict | None:
         name = b.get("itemLabel", {}).get("value")
         coord = b.get("coord", {}).get("value")  # "Point(lng lat)"
-        if not name or not coord:
+        if not name or not coord or _osm.is_excluded_name(name):
             return None
         lat, lng = self._parse_point(coord)
         if lat is None:

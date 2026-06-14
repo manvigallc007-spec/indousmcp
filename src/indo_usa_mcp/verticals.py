@@ -161,6 +161,27 @@ def _table(vertical: str) -> str:
     return get(vertical)["table"]
 
 
+def purge_excluded(dry_run: bool = True) -> dict[str, Any]:
+    """Find (and, unless dry_run, soft-delete) already-stored listings whose name signals a
+    NON-India-diaspora 'Indian' — Native American / West Indian / brand homonyms (see
+    osm.is_excluded_name). Soft-delete + deactivate is reversible (sets deleted_at + is_active)."""
+    from . import osm
+    out: dict[str, Any] = {"dry_run": dry_run, "by_vertical": {}, "total": 0}
+    for v in VERTICALS:
+        try:
+            rows = db.query(f"SELECT id, name FROM {_table(v)} WHERE deleted_at IS NULL")
+        except Exception:
+            continue
+        bad = [(r["id"], r["name"]) for r in rows if osm.is_excluded_name(r["name"])]
+        if bad and not dry_run:
+            db.execute(f"UPDATE {_table(v)} SET deleted_at = now(), is_active = false "
+                       f"WHERE id = ANY(%s)", [[i for i, _ in bad]])
+        if bad:
+            out["by_vertical"][v] = {"matched": len(bad), "samples": [n for _, n in bad[:8]]}
+            out["total"] += len(bad)
+    return out
+
+
 # ------------------------------------------------------------------ generic queries
 _FLT_MAP = {"featured": "is_featured", "claimed": "is_claimed",
             "inactive": "NOT is_active", "active": "is_active"}
@@ -297,6 +318,9 @@ def create_record(vertical: str, data: dict) -> dict[str, Any]:
     name = (data.get("name") or "").strip()
     if not name:
         return {"ok": False, "error": "name_required"}
+    from . import osm
+    if osm.is_excluded_name(name):  # Native American / West Indian / brand homonyms — not us
+        return {"ok": False, "error": "not_india_diaspora"}
     lat, lng = _to_float(data.get("lat")), _to_float(data.get("lng"))
     city, state = clean.fill_location((data.get("city") or "").strip() or None,
                                       (data.get("state") or "").strip() or None, lat, lng)

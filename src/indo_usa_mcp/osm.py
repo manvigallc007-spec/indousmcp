@@ -21,6 +21,28 @@ class OverpassError(RuntimeError):
 _RETRY_STATUS = {429, 502, 503, 504}
 
 
+# --- diaspora guardrail -------------------------------------------------------------------
+# This directory is for Indians FROM INDIA living in the USA. "Indian" is ambiguous, so these
+# NAME signals mark the homonyms we must NOT ingest: American Indian / Native American (the main
+# false positive), West Indian (Caribbean), and the "Indian" motorcycle/place brand. Matched as
+# case-insensitive substrings of the name only, so genuine India-diaspora names are never hit.
+_EXCLUDE_TERMS = (
+    "american indian", "native american", "native indian", "amerindian",
+    "first nations", "first nation", "indian reservation", "indian tribe", "indian tribal",
+    "tribal council", "indian nation", "indigenous", "indian health service",
+    "bureau of indian affairs", "indian affairs", "powwow", "pow wow", "pow-wow",
+    "west indian", "indian motorcycle",
+)
+
+
+def is_excluded_name(name: str | None) -> bool:
+    """True if a place NAME signals a non-India-diaspora 'Indian' (Native American / West Indian
+    / 'Indian' brand). Scrapers and the manual-add path reject these so the directory stays
+    focused on Indians from India living in the USA."""
+    n = (name or "").lower()
+    return any(term in n for term in _EXCLUDE_TERMS)
+
+
 def overpass_post(query: str, timeout: float, retries: int = 3, base_delay: float = 5.0) -> dict:
     """POST an Overpass query with retry + exponential backoff on rate-limits/timeouts
     (429/502/503/504 and network timeouts). Returns parsed JSON. Raises OverpassError only

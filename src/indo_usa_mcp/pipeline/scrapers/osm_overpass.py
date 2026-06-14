@@ -63,7 +63,7 @@ class OverpassScraper:
     def _element_to_candidate(self, element: dict, region: str) -> dict | None:
         tags = element.get("tags", {})
         name = tags.get("name")
-        if not name:
+        if not name or _osm.is_excluded_name(name):
             return None
 
         # Nodes carry lat/lon directly; ways/relations carry a computed "center".

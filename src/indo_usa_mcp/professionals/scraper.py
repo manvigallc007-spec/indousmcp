@@ -65,7 +65,7 @@ class ProfessionalOverpassScraper:
     def _to_candidate(self, element: dict, region: str) -> dict | None:
         tags = element.get("tags", {})
         name = tags.get("name") or tags.get("name:en")
-        if not name:
+        if not name or _osm.is_excluded_name(name):
             return None
         lat = element.get("lat") or element.get("center", {}).get("lat")
         lng = element.get("lon") or element.get("center", {}).get("lon")

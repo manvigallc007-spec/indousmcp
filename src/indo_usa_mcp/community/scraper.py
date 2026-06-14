@@ -22,9 +22,6 @@ _NAMES = ("Telugu|Tamil|Gujarati|Marathi|Bengali|Kannada|Malayalee|Malayali|Punj
           "Konkani|Sindhi|Indo-American|Indo American|Indian Association|India Association|"
           "Indian Cultural|Sangam|Samaj|Mandal|Koota|Sabha|Sangha|Parishad|Bhavan|Sanskriti|"
           "Vishwa Hindu|Hindu Society|Jain Society|Sikh Society")
-# Names to reject even if a token matched (most importantly Native American "American Indian").
-_EXCLUDE = ("american indian", "native american", "west indian", "indian motorcycle")
-
 # OSM keys hosting these orgs. Built per-bbox by _block().
 _KEYS = [("amenity", "community_centre|social_centre|arts_centre"),
          ("office", "association|ngo|foundation"),
@@ -70,7 +67,7 @@ class CommunityOverpassScraper:
     def _to_candidate(self, element: dict, region: str) -> dict | None:
         tags = element.get("tags", {})
         name = tags.get("name") or tags.get("name:en")
-        if not name or any(bad in name.lower() for bad in _EXCLUDE):
+        if not name or _osm.is_excluded_name(name):
             return None
         lat = element.get("lat") or element.get("center", {}).get("lat")
         lng = element.get("lon") or element.get("center", {}).get("lon")
