@@ -168,8 +168,8 @@ class Settings(BaseSettings):
     fastembed_model: str = "BAAI/bge-small-en-v1.5"    # fastembed (384-dim, matches column)
     embedding_dim: int = 384                            # must match the embedding vector(N) columns
 
-    # Branding — TEMP placeholders until a real name/domain is chosen (override via env).
-    platform_name: str = "DesiConnect"          # directory/platform brand shown across pages
+    # Branding. Real brand: Namaste America (namasteamerica.us). Dost is the chatbot's name.
+    platform_name: str = "Namaste America"      # directory/platform brand shown across pages
     assistant_name: str = "Dost"                # the chatbot's name
     # One source for the friendly meaning, surfaced in chat copy + meta so non-Hindi speakers get it.
     assistant_meaning: str = "“Dost” means “friend” in Hindi & Urdu"
