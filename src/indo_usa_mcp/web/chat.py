@@ -278,10 +278,18 @@ function applyLang(){const t=T();
  const spk=document.getElementById('spk');if(spk){spk.title=t.spk;spk.classList.toggle('on',speakOn);}
  const sel=document.getElementById('lang');if(sel)sel.value=lang;
 }
-function startMic(){
+async function ensureMic(){
+ // Trigger the browser's native "Allow microphone?" popup (cleaner/more reliable than letting
+ // SpeechRecognition request it). Returns false if blocked/denied.
+ try{if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){
+   var s=await navigator.mediaDevices.getUserMedia({audio:true});s.getTracks().forEach(function(t){t.stop();});}
+   return true;}catch(e){return false;}
+}
+async function startMic(){
  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
  if(!SR){fillBot(addBot(),'🎤 Voice input isn’t supported in this browser — please type instead.',[]);return;}
  if(!window.isSecureContext){fillBot(addBot(),'🎤 Voice input needs a secure (https) connection — you can still type.',[]);return;}
+ if(!(await ensureMic())){fillBot(addBot(),micError('not-allowed'),[]);return;}
  let r;try{r=new SR();}catch(e){return;}
  r.lang=LOCALE[lang]||'en-US';r.interimResults=false;r.maxAlternatives=1;
  const mic=document.getElementById('mic');if(mic)mic.classList.add('rec');
@@ -291,7 +299,7 @@ function startMic(){
  try{r.start();}catch(e){if(mic)mic.classList.remove('rec');}
 }
 function micError(code){return {
- 'not-allowed':'🎤 Microphone access is blocked. Tap the 🔒/ⓘ in the address bar → allow Microphone → reload, then try again.',
+ 'not-allowed':'🎤 The mic is blocked for this site. Easiest fix: open it in an Incognito/Private tab and tap 🎙️ → Allow. (Or tap the 🔒 next to the web address → Microphone → Allow → reload.)',
  'service-not-allowed':'🎤 Microphone access is blocked for this site — enable it in your browser settings and retry.',
  'no-speech':'🎤 I didn’t catch that — tap the mic and speak again.',
  'audio-capture':'🎤 No microphone found — check your device’s mic.',
@@ -315,10 +323,11 @@ function convoStatus(s){var bar=document.getElementById('convobar'),txt=document
   if(bar)bar.style.display=convoMode?'flex':'none';
   if(txt)txt.textContent=s==='listening'?'🎙️ Listening…':(s==='thinking'?'💭 Thinking…':'🔊 Speaking…');}
 function toggleConvo(){convoMode?stopConvo():startConvo();}
-function startConvo(){
+async function startConvo(){
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){fillBot(addBot(),'🎙️ Voice isn’t supported in this browser — try Chrome, or type instead.',[]);return;}
   if(!window.isSecureContext){fillBot(addBot(),'🎙️ Voice needs a secure (https) connection.',[]);return;}
+  if(!(await ensureMic())){fillBot(addBot(),micError('not-allowed'),[]);return;}
   convoMode=true;speakOn=true;localStorage.setItem('dost_speak','1');
   var cb=document.getElementById('convo');if(cb)cb.classList.add('on');
   var spk=document.getElementById('spk');if(spk)spk.classList.add('on');
