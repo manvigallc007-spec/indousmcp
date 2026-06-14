@@ -145,6 +145,11 @@ a{color:var(--brand);text-decoration:none}
 .morebtn{display:block;margin-top:10px;background:#fff;border:1px solid var(--accent);color:var(--accent);
  border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s}
 .morebtn:hover{background:var(--accent);color:#fff}
+.contrib{margin-top:10px;display:flex;flex-wrap:wrap;gap:8px}
+.contrib .cin{flex:1 1 180px;border:1px solid #ddd;border-radius:9px;padding:9px 11px;font:inherit;font-size:14px}
+.contrib .cin:focus{outline:0;border-color:var(--accent)}
+.contrib .csend{background:var(--accent);color:#fff;border:0;border-radius:9px;padding:9px 16px;
+ font-size:14px;font-weight:600;cursor:pointer}.contrib .csend:hover{background:var(--accent-d)}
 .composer{background:var(--panel);border-top:1px solid var(--line);padding:12px 16px;
  padding-bottom:max(12px,env(safe-area-inset-bottom))}
 .composer-inner{max-width:760px;margin:0 auto;display:flex;align-items:flex-end;gap:10px;background:#fff;
@@ -173,6 +178,13 @@ a{color:var(--brand);text-decoration:none}
    events, classes, salons, doctors, jewelry and more across the USA. Tell me what you're looking
    for and roughly where, and I'll find the closest ones.</p>
   <div class="chips">__CHIPS__</div>
+  <p style="margin:22px 0 8px;color:var(--muted);font-size:14px">New here? Help the community grow —
+   add a place you love and others will find it too:</p>
+  <div class="chips">
+   <button class="chip" onclick="openContribute('restaurants','')">➕ A restaurant I love</button>
+   <button class="chip" onclick="openContribute('groceries','')">➕ My go-to grocery</button>
+   <button class="chip" onclick="openContribute('temples','')">➕ My temple</button>
+  </div>
  </section>
 </div></main>
 <form class="composer" onsubmit="return submitForm(event)">
@@ -242,14 +254,36 @@ function addUser(text){const m=el('div','msg user');m.appendChild(el('div','bubb
 function addBot(){const m=el('div','msg bot');m.appendChild(el('div','avatar','🪷'));
   const content=el('div','content');const b=el('div','bubble');b.appendChild(typing());content.appendChild(b);
   m.appendChild(content);thread.appendChild(m);scroll();return content;}
-function fillBot(content,reply,cards,suggest){content.innerHTML='';content.appendChild(el('div','bubble',reply||'…'));
+function fillBot(content,reply,cards,suggest,contribute){content.innerHTML='';content.appendChild(el('div','bubble',reply||'…'));
   if(cards&&cards.length){const w=el('div','cards');const N=6;
     cards.slice(0,N).forEach(c=>w.appendChild(card(c)));content.appendChild(w);
     if(cards.length>N){const b=el('button','morebtn','Show '+(cards.length-N)+' more');
       b.onclick=function(){cards.slice(N).forEach(c=>w.appendChild(card(c)));b.remove();scroll();};content.appendChild(b);}
     const vs=[...new Set(cards.map(c=>c.vertical).filter(Boolean))];syncChip(vs.length===1?vs[0]:'');}
-  if(suggest&&suggest.url){const a=el('a','addcta',suggest.label||'➕ Add to directory');a.href=suggest.url;a.target='_blank';a.rel='noopener';content.appendChild(a);}
+  if(contribute){const a=el('button','addcta','➕ Add a place you know');
+    a.onclick=function(){openContribute(contribute.vertical||'',contribute.city||'');};content.appendChild(a);}
+  else if(suggest&&suggest.url){const a=el('a','addcta',suggest.label||'➕ Add to directory');a.href=suggest.url;a.target='_blank';a.rel='noopener';content.appendChild(a);}
   scroll();}
+function openContribute(vertical,city){
+  hideWelcome();const content=addBot();content.innerHTML='';
+  content.appendChild(el('div','bubble','Wonderful — share a place you love and I’ll send it to our team to verify and add. 🙏'));
+  const f=el('div','contrib');
+  const nm=el('input','cin');nm.placeholder='Place name (e.g. Saravana Bhavan)';
+  const ct=el('input','cin');ct.placeholder='City, ST (e.g. Edison, NJ)';if(city)ct.value=city;
+  const send=el('button','csend','Add it');
+  send.onclick=function(){submitContribute(content,nm.value,ct.value,vertical);};
+  f.appendChild(nm);f.appendChild(ct);f.appendChild(send);content.appendChild(f);scroll();nm.focus();
+}
+function submitContribute(content,name,city,vertical){
+  name=(name||'').trim();if(!name){return;}
+  content.innerHTML='';content.appendChild(el('div','bubble','Sending… 🙏'));
+  fetch('/chat/contribute',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name:name,city:city,vertical:vertical})})
+    .then(r=>r.json()).then(d=>{content.innerHTML='';
+      content.appendChild(el('div','bubble',d.message||'Thanks! We’ll review and add it.'));scroll();})
+    .catch(function(){content.innerHTML='';
+      content.appendChild(el('div','bubble','Sorry, that didn’t go through — please try again.'));scroll();});
+}
 async function send(text,isRerun){
   hideWelcome();let content;
   if(!isRerun){addUser(text);history.push({role:'user',content:text});lastQuery=text;content=addBot();lastBot=content;}
@@ -257,7 +291,7 @@ async function send(text,isRerun){
   try{
     const r=await fetch('/chat/api',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({messages:history,geo:geo,filters:filters})});
-    const data=await r.json();fillBot(content,data.reply,data.cards,data.suggest_add);
+    const data=await r.json();fillBot(content,data.reply,data.cards,data.suggest_add,data.contribute);
     if(!isRerun)history.push({role:'assistant',content:data.reply||''});
   }catch(e){fillBot(content,'Sorry, something went wrong. Please try again.',[]);}
 }
@@ -355,7 +389,46 @@ async def chat_api(request: Request) -> JSONResponse:
     return JSONResponse(result)
 
 
+async def chat_contribute(request: Request) -> JSONResponse:
+    """In-chat contribution: a visitor names a place they know -> a pending submission for the
+    portal (admin moderates). This is how the discovery conversation + 'add your favorite' turn
+    into real data the agents can verify and grow."""
+    if not assistant.enabled():
+        return JSONResponse({"ok": False, "message": "Unavailable right now."}, status_code=503)
+    ip = (request.client.host if request.client else "?") or "?"
+    if not _rate_ok(ip):
+        return JSONResponse({"ok": False, "message": "A bit too fast — try again in a moment."},
+                            status_code=429)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    name = (body.get("name") or "").strip()[:120]
+    if not name:
+        return JSONResponse({"ok": False, "message": "Please add the place's name."}, status_code=400)
+    raw_city = (body.get("city") or "").strip()[:120]
+    city, state = raw_city or None, None
+    if "," in raw_city:                                   # "Edison, NJ" -> city + state
+        c, s = raw_city.rsplit(",", 1)
+        city, state = c.strip() or None, (s.strip()[:2].upper() or None)
+    v = body.get("vertical") if body.get("vertical") in verticals.VERTICALS else None
+    if not v or v == "events":                            # guess, default to restaurants (admin recategorizes)
+        v = assistant._guess_vertical(f"{name} {raw_city}") or "restaurants"
+    if v == "events":
+        v = "restaurants"
+    from .. import submissions
+    res = submissions.submit(v, {"name": name, "city": city, "state": state},
+                             note="Suggested by a visitor via Dost chat")
+    if res.get("ok"):
+        return JSONResponse({"ok": True, "message":
+                             f"🎉 Thank you! I've sent “{name}” to our team to verify and add to the "
+                             "directory. Anything else I can help you find?"})
+    return JSONResponse({"ok": False, "message": "Hmm, that didn't go through — please try again."},
+                        status_code=400)
+
+
 routes = [
     Route("/chat", chat_page, methods=["GET"]),
     Route("/chat/api", chat_api, methods=["POST"]),
+    Route("/chat/contribute", chat_contribute, methods=["POST"]),
 ]

@@ -128,6 +128,42 @@ def test_og_image_renders():
     assert "Dost" in r.text and "1200" in r.text
 
 
+def test_chat_welcome_invites_contribution():
+    t = TestClient(app).get("/chat").text
+    assert "openContribute" in t and "A restaurant I love" in t   # greeting invites adding favorites
+
+
+def test_chat_contribute_creates_submission(monkeypatch):
+    from indo_usa_mcp import submissions
+    seen = {}
+
+    def fake_submit(vertical, payload, **k):
+        seen["vertical"], seen["payload"] = vertical, payload
+        return {"ok": True, "id": 1}
+    monkeypatch.setattr(submissions, "submit", fake_submit)
+    r = TestClient(app).post("/chat/contribute",
+                             json={"name": "Saravana Bhavan", "city": "Edison, NJ",
+                                   "vertical": "restaurants"})
+    assert r.status_code == 200 and r.json()["ok"] is True
+    assert seen["vertical"] == "restaurants"
+    assert seen["payload"]["name"] == "Saravana Bhavan"
+    assert seen["payload"]["city"] == "Edison" and seen["payload"]["state"] == "NJ"
+
+
+def test_chat_contribute_requires_name():
+    r = TestClient(app).post("/chat/contribute", json={"name": "  "})
+    assert r.status_code == 400 and r.json()["ok"] is False
+
+
+def test_chat_contribute_guesses_vertical(monkeypatch):
+    from indo_usa_mcp import submissions
+    seen = {}
+    monkeypatch.setattr(submissions, "submit",
+                        lambda v, p, **k: seen.update(v=v) or {"ok": True, "id": 2})
+    TestClient(app).post("/chat/contribute", json={"name": "Apna Bazar grocery", "city": "Iselin"})
+    assert seen["v"] == "groceries"   # guessed from the name when no vertical given
+
+
 def test_chat_api_returns_cards(no_db, monkeypatch):
     monkeypatch.setattr(settings, "llm_provider", "search")
     r = TestClient(app).post("/chat/api", json={"messages": [{"role": "user", "content": "dosa"}]})
