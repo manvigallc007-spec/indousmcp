@@ -154,6 +154,11 @@ services:
     image: caddy:2
     restart: unless-stopped
     profiles: ["tls"]
+    # Use public resolvers — some hosts' /etc/resolv.conf points at a loopback stub (127.0.0.53)
+    # that isn't reachable inside the container, which breaks the ACME (Let's Encrypt) lookup.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     environment:
       DOMAIN: ${DOMAIN:?set DOMAIN to your hostname to use the tls profile}
     ports:
