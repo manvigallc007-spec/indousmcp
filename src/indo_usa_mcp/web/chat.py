@@ -375,9 +375,11 @@ async def chat_api(request: Request) -> JSONResponse:
         if pt:
             geo = {"lat": pt[0], "lng": pt[1], "approx": True}
     raw = body.get("filters") if isinstance(body.get("filters"), dict) else {}
+    lang = body.get("lang") if body.get("lang") in ("en", "hi", "te") else "en"
     filters = {
         "vertical": raw.get("vertical") if isinstance(raw.get("vertical"), str) else None,
         "open_now": bool(raw.get("open_now")),
+        "lang": lang,
     }
     if not isinstance(messages, list):
         messages = []

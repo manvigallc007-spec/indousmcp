@@ -333,6 +333,29 @@ def test_general_question_still_uses_web_not_discovery(no_results, monkeypatch):
     assert out["provider"] == "web"                       # general knowledge -> web fallback
 
 
+def test_lang_note():
+    assert "Hindi" in (assistant._lang_note({"lang": "hi"}) or "")
+    assert "Telugu" in (assistant._lang_note({"lang": "te"}) or "")
+    assert assistant._lang_note({"lang": "en"}) is None
+    assert assistant._lang_note({}) is None
+
+
+def test_grounded_reply_carries_language_instruction(no_db, monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "llm")
+    monkeypatch.setattr(settings, "llm_base_url", "http://x")
+    monkeypatch.setattr(settings, "llm_model", "gemma2:2b")
+    monkeypatch.setattr(settings, "llm_use_tools", False)
+    seen = {}
+
+    def fake_chat(convo, use_tools):
+        seen["has_hindi"] = any("Hindi" in m.get("content", "") for m in convo)
+        return {"content": "नमस्ते! दोसा हट देखिए।"}
+    monkeypatch.setattr(assistant, "_chat", fake_chat)
+    out = assistant.reply([{"role": "user", "content": "dosa"}],
+                          filters={"vertical": None, "open_now": False, "lang": "hi"})
+    assert out["provider"] == "llm" and seen["has_hindi"] is True
+
+
 def test_is_local_request():
     assert assistant._is_local_request("biryani restaurant in dallas")
     assert assistant._is_local_request("krishna temple near me")

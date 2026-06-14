@@ -171,6 +171,22 @@ def _filter_note(filters: dict | None) -> str | None:
     return ("The user has applied filters: " + "; ".join(parts) + ".") if parts else None
 
 
+# Multilingual: the chat passes a language code; English is the default (no instruction needed).
+_LANG_NAMES = {"hi": "Hindi", "te": "Telugu", "en": "English"}
+
+
+def _lang_note(filters: dict | None) -> str | None:
+    """System instruction so the LLM understands & replies in the user's chosen language while
+    still searching the (English) directory in English."""
+    name = _LANG_NAMES.get((filters or {}).get("lang") or "en")
+    if not name or name == "English":
+        return None
+    return (f"Always reply to the user entirely in {name} (its native script). The user may type "
+            f"or speak in {name} or a romanized form — understand either. When you search the "
+            f"directory or call a tool, TRANSLATE the request into English search terms (the "
+            f"listings are stored in English); keep business names as they are.")
+
+
 def _cards(res: dict) -> list[dict]:
     # Return up to 12; the chat UI shows the top 6 and offers "show more" for the rest.
     out = []
@@ -243,7 +259,7 @@ def _chat(messages: list[dict], use_tools: bool) -> dict:
 
 def _llm_reply(messages: list[dict], geo: dict | None, filters: dict | None) -> dict:
     convo: list[dict] = [{"role": "system", "content": _SYSTEM}]
-    for extra in (_location_note(geo), _filter_note(filters)):
+    for extra in (_location_note(geo), _filter_note(filters), _lang_note(filters)):
         if extra:
             convo.append({"role": "system", "content": extra})
     convo += [{"role": m["role"], "content": m.get("content", "")} for m in messages]
@@ -284,7 +300,7 @@ def _grounded_reply(messages: list[dict], geo: dict | None, filters: dict | None
         # free web fallback (avoids spending a slow CPU LLM call just to say "nothing matched").
         return {"reply": "", "cards": [], "provider": "llm", "_empty": True}
     convo: list[dict] = [{"role": "system", "content": _SYSTEM_GROUNDED}]
-    for extra in (_location_note(geo), _filter_note(filters)):
+    for extra in (_location_note(geo), _filter_note(filters), _lang_note(filters)):
         if extra:
             convo.append({"role": "system", "content": extra})
     convo += [{"role": m["role"], "content": m.get("content", "")} for m in messages]
@@ -447,6 +463,9 @@ def _discovery_reply(query: str, messages: list[dict], geo: dict | None, filters
     if llm_active():
         try:
             convo = [{"role": "system", "content": _SYSTEM_DISCOVERY}]
+            note = _lang_note(filters)
+            if note:
+                convo.append({"role": "system", "content": note})
             convo += [{"role": m["role"], "content": m.get("content", "")} for m in messages][-4:]
             reply = (_chat(convo, use_tools=False).get("content") or "").strip() or None
         except Exception:
@@ -476,10 +495,13 @@ def _web_fallback(query: str, geo: dict | None, filters: dict | None) -> dict:
     if snips:
         if llm_active():
             try:
-                msg = _chat([{"role": "system", "content": _SYSTEM_WEB},
-                             {"role": "user", "content":
-                              f"Question: {query}\n\nReference material:\n{_web_snippets_text(snips)}"}],
-                            use_tools=False)
+                convo = [{"role": "system", "content": _SYSTEM_WEB}]
+                note = _lang_note(filters)
+                if note:
+                    convo.append({"role": "system", "content": note})
+                convo.append({"role": "user", "content":
+                              f"Question: {query}\n\nReference material:\n{_web_snippets_text(snips)}"})
+                msg = _chat(convo, use_tools=False)
                 answer = (msg.get("content") or "").strip()
             except Exception:
                 answer = ""
