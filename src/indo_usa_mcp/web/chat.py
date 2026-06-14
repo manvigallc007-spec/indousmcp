@@ -93,6 +93,13 @@ a{color:var(--brand);text-decoration:none}
 .newchat{background:#fff;border:1px solid #e2e0dd;color:var(--ink);border-radius:9px;padding:7px 11px;
  font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:.15s}
 .newchat:hover{border-color:var(--brand);color:var(--brand)}
+.langsel{border:1px solid #e2e0dd;border-radius:9px;padding:6px 8px;font-size:13px;background:#fff;color:var(--ink);cursor:pointer}
+.iconbtn{background:#fff;border:1px solid #e2e0dd;border-radius:9px;padding:6px 9px;font-size:15px;cursor:pointer;line-height:1}
+.iconbtn.on{border-color:var(--accent);background:#e7f6f4}
+.micbtn{flex:0 0 auto;width:40px;height:40px;border:1px solid #ddd;border-radius:12px;background:#fff;
+ cursor:pointer;font-size:18px;line-height:1}.micbtn:hover{border-color:var(--accent)}
+.micbtn.rec{background:#ffe3e3;border-color:#e57373;animation:micpulse 1s infinite}
+@keyframes micpulse{0%,100%{opacity:1}50%{opacity:.45}}
 .status{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
 .status .dot{width:8px;height:8px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 3px #16a34a22}
 @media(max-width:600px){.status{display:none}}
@@ -165,6 +172,10 @@ a{color:var(--brand);text-decoration:none}
 <header class="topbar">
  <a class="brand" href="/"><span class="logo">🪷</span><span><b>__ANAME__</b><i>__AMEAN__</i></span></a>
  <div class="actions">
+  <select id="lang" class="langsel" onchange="setLang(this.value)" aria-label="Language">
+   <option value="en">English</option><option value="hi">हिंदी</option><option value="te">తెలుగు</option>
+  </select>
+  <button class="iconbtn" id="spk" type="button" onclick="toggleSpeak()" title="Read answers aloud" aria-label="Toggle voice">🔊</button>
   <button class="newchat" onclick="newChat()" aria-label="Start a new chat">✎ New chat</button>
   <span class="status"><span class="dot"></span>__MODE__</span>
  </div>
@@ -174,22 +185,23 @@ a{color:var(--brand);text-decoration:none}
  <section id="welcome" class="welcome">
   <div class="hero-avatar">🪷</div>
   <h1>Namaste! I'm __ANAME__ — that means “friend”.</h1>
-  <p>Think of me as your desi friend for finding Indian America — restaurants, sweets, temples,
-   events, classes, salons, doctors, jewelry and more across the USA. Tell me what you're looking
-   for and roughly where, and I'll find the closest ones.</p>
+  <p class="heroSub">Think of me as your desi friend for finding Indian America — restaurants,
+   sweets, temples, events, classes, salons, doctors, jewelry and more across the USA. Tell me what
+   you're looking for and roughly where, and I'll find the closest ones.</p>
   <div class="chips">__CHIPS__</div>
-  <p style="margin:22px 0 8px;color:var(--muted);font-size:14px">New here? Help the community grow —
-   add a place you love and others will find it too:</p>
+  <p class="welcome-contrib">New here? Help the community grow — add a place you love and others
+   will find it too:</p>
   <div class="chips">
-   <button class="chip" onclick="openContribute('restaurants','')">➕ A restaurant I love</button>
-   <button class="chip" onclick="openContribute('groceries','')">➕ My go-to grocery</button>
-   <button class="chip" onclick="openContribute('temples','')">➕ My temple</button>
+   <button class="chip contribchip" onclick="openContribute('restaurants','')">➕ A restaurant I love</button>
+   <button class="chip contribchip" onclick="openContribute('groceries','')">➕ My go-to grocery</button>
+   <button class="chip contribchip" onclick="openContribute('temples','')">➕ My temple</button>
   </div>
  </section>
 </div></main>
 <form class="composer" onsubmit="return submitForm(event)">
  <div class="composer-inner">
   <textarea id="q" rows="1" autocomplete="off" placeholder="Ask anything… e.g. vegetarian thali in Jersey City"></textarea>
+  <button class="micbtn" id="mic" type="button" onclick="startMic()" title="Speak" aria-label="Speak">🎤</button>
   <button class="send" type="submit" aria-label="Send">
    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
   </button>
@@ -202,11 +214,67 @@ const log=document.getElementById('log'), thread=document.getElementById('thread
 const WELCOME=thread.innerHTML;
 let history=[], geo=null, lastQuery='', lastBot=null;
 let filters={vertical:null, open_now:false};
+// --- language + voice (free: browser Web Speech API; Dost replies via the multilingual LLM) ---
+let lang=localStorage.getItem('dost_lang')||'en';
+let speakOn=localStorage.getItem('dost_speak')==='1';
+const LOCALE={en:'en-US',hi:'hi-IN',te:'te-IN'};
+const I18N={
+ en:{hero:"Namaste! I'm Dost — that means “friend”.",
+  heroSub:"Tell me what you're looking for and roughly where, and I'll find the closest ones.",
+  contribLine:"New here? Add a place you love so others can find it too:",
+  cRest:"➕ A restaurant I love",cGro:"➕ My go-to grocery",cTemple:"➕ My temple",
+  placeholder:"Ask anything… e.g. vegetarian thali in Jersey City",
+  hint:"Dost searches a live directory · Enter to send",
+  nearme:"Near me",opennow:"Open now",newchat:"New chat",mic:"Speak",spk:"Read answers aloud"},
+ hi:{hero:"नमस्ते! मैं दोस्त हूँ — यानी आपका “मित्र”।",
+  heroSub:"बताइए आप क्या ढूँढ़ रहे हैं और किस शहर में — मैं आपके सबसे नज़दीकी जगहें खोज दूँगा।",
+  contribLine:"नए हैं? अपनी पसंदीदा जगह जोड़ें ताकि और लोग भी उसे पा सकें:",
+  cRest:"➕ मेरा पसंदीदा रेस्टोरेंट",cGro:"➕ मेरी रोज़ की ग्रोसरी",cTemple:"➕ मेरा मंदिर",
+  placeholder:"कुछ भी पूछें… जैसे जर्सी सिटी में वेज थाली",
+  hint:"दोस्त एक लाइव डायरेक्टरी खोजता है · भेजने के लिए Enter",
+  nearme:"मेरे पास",opennow:"अभी खुला",newchat:"नई चैट",mic:"बोलें",spk:"जवाब सुनाएँ"},
+ te:{hero:"నమస్తే! నేను దోస్త్ — అంటే మీ “స్నేహితుడు”.",
+  heroSub:"మీరు ఏమి వెతుకుతున్నారో, ఏ నగరంలోనో చెప్పండి — దగ్గర్లోని వాటిని నేను చూపిస్తాను.",
+  contribLine:"కొత్తగా వచ్చారా? మీకు నచ్చిన ప్రదేశాన్ని జోడించండి, ఇతరులూ కనుగొంటారు:",
+  cRest:"➕ నాకు ఇష్టమైన రెస్టారెంట్",cGro:"➕ నా రోజువారీ గ్రోసరీ",cTemple:"➕ నా ఆలయం",
+  placeholder:"ఏదైనా అడగండి… ఉదా: జెర్సీ సిటీలో వెజ్ తాలి",
+  hint:"దోస్త్ లైవ్ డైరెక్టరీని వెతుకుతుంది · పంపడానికి Enter",
+  nearme:"నా దగ్గర",opennow:"ఇప్పుడు తెరిచి ఉంది",newchat:"కొత్త చాట్",mic:"మాట్లాడండి",spk:"సమాధానాలు చదవండి"}
+};
+function T(){return I18N[lang]||I18N.en;}
+function setLang(v){lang=I18N[v]?v:'en';localStorage.setItem('dost_lang',lang);applyLang();}
+function applyLang(){const t=T();
+ const set=(sel,val)=>{const e=document.querySelector(sel);if(e)e.textContent=val;};
+ set('#welcome h1',t.hero);set('#welcome .heroSub',t.heroSub);set('#welcome .welcome-contrib',t.contribLine);
+ const cc=document.querySelectorAll('#welcome .contribchip');if(cc[0])cc[0].textContent=t.cRest;if(cc[1])cc[1].textContent=t.cGro;if(cc[2])cc[2].textContent=t.cTemple;
+ if(ta)ta.placeholder=t.placeholder;
+ const hint=document.querySelector('.hint');if(hint)hint.textContent=t.hint;
+ const loc=document.querySelector('.fchip.loc');if(loc)loc.textContent='📍 '+t.nearme;
+ const opn=document.querySelector('.fchip.open');if(opn)opn.textContent='● '+t.opennow;
+ const nc=document.querySelector('.newchat');if(nc)nc.textContent='✎ '+t.newchat;
+ const mic=document.getElementById('mic');if(mic)mic.title=t.mic;
+ const spk=document.getElementById('spk');if(spk){spk.title=t.spk;spk.classList.toggle('on',speakOn);}
+ const sel=document.getElementById('lang');if(sel)sel.value=lang;
+}
+function startMic(){
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!SR){fillBot(addBot(),'🎤 Voice input isn’t supported in this browser — please type instead.',[]);return;}
+ if(!window.isSecureContext){fillBot(addBot(),'🎤 Voice input needs a secure (https) connection — you can still type.',[]);return;}
+ let r;try{r=new SR();}catch(e){return;}
+ r.lang=LOCALE[lang]||'en-US';r.interimResults=false;r.maxAlternatives=1;
+ const mic=document.getElementById('mic');if(mic)mic.classList.add('rec');
+ r.onresult=function(e){const tx=(e.results[0][0]||{}).transcript||'';if(tx){ta.value=tx;submitForm(new Event('submit'));}};
+ r.onerror=function(){};r.onend=function(){if(mic)mic.classList.remove('rec');};
+ try{r.start();}catch(e){if(mic)mic.classList.remove('rec');}
+}
+function pickVoice(loc){const vs=(window.speechSynthesis?speechSynthesis.getVoices():[])||[];return vs.find(v=>v.lang===loc)||vs.find(v=>v.lang&&v.lang.slice(0,2)===loc.slice(0,2));}
+function speak(text){if(!speakOn||!('speechSynthesis' in window)||!text)return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang=LOCALE[lang]||'en-US';const v=pickVoice(u.lang);if(v)u.voice=v;speechSynthesis.speak(u);}catch(e){}}
+function toggleSpeak(){speakOn=!speakOn;localStorage.setItem('dost_speak',speakOn?'1':'0');const spk=document.getElementById('spk');if(spk)spk.classList.toggle('on',speakOn);if(!speakOn&&'speechSynthesis' in window){try{speechSynthesis.cancel();}catch(e){}}}
 function newChat(){
   history=[];lastQuery='';lastBot=null;filters={vertical:null,open_now:false};
   document.querySelectorAll('.fchip').forEach(c=>c.classList.remove('on'));
   const all=document.querySelector('.fchip[data-v=""]');if(all)all.classList.add('on');
-  thread.innerHTML=WELCOME;ta.value='';ta.style.height='auto';ta.focus();log.scrollTop=0;
+  thread.innerHTML=WELCOME;ta.value='';ta.style.height='auto';applyLang();ta.focus();log.scrollTop=0;
 }
 navigator.geolocation && navigator.geolocation.getCurrentPosition(
   p=>{geo={lat:p.coords.latitude,lng:p.coords.longitude};}, ()=>{}, {timeout:4000});
@@ -290,8 +358,9 @@ async function send(text,isRerun){
   else{content=lastBot;content.innerHTML='';const b=el('div','bubble');b.appendChild(typing());content.appendChild(b);scroll();}
   try{
     const r=await fetch('/chat/api',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({messages:history,geo:geo,filters:filters})});
+      body:JSON.stringify({messages:history,geo:geo,filters:filters,lang:lang})});
     const data=await r.json();fillBot(content,data.reply,data.cards,data.suggest_add,data.contribute);
+    speak(data.reply);
     if(!isRerun)history.push({role:'assistant',content:data.reply||''});
   }catch(e){fillBot(content,'Sorry, something went wrong. Please try again.',[]);}
 }
@@ -300,6 +369,8 @@ function submitForm(e){if(e&&e.preventDefault)e.preventDefault();const t=ta.valu
 function ask(text){send(text,false);}
 ta.addEventListener('input',()=>{ta.style.height='auto';ta.style.height=Math.min(ta.scrollHeight,140)+'px';});
 ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submitForm(e);}});
+setLang(lang);  // apply saved language to the UI + selector
+if('speechSynthesis' in window){speechSynthesis.onvoiceschanged=function(){};speechSynthesis.getVoices();}
 ta.focus();
 // Deep-link / SEO SearchAction: /chat?q=... prefills and runs the search automatically.
 (function(){var q=new URLSearchParams(location.search).get('q');if(q&&q.trim()){send(q.trim(),false);}})();

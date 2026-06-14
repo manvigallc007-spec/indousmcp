@@ -122,6 +122,22 @@ def test_chat_page_is_dost_branded_with_meaning_and_jsonld():
     assert "__" not in t                       # all template placeholders resolved
 
 
+def test_chat_has_language_selector_and_voice():
+    t = TestClient(app).get("/chat").text
+    assert 'id="lang"' in t and "हिंदी" in t and "తెలుగు" in t   # EN/HI/TE picker
+    assert "startMic" in t and "micbtn" in t                      # mic (SpeechRecognition)
+    assert "speechSynthesis" in t                                 # speaker (SpeechSynthesis)
+    assert "नमस्ते" in t                                          # Hindi UI string present
+    assert "__" not in t                                          # all placeholders resolved
+
+
+def test_chat_api_accepts_lang(no_db, monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "search")
+    r = TestClient(app).post("/chat/api",
+                             json={"messages": [{"role": "user", "content": "dosa"}], "lang": "hi"})
+    assert r.status_code == 200
+
+
 def test_og_image_renders():
     r = TestClient(app).get("/og-image.svg")
     assert r.status_code == 200 and r.headers["content-type"] == "image/svg+xml"
