@@ -17,17 +17,25 @@ _unavailable = False
 _FWD_CACHE: dict[str, tuple[float, float] | None] = {}
 
 
-def coords_for(address: str | None = None, city: str | None = None, state: str | None = None,
-               country: str = "USA") -> tuple[float, float] | None:
-    """Forward-geocode a US address/locality to (lat, lng) via Nominatim. Cached; None on failure."""
-    locality = [str(p).strip() for p in (address, city, state) if p and str(p).strip()]
-    if not locality:   # nothing specific to geocode (country alone is useless) -> skip the call
-        return None
-    query = ", ".join(locality + ([country] if country else []))
-    key = query.lower()
-    if key in _FWD_CACHE:
-        return _FWD_CACHE[key]
-    point: tuple[float, float] | None = None
+def _census_geocode(query: str) -> tuple[float, float] | None:
+    """Official US Census geocoder — free, no key, no rate limit; best on full street addresses."""
+    try:
+        r = httpx.get("https://geocoding.geo.census.gov/geocoder/locations/onelineaddress",
+                      params={"address": query, "benchmark": "Public_AR_Current", "format": "json"},
+                      headers={"User-Agent": settings.scraper_user_agent}, timeout=8.0)
+        if r.status_code == 200:
+            matches = (r.json().get("result", {}) or {}).get("addressMatches", []) or []
+            if matches:
+                c = matches[0].get("coordinates", {}) or {}
+                if c.get("y") is not None and c.get("x") is not None:
+                    return (float(c["y"]), float(c["x"]))   # y=lat, x=lng
+    except Exception:
+        pass
+    return None
+
+
+def _nominatim_geocode(query: str) -> tuple[float, float] | None:
+    """OSM Nominatim — free; handles city/state-only queries the Census geocoder can't."""
     try:
         r = httpx.get("https://nominatim.openstreetmap.org/search",
                       params={"q": query, "format": "json", "limit": 1, "countrycodes": "us"},
@@ -35,9 +43,26 @@ def coords_for(address: str | None = None, city: str | None = None, state: str |
         if r.status_code == 200:
             data = r.json()
             if data:
-                point = (float(data[0]["lat"]), float(data[0]["lon"]))
+                return (float(data[0]["lat"]), float(data[0]["lon"]))
     except Exception:
-        point = None
+        pass
+    return None
+
+
+def coords_for(address: str | None = None, city: str | None = None, state: str | None = None,
+               country: str = "USA") -> tuple[float, float] | None:
+    """Forward-geocode a US address/locality to (lat, lng). Tries the official Census geocoder when
+    a street address is present (free, fast, no rate limit), else OSM Nominatim. Cached; None on
+    failure."""
+    locality = [str(p).strip() for p in (address, city, state) if p and str(p).strip()]
+    if not locality:   # nothing specific to geocode (country alone is useless) -> skip the call
+        return None
+    query = ", ".join(locality + ([country] if country else []))
+    key = query.lower()
+    if key in _FWD_CACHE:
+        return _FWD_CACHE[key]
+    has_street = any(ch.isdigit() for ch in (address or ""))   # Census needs a street address
+    point = (_census_geocode(query) if has_street else None) or _nominatim_geocode(query)
     _FWD_CACHE[key] = point
     return point
 
