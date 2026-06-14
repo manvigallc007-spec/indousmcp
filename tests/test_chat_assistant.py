@@ -202,6 +202,25 @@ def test_chat_widens_to_state_when_city_empty(monkeypatch):
     assert out["cards"][0]["name"] == "Plano Tiffins"
 
 
+def test_typed_category_overrides_conflicting_chip(monkeypatch):
+    # Temple chip selected, but the user asks for restaurants -> show restaurants, not temples.
+    monkeypatch.setattr(settings, "llm_provider", "search")
+    monkeypatch.setattr(assistant.analytics, "log_impressions", lambda *a, **k: None)
+    monkeypatch.setattr(assistant.analytics, "log_call", lambda *a, **k: None)
+    from indo_usa_mcp import queries as r_queries
+    monkeypatch.setattr(assistant.verticals, "search_all",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("should scope, not search_all")))
+
+    def boom_temples(*a, **k):
+        raise AssertionError("must not search temples when the user typed 'restaurants'")
+    monkeypatch.setattr(r_queries, "search_restaurants_by_text",
+                        lambda q, **k: {"results": [{"id": 1, "name": "Dallas Dhaba"}]})
+    out = assistant.reply([{"role": "user", "content": "restaurants in dallas"}],
+                          filters={"vertical": "temples", "open_now": False})
+    assert out["cards"][0]["name"] == "Dallas Dhaba"
+    assert out["cards"][0]["vertical"] == "restaurants"
+
+
 def test_is_indian_american_topic():
     assert assistant.is_indian_american_topic("when is diwali this year")
     assert assistant.is_indian_american_topic("best indian restaurant near me")
