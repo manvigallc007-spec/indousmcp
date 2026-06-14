@@ -50,8 +50,11 @@ def clean_professional(c: dict) -> dict:
     haystack = " ".join(str(c.get(f) or "") for f in
                         ("name", "speciality", "profession_type", "address_full")).lower()
     city, state = rclean.fill_location(c.get("city"), c.get("state"), lat, lng)
+    # Coordinate-less sources (e.g. NPPES) would all collide on a name-only key, so disambiguate
+    # by city; coordinate-bearing sources (OSM) keep their original name+geo key.
+    nk_seed = name if (lat is not None and lng is not None) else f"{name} {city or ''}".strip()
     rec = {
-        "natural_key": rclean.natural_key(name, lat, lng),
+        "natural_key": rclean.natural_key(nk_seed, lat, lng),
         "name": name,
         "address_full": (c.get("address_full") or "").strip() or None,
         "city": city,
@@ -88,6 +91,22 @@ def _score(rec: dict) -> float:
 def scrape_to_raw(region: str) -> int:
     count = 0
     for c in ProfessionalOverpassScraper().scrape(region):
+        db.execute(
+            "INSERT INTO professional_raw (source_name, source_url, source_id, payload) "
+            "VALUES (%s, %s, %s, %s) ON CONFLICT (source_name, source_id) "
+            "DO UPDATE SET payload = EXCLUDED.payload, scraped_at = now(), "
+            "processed = false, processed_at = NULL",
+            (c["source_name"], c.get("source_url"), c.get("source_id"), Jsonb(c)),
+        )
+        count += 1
+    return count
+
+
+def scrape_nppes_to_raw(state: str, limit_per: int = 200) -> int:
+    """Pull Indian-American providers for a US state from the NPPES NPI registry into raw."""
+    from .nppes import NppesScraper
+    count = 0
+    for c in NppesScraper().scrape(state, limit_per=limit_per):
         db.execute(
             "INSERT INTO professional_raw (source_name, source_url, source_id, payload) "
             "VALUES (%s, %s, %s, %s) ON CONFLICT (source_name, source_id) "

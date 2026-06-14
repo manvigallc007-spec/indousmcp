@@ -271,6 +271,12 @@ def cmd_professionals_scrape(args: argparse.Namespace) -> None:
     print(f"Upserted {n} raw professional observation(s).")
 
 
+def cmd_professionals_nppes(args: argparse.Namespace) -> None:
+    print(f"Scraping NPPES providers for state={args.state.upper()} (free CMS registry) ...")
+    n = professionals.scrape_nppes_to_raw(args.state, limit_per=args.limit)
+    print(f"Upserted {n} raw provider(s). Run professionals-process, then backfill-geo for coords.")
+
+
 def cmd_professionals_process(_: argparse.Namespace) -> None:
     _print(professionals.process_raw())
 
@@ -588,6 +594,12 @@ def build_parser() -> argparse.ArgumentParser:
     ps = sub.add_parser("professionals-scrape", help="Scrape Indian doctors/dentists/clinics")
     ps.add_argument("--metro", required=True, choices=SCRAPE_REGIONS, metavar="REGION")
     ps.set_defaults(func=cmd_professionals_scrape)
+
+    pn = sub.add_parser("professionals-nppes",
+                        help="Pull Indian providers from the free CMS NPPES registry (by US state)")
+    pn.add_argument("--state", required=True, help="2-letter US state, e.g. NJ, TX, CA")
+    pn.add_argument("--limit", type=int, default=200, help="Max results per surname (<=200)")
+    pn.set_defaults(func=cmd_professionals_nppes)
 
     sub.add_parser("professionals-process", help="Process raw professionals -> canonical").set_defaults(
         func=cmd_professionals_process)
