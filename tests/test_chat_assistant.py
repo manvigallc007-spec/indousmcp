@@ -278,14 +278,29 @@ def test_relevant_miss_uses_web_fallback_and_suggests_add(no_results, monkeypatc
     assert out["suggest_add"]["url"].endswith("/submit")
 
 
-def test_relevant_miss_without_web_data_still_suggests(no_results, monkeypatch):
+def test_local_miss_goes_to_discovery_and_invites_contribution(no_results, monkeypatch):
+    # A local business/place we don't have -> engage (ask + invite to add), not a web answer.
+    monkeypatch.setattr(settings, "llm_provider", "search")
+    out = assistant.reply([{"role": "user", "content": "telugu association in austin"}])
+    assert out["provider"] == "discovery" and out["cards"] == []
+    assert out["contribute"]["vertical"] == "community"
+    assert out["suggest_add"]["url"].endswith("?vertical=community")
+    assert "directory" in out["reply"].lower()           # invites adding it
+
+
+def test_general_question_still_uses_web_not_discovery(no_results, monkeypatch):
     monkeypatch.setattr(settings, "llm_provider", "search")
     import indo_usa_mcp.websearch as ws
-    monkeypatch.setattr(ws, "lookup", lambda q, **k: [])
-    out = assistant.reply([{"role": "user", "content": "telugu association in austin"}])
-    assert out["provider"] == "web" and out["cards"] == []
-    assert out["suggest_add"]["vertical"] == "community"
-    assert "directory" in out["reply"].lower()
+    monkeypatch.setattr(ws, "lookup", lambda q, **k: [
+        {"source": "Wikipedia", "title": "Diwali", "text": "Festival of lights.", "url": ""}])
+    out = assistant.reply([{"role": "user", "content": "what is diwali about"}])
+    assert out["provider"] == "web"                       # general knowledge -> web fallback
+
+
+def test_is_local_request():
+    assert assistant._is_local_request("biryani restaurant in dallas")
+    assert assistant._is_local_request("krishna temple near me")
+    assert not assistant._is_local_request("what is the significance of holi")
 
 
 def test_web_fallback_serves_from_cache_without_calling_web(no_results, monkeypatch):

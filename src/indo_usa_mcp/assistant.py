@@ -48,6 +48,14 @@ _SYSTEM_WEB = (
     "or invent any specific business, phone number, address, or price. If the references don't "
     "actually answer the question, say you're not sure.")
 
+_SYSTEM_DISCOVERY = (
+    "You are Dost (Hindi/Urdu for “friend”), a warm guide to Indian-American places across the "
+    "USA. We do NOT have a listing for the user's request yet. In 1-2 friendly, natural sentences: "
+    "(1) gently say we don't have it yet, (2) ask ONE specific follow-up to understand what they "
+    "want (which area/city, what kind, veg or occasion), and (3) invite them to share a place they "
+    "know so we can add it to the directory. Be warm and curious, vary your wording — never invent "
+    "or name specific businesses.")
+
 _TOOLS = [{
     "type": "function",
     "function": {
@@ -403,6 +411,53 @@ def _web_snippets_text(snips: list[dict]) -> str:
                        for s in snips)
 
 
+def _is_local_request(query: str, filters: dict | None = None) -> bool:
+    """A request for a local business/place (-> discovery conversation) vs a general-knowledge
+    question (-> web answer). True if a category, local-intent word, or place is present."""
+    if (filters or {}).get("vertical"):
+        return True
+    t = (query or "").lower()
+    return bool(_guess_vertical(query)) or any(w in t for w in _LOCAL_WORDS) \
+        or _extract_location(query) != (None, None)
+
+
+def _discovery_template(vertical: str | None, city: str | None) -> str:
+    label = (verticals.VERTICALS.get(vertical, {}).get("label", "").lower()
+             if vertical else "") or "places like that"
+    where = f" in {city}" if city else " in your area"
+    return (f"I don't have {label}{where} in the directory yet — and honestly that's really useful "
+            "to know, it tells me what to add next! Could you tell me a little more — which area, "
+            "or what kind you're after? And if you already know a great spot, share its name and "
+            "I'll get it into the directory for others.")
+
+
+def _discovery_reply(query: str, messages: list[dict], geo: dict | None, filters: dict | None) -> dict:
+    """A relevant *local* request we can't answer yet → engage: acknowledge, ask a follow-up, and
+    invite the visitor to contribute the missing place (which we'll add). Demand was already logged
+    by the search that came up empty, so agents can prioritize scraping it."""
+    vertical = (filters or {}).get("vertical") or _guess_vertical(query)
+    city, state = _extract_location(query)
+    if not (city or state) and geo:
+        try:
+            from .pipeline import clean
+            city, state = clean.fill_location(None, None, float(geo["lat"]), float(geo["lng"]))
+        except Exception:
+            pass
+    reply = None
+    if llm_active():
+        try:
+            convo = [{"role": "system", "content": _SYSTEM_DISCOVERY}]
+            convo += [{"role": m["role"], "content": m.get("content", "")} for m in messages][-4:]
+            reply = (_chat(convo, use_tools=False).get("content") or "").strip() or None
+        except Exception:
+            reply = None
+    if not reply:
+        reply = _discovery_template(vertical, city)
+    return {"reply": reply, "cards": [], "provider": "discovery",
+            "suggest_add": _suggest_add(query),
+            "contribute": {"vertical": vertical, "city": city, "state": state}}
+
+
 def _web_fallback(query: str, geo: dict | None, filters: dict | None) -> dict:
     """Relevant question the directory can't answer → answer from free web sources (labelled as
     general info, never as a verified listing) + suggest adding it to the directory.
@@ -562,10 +617,14 @@ def reply(messages: list[dict], geo: dict | None = None, filters: dict | None = 
     else:
         out = _search_reply(messages, geo, filters)
 
-    # Directory found nothing for a real query: gate relevance, then either answer from free
-    # web sources (relevant) or decline politely (off-topic). Both paths suggest adding a listing.
+    # Directory found nothing for a real query. Route the dead-end into something useful:
+    #  - off-topic            -> polite decline
+    #  - local business/place -> a DISCOVERY conversation (ask a follow-up + invite them to add it)
+    #  - general knowledge    -> answer from free web sources
     if query and not out.get("cards"):
         if not is_indian_american_topic(query):
             return _decline(query)
+        if _is_local_request(query, filters):
+            return _discovery_reply(query, messages, geo, filters)
         return _web_fallback(query, geo, filters)
     return out
