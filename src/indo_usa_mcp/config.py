@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     # Scraper politeness
     overpass_url: str = "https://overpass-api.de/api/interpreter"
     scraper_user_agent: str = "indo-usa-diaspora-mcp/0.1"
+    # Optional free US Census API key (https://api.census.gov/data/key_signup.html). Low-volume
+    # demographics pulls work without one; set it to be safe under rate limits.
+    census_api_key: str = ""
     scraper_timeout_seconds: int = 180
 
     # Public claim web page (owner-facing)

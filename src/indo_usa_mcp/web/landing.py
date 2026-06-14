@@ -316,8 +316,9 @@ def events_page(request: Request) -> HTMLResponse:
 # -------------------------------------------------------------- crawler files
 def sitemap(request: Request) -> Response:
     base = _base()
-    urls = [f"{base}/", f"{base}/browse", f"{base}/chat", f"{base}/events", f"{base}/submit",
-            f"{base}/about", f"{base}/privacy", f"{base}/terms", f"{base}/contact", f"{base}/faq"]
+    urls = [f"{base}/", f"{base}/browse", f"{base}/chat", f"{base}/events", f"{base}/insights",
+            f"{base}/submit", f"{base}/about", f"{base}/privacy", f"{base}/terms",
+            f"{base}/contact", f"{base}/faq"]
     urls += [f"{base}/browse/{v}" for v in verticals.VERTICALS]
     # All (vertical × city) pages that actually have active listings.
     for v in verticals.VERTICALS:
@@ -375,6 +376,42 @@ def service_worker(request: Request) -> Response:
                     headers={"Cache-Control": "no-cache"})
 
 
+def insights(request: Request) -> HTMLResponse:
+    from .. import demographics
+    metros, states = demographics.top("metro", 15), demographics.top("state", 12)
+    title = "Indian America by the numbers"
+    desc = ("Where Indian-Americans live across the USA — top metros and states by Asian-Indian "
+            "population, from public U.S. Census data.")
+    if not metros and not states:
+        body = (f"<h1>{title}</h1><p class='muted'>Population insights are being prepared — "
+                "check back soon. Meanwhile, <a href='/chat'>Ask Dost</a> or "
+                "<a href='/browse'>browse the directory</a>.</p>")
+        return _page(title, desc, body)
+    th = "padding:8px 12px;border-bottom:2px solid #e7c3b6;text-align:left"
+    td = "padding:7px 12px;border-bottom:1px solid #efe9e1"
+    tdr = td + ";text-align:right"
+
+    def _rows(items):
+        return "".join(f"<tr><td style='{td}'>{html.escape(r['name'])}</td>"
+                       f"<td style='{tdr}'>{(r['indian_population'] or 0):,}</td></tr>" for r in items)
+    total = (demographics.summary().get("total_indian") or 0)
+    body = (
+        f"<h1>{title}</h1>"
+        f"<p class='lead'>Where Indian-Americans live across the USA, from the U.S. Census Bureau "
+        f"(American Community Survey). Roughly <b>{total:,}</b> people of Asian-Indian origin "
+        f"nationwide.</p>"
+        f"<h2>Top metro areas</h2><table style='border-collapse:collapse;width:100%'>"
+        f"<tr><th style='{th}'>Metro area</th><th style='{th};text-align:right'>Asian-Indian population</th></tr>"
+        f"{_rows(metros)}</table>"
+        f"<h2 style='margin-top:24px'>Top states</h2><table style='border-collapse:collapse;width:100%'>"
+        f"<tr><th style='{th}'>State</th><th style='{th};text-align:right'>Asian-Indian population</th></tr>"
+        f"{_rows(states)}</table>"
+        f"<p class='muted' style='margin-top:18px'>Source: U.S. Census Bureau, ACS 5-year "
+        f"(aggregated, public data).</p>"
+        f"<p><a href='/chat'>Ask Dost to find Indian places near you →</a></p>")
+    return _page(title, desc, body)
+
+
 def llms_txt(request: Request) -> Response:
     base = _base()
     cats = "\n".join(f"- {cfg['label']}: {base}/browse/{v}" for v, cfg in verticals.VERTICALS.items())
@@ -394,6 +431,7 @@ def llms_txt(request: Request) -> Response:
 routes = [
     Route("/browse", browse_root, methods=["GET"]),
     Route("/events", events_page, methods=["GET"]),
+    Route("/insights", insights, methods=["GET"]),
     Route("/browse/{vertical}", browse_vertical, methods=["GET"]),
     Route("/browse/{vertical}/{state}", browse_state, methods=["GET"]),
     Route("/browse/{vertical}/{state}/{city}", browse_city, methods=["GET"]),

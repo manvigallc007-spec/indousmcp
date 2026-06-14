@@ -17,8 +17,8 @@ from ..config import settings
 
 # Footer links shown on every content page (and reusable elsewhere).
 FOOTER_LINKS = [("Home", "/"), ("Ask " + settings.assistant_name, "/chat"), ("Browse", "/browse"),
-                ("Add a listing", "/submit"), ("About", "/about"), ("Privacy", "/privacy"),
-                ("Terms", "/terms"), ("Contact", "/contact"), ("FAQ", "/faq")]
+                ("Insights", "/insights"), ("Add a listing", "/submit"), ("About", "/about"),
+                ("Privacy", "/privacy"), ("Terms", "/terms"), ("Contact", "/contact"), ("FAQ", "/faq")]
 
 
 def footer_html() -> str:

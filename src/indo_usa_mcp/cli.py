@@ -145,6 +145,14 @@ def cmd_backfill_geo(args: argparse.Namespace) -> None:
     _print(verticals.backfill_coords(limit=args.limit))
 
 
+def cmd_demographics_refresh(args: argparse.Namespace) -> None:
+    from . import demographics
+    _print(demographics.refresh(year=args.year))
+    print("Top Indian-American metros:")
+    for r in demographics.top("metro", 12):
+        print(f"  {r['indian_population']:>8,}  {r['name']}")
+
+
 def cmd_approval_digest(_: argparse.Namespace) -> None:
     _print(ingest.summarize_approvals())
 
@@ -484,9 +492,14 @@ def build_parser() -> argparse.ArgumentParser:
     pnd.set_defaults(func=cmd_purge_non_diaspora)
 
     bg = sub.add_parser("backfill-geo",
-                        help="Forward-geocode address-only listings (Nominatim) so they sort by distance")
+                        help="Forward-geocode address-only listings (Census/Nominatim) so they sort by distance")
     bg.add_argument("--limit", type=int, default=200, help="Max rows per vertical per run")
     bg.set_defaults(func=cmd_backfill_geo)
+
+    dg = sub.add_parser("demographics-refresh",
+                        help="Pull Asian-Indian population by state/metro from the free Census ACS API")
+    dg.add_argument("--year", default="2022", help="ACS 5-year vintage, e.g. 2022")
+    dg.set_defaults(func=cmd_demographics_refresh)
 
     sub.add_parser("approval-digest", help="Human-readable summary of pending approvals").set_defaults(
         func=cmd_approval_digest
