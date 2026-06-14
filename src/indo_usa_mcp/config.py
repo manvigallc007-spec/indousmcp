@@ -163,8 +163,11 @@ class Settings(BaseSettings):
     embedding_dim: int = 384                            # must match the embedding vector(N) columns
 
     # Branding — TEMP placeholders until a real name/domain is chosen (override via env).
-    platform_name: str = "DesiConnect"          # brand shown across pages
-    assistant_name: str = "Dost"                # chatbot persona ("dost" = friend)
+    platform_name: str = "DesiConnect"          # directory/platform brand shown across pages
+    assistant_name: str = "Dost"                # the chatbot's name
+    # One source for the friendly meaning, surfaced in chat copy + meta so non-Hindi speakers get it.
+    assistant_meaning: str = "“Dost” means “friend” in Hindi & Urdu"
+    assistant_tagline: str = "your friend for finding Indian America"
     platform_tagline: str = "Your guide to Indian America"
 
     # Outreach & claiming

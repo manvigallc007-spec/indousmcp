@@ -46,6 +46,37 @@ def icon(request: Request) -> Response:
                     headers={"Cache-Control": "public, max-age=86400"})
 
 
+def og_image(request: Request) -> Response:
+    """A 1200x630 branded social-share card (temp name + lotus logo). Swap for the real brand
+    later by editing this one route. SVG keeps it dependency-free; a raster can replace it."""
+    aname = html.escape(settings.assistant_name)
+    tag = html.escape(settings.assistant_tagline)
+    mean = html.escape(settings.assistant_meaning)
+    plat = html.escape(settings.platform_name)
+    f = "font-family='Segoe UI,Helvetica,Arial,sans-serif'"
+    svg = (
+        "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='630' viewBox='0 0 1200 630'>"
+        "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>"
+        "<stop offset='0' stop-color='#ffce93'/><stop offset='1' stop-color='#e8772e'/>"
+        "</linearGradient></defs>"
+        "<rect width='1200' height='630' fill='#faf7f2'/>"
+        "<rect width='1200' height='16' fill='#e8772e'/><rect y='614' width='1200' height='16' fill='#0f9b8e'/>"
+        "<rect x='96' y='220' width='190' height='190' rx='44' fill='url(#g)'/>"
+        "<g fill='#fff' opacity='.96' transform='translate(191 315) scale(2.5)'>"
+        "<ellipse cx='0' cy='0' rx='5.5' ry='14'/>"
+        "<ellipse cx='0' cy='0' rx='5.5' ry='14' transform='rotate(38)'/>"
+        "<ellipse cx='0' cy='0' rx='5.5' ry='14' transform='rotate(-38)'/>"
+        "<ellipse cx='0' cy='2' rx='5' ry='10.5' transform='rotate(70)'/>"
+        "<ellipse cx='0' cy='2' rx='5' ry='10.5' transform='rotate(-70)'/></g>"
+        f"<text x='330' y='300' {f} font-size='128' font-weight='700' fill='#25303a'>{aname}</text>"
+        f"<text x='334' y='362' {f} font-size='42' fill='#0f9b8e'>{tag}</text>"
+        f"<text x='334' y='420' {f} font-size='30' fill='#6b7280'>{mean}</text>"
+        f"<text x='96' y='566' {f} font-size='26' fill='#9aa0a6'>{plat} · Indian-American directory · USA</text>"
+        "</svg>")
+    return Response(svg, media_type="image/svg+xml",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
 _LANDING_HTML = """<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__PLAT__ — Find Indian America</title>
@@ -406,6 +437,7 @@ routes = [
     Route("/", home, methods=["GET"]),
     Route("/icon.svg", icon, methods=["GET"]),
     Route("/favicon.ico", icon, methods=["GET"]),
+    Route("/og-image.svg", og_image, methods=["GET"]),
     Route("/submit", submit_get, methods=["GET"]),
     Route("/submit", submit_post, methods=["POST"]),
     Route("/claim", claim_get, methods=["GET"]),

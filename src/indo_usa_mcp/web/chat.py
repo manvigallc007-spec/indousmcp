@@ -60,20 +60,25 @@ _CAT_BLURB = {"restaurants": "Dosa, biryani, thali & more", "temples": "Hindu ·
 _CHAT_HTML = """<!doctype html><html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Ask __ANAME__ · __PLAT__</title>
+<title>__ANAME__ — __ATAG__</title>
 <meta name="description" content="__OGDESC__">
-<meta property="og:title" content="__PLAT__ — Ask __ANAME__">
+<meta property="og:title" content="__ANAME__ — __ATAG__">
 <meta property="og:description" content="__OGDESC__">
 <meta property="og:type" content="website">
 <meta property="og:url" content="__OGURL__">
 <meta property="og:image" content="__OGIMG__">
-<meta name="twitter:card" content="summary">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="__ANAME__ — __ATAG__">
+<meta name="twitter:description" content="__OGDESC__">
+<meta name="twitter:image" content="__OGIMG__">
+<link rel="canonical" href="__OGURL__">
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
-<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#c1440e">
+<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#e8772e">
+<script type="application/ld+json">__JSONLD__</script>
 <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}</script>
 <style>
-:root{--brand:#c1440e;--brand-d:#a2380b;--bg:#f6f4f1;--panel:#fff;--ink:#1f2430;
- --muted:#6b7280;--line:#ececec}
+:root{--brand:#e8772e;--brand-d:#cf6212;--accent:#0f9b8e;--accent-d:#0c7e74;
+ --bg:#faf7f2;--panel:#fff;--ink:#25303a;--muted:#6b7280;--line:#efe9e1}
 *{box-sizing:border-box}html,body{height:100%}
 body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
  color:var(--ink);background:var(--bg);display:flex;flex-direction:column;height:100dvh}
@@ -150,7 +155,7 @@ a{color:var(--brand);text-decoration:none}
 @media(max-width:600px){.welcome{margin-top:4vh}.welcome h1{font-size:21px}}
 </style></head><body>
 <header class="topbar">
- <a class="brand" href="/"><span class="logo">🪷</span><span><b>__PLAT__</b><i>Ask __ANAME__</i></span></a>
+ <a class="brand" href="/"><span class="logo">🪷</span><span><b>__ANAME__</b><i>__AMEAN__</i></span></a>
  <div class="actions">
   <button class="newchat" onclick="newChat()" aria-label="Start a new chat">✎ New chat</button>
   <span class="status"><span class="dot"></span>__MODE__</span>
@@ -160,9 +165,10 @@ a{color:var(--brand);text-decoration:none}
 <main id="log"><div class="wrap" id="thread">
  <section id="welcome" class="welcome">
   <div class="hero-avatar">🪷</div>
-  <h1>Namaste! I'm __ANAME__.</h1>
-  <p>Your guide to Indian America — restaurants, sweets, temples, events, classes, salons,
-   jewelry and more across the USA. What are you looking for?</p>
+  <h1>Namaste! I'm __ANAME__ — that means “friend”.</h1>
+  <p>Think of me as your desi friend for finding Indian America — restaurants, sweets, temples,
+   events, classes, salons, doctors, jewelry and more across the USA. Tell me what you're looking
+   for and roughly where, and I'll find the closest ones.</p>
   <div class="chips">__CHIPS__</div>
  </section>
 </div></main>
@@ -272,14 +278,32 @@ def chat_page(request: Request) -> HTMLResponse:
         f"<button class='fchip' data-v='{k}' onclick='setVertical(this)'>{html.escape(cfg['label'])}</button>"
         for k, cfg in verticals.VERTICALS.items())
     fchips += "<button class='fchip open' onclick='toggleOpen(this)'>● Open now</button>"
-    og_url = html.escape(f"{settings.public_web_url.rstrip('/')}/chat")
-    og_desc = (f"Ask {settings.assistant_name} for Indian restaurants, sweets, temples, events, "
-               "classes, salons, jewelry and more across the USA.")
+    base = settings.public_web_url.rstrip("/")
+    og_url = f"{base}/chat"
+    og_img = f"{base}/og-image.svg"
+    aname_raw = settings.assistant_name
+    og_desc = (f"{aname_raw} ({settings.assistant_meaning}) is your friendly guide to Indian "
+               f"America — find Indian restaurants, sweets, temples, doctors, events, classes, "
+               f"salons and jewelry near you across the USA.")
+    # JSON-LD so Google indexes the chatbot as a named app, with a search box pointing at /chat.
+    jsonld = json.dumps([
+        {"@context": "https://schema.org", "@type": "WebApplication", "name": aname_raw,
+         "alternateName": f"{aname_raw} — {settings.platform_name}", "url": og_url,
+         "applicationCategory": "TravelApplication", "operatingSystem": "Web",
+         "description": og_desc,
+         "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}},
+        {"@context": "https://schema.org", "@type": "WebSite", "name": aname_raw, "url": og_url,
+         "potentialAction": {"@type": "SearchAction",
+                             "target": f"{og_url}?q={{search_term_string}}",
+                             "query-input": "required name=search_term_string"}},
+    ], ensure_ascii=False)
     repl = {
         "__PLAT__": plat, "__ANAME__": aname, "__MODE__": html.escape(mode),
-        "__FCHIPS__": fchips, "__CHIPS__": chips, "__OGURL__": og_url,
-        "__OGIMG__": html.escape(f"{settings.public_web_url.rstrip('/')}/icon.svg"),
-        "__OGDESC__": html.escape(og_desc),
+        "__ATAG__": html.escape(settings.assistant_tagline),
+        "__AMEAN__": html.escape(settings.assistant_meaning),
+        "__FCHIPS__": fchips, "__CHIPS__": chips, "__OGURL__": html.escape(og_url),
+        "__OGIMG__": html.escape(og_img), "__OGDESC__": html.escape(og_desc),
+        "__JSONLD__": jsonld,
         "__ICONS__": json.dumps(_CAT_ICON, ensure_ascii=False),
         "__COLORS__": json.dumps(_CAT_COLOR),
     }

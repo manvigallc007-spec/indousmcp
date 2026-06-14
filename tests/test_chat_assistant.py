@@ -96,6 +96,21 @@ def test_chat_page_renders():
     assert r.status_code == 200 and "chat/api" in r.text
 
 
+def test_chat_page_is_dost_branded_with_meaning_and_jsonld():
+    t = TestClient(app).get("/chat").text
+    assert "<title>Dost" in t                 # chatbot brand leads the title
+    assert "friend" in t.lower()               # meaning is explained for non-Hindi speakers
+    assert "WebApplication" in t and "SearchAction" in t   # chatbot SEO/indexing
+    assert "#e8772e" in t and "#0f9b8e" in t   # warm saffron + teal palette
+    assert "__" not in t                       # all template placeholders resolved
+
+
+def test_og_image_renders():
+    r = TestClient(app).get("/og-image.svg")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/svg+xml"
+    assert "Dost" in r.text and "1200" in r.text
+
+
 def test_chat_api_returns_cards(no_db, monkeypatch):
     monkeypatch.setattr(settings, "llm_provider", "search")
     r = TestClient(app).post("/chat/api", json={"messages": [{"role": "user", "content": "dosa"}]})
