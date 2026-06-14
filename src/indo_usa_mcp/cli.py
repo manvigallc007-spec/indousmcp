@@ -140,6 +140,11 @@ def cmd_purge_non_diaspora(args: argparse.Namespace) -> None:
     _print(verticals.purge_excluded(dry_run=not args.apply))
 
 
+def cmd_backfill_geo(args: argparse.Namespace) -> None:
+    from . import verticals
+    _print(verticals.backfill_coords(limit=args.limit))
+
+
 def cmd_approval_digest(_: argparse.Namespace) -> None:
     _print(ingest.summarize_approvals())
 
@@ -471,6 +476,11 @@ def build_parser() -> argparse.ArgumentParser:
     pnd.add_argument("--apply", action="store_true",
                      help="Actually soft-delete (default: dry-run, just report matches)")
     pnd.set_defaults(func=cmd_purge_non_diaspora)
+
+    bg = sub.add_parser("backfill-geo",
+                        help="Forward-geocode address-only listings (Nominatim) so they sort by distance")
+    bg.add_argument("--limit", type=int, default=200, help="Max rows per vertical per run")
+    bg.set_defaults(func=cmd_backfill_geo)
 
     sub.add_parser("approval-digest", help="Human-readable summary of pending approvals").set_defaults(
         func=cmd_approval_digest

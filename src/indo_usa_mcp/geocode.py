@@ -1,14 +1,45 @@
-"""Offline reverse geocoding: fill city/state from coordinates.
+"""Geocoding helpers (free, no API key).
 
-Uses the `reverse_geocoder` package (bundled GeoNames data, no network, free). Returns
-the raw GeoNames city + admin1 (state name); callers normalize the state. Degrades to
-(None, None) if the package isn't installed.
+- Reverse (coords -> city/state): offline `reverse_geocoder` (bundled GeoNames data).
+- Forward (address -> coords): OpenStreetMap Nominatim (online, free; max ~1 req/s, needs a
+  descriptive User-Agent). Used to give address-only listings (admin-adds / owner submissions)
+  coordinates so they're sortable by distance. Cached; degrades to None on any failure.
 """
 
 from __future__ import annotations
 
+import httpx
+
+from .config import settings
+
 _rg = None
 _unavailable = False
+_FWD_CACHE: dict[str, tuple[float, float] | None] = {}
+
+
+def coords_for(address: str | None = None, city: str | None = None, state: str | None = None,
+               country: str = "USA") -> tuple[float, float] | None:
+    """Forward-geocode a US address/locality to (lat, lng) via Nominatim. Cached; None on failure."""
+    locality = [str(p).strip() for p in (address, city, state) if p and str(p).strip()]
+    if not locality:   # nothing specific to geocode (country alone is useless) -> skip the call
+        return None
+    query = ", ".join(locality + ([country] if country else []))
+    key = query.lower()
+    if key in _FWD_CACHE:
+        return _FWD_CACHE[key]
+    point: tuple[float, float] | None = None
+    try:
+        r = httpx.get("https://nominatim.openstreetmap.org/search",
+                      params={"q": query, "format": "json", "limit": 1, "countrycodes": "us"},
+                      headers={"User-Agent": settings.scraper_user_agent}, timeout=8.0)
+        if r.status_code == 200:
+            data = r.json()
+            if data:
+                point = (float(data[0]["lat"]), float(data[0]["lon"]))
+    except Exception:
+        point = None
+    _FWD_CACHE[key] = point
+    return point
 
 
 def _geocoder():

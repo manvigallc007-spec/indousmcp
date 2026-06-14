@@ -161,6 +161,36 @@ def _table(vertical: str) -> str:
     return get(vertical)["table"]
 
 
+def backfill_coords(limit: int = 200) -> dict[str, Any]:
+    """Forward-geocode existing active listings that have an address/city but no lat/lng, so they
+    become sortable by distance ("near me"). Polite to Nominatim (1 req/s). Returns per-vertical
+    counts. `limit` caps rows per vertical per run."""
+    import time
+
+    from . import geocode
+    out: dict[str, Any] = {"total_filled": 0, "by_vertical": {}}
+    for v in VERTICALS:
+        try:
+            rows = db.query(
+                f"SELECT id, address_full, city, state FROM {_table(v)} "
+                f"WHERE deleted_at IS NULL AND (lat IS NULL OR lng IS NULL) "
+                f"AND (address_full IS NOT NULL OR city IS NOT NULL) LIMIT %s", [limit])
+        except Exception:
+            continue
+        filled = 0
+        for r in rows:
+            pt = geocode.coords_for(r.get("address_full"), r.get("city"), r.get("state"))
+            if pt:
+                db.execute(f"UPDATE {_table(v)} SET lat = %s, lng = %s WHERE id = %s",
+                           [pt[0], pt[1], r["id"]])
+                filled += 1
+            time.sleep(1.0)  # Nominatim usage policy: <= 1 request/second
+        if rows:
+            out["by_vertical"][v] = {"checked": len(rows), "filled": filled}
+            out["total_filled"] += filled
+    return out
+
+
 def purge_excluded(dry_run: bool = True) -> dict[str, Any]:
     """Find (and, unless dry_run, soft-delete) already-stored listings whose name signals a
     NON-India-diaspora 'Indian' — Native American / West Indian / brand homonyms (see
@@ -324,6 +354,13 @@ def create_record(vertical: str, data: dict) -> dict[str, Any]:
     lat, lng = _to_float(data.get("lat")), _to_float(data.get("lng"))
     city, state = clean.fill_location((data.get("city") or "").strip() or None,
                                       (data.get("state") or "").strip() or None, lat, lng)
+    # No coordinates given (typical for admin-adds / owner submissions)? Forward-geocode the
+    # address so the listing is sortable by distance / appears in "near me".
+    if lat is None or lng is None:
+        from . import geocode
+        pt = geocode.coords_for((data.get("address_full") or "").strip() or None, city, state)
+        if pt:
+            lat, lng = pt
     rec: dict[str, Any] = {
         "natural_key": clean.natural_key(name, lat, lng),
         "name": name,
