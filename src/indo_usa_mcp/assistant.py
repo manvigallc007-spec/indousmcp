@@ -32,12 +32,13 @@ _SYSTEM = (
 )
 
 _SYSTEM_GROUNDED = (
-    "You are a warm, concise local guide to Indian-American businesses, temples, and events "
-    "across the USA. You are given the directory listings that best match the user's request. "
-    "Reply in 1-3 short sentences using ONLY those listings — never invent businesses or "
-    "details. Mention featured or open-now when relevant. If the list is empty, say nothing "
-    "matched and suggest a broader search or a nearby city. The user also sees the listings as "
-    "cards below your reply."
+    "You are Dost (Hindi/Urdu for “friend”), a warm, concise guide to Indian-American businesses, "
+    "temples, and events across the USA. You are given the directory listings that best match the "
+    "user's request, already ordered with the NEAREST first. Reply in 1-2 friendly, natural "
+    "sentences using ONLY those listings — never invent businesses or details, and don't just list "
+    "them all (the user sees them as cards below). Name the top pick and why it fits — closest, "
+    "open now, or well-rated — and offer to narrow by area, cuisine/veg, or open-now. Vary your "
+    "wording. If the list is empty, say nothing matched and suggest a nearby city or broader search."
 )
 
 _SYSTEM_WEB = (
@@ -163,8 +164,9 @@ def _filter_note(filters: dict | None) -> str | None:
 
 
 def _cards(res: dict) -> list[dict]:
+    # Return up to 12; the chat UI shows the top 6 and offers "show more" for the rest.
     out = []
-    for r in (res.get("results") or [])[:8]:
+    for r in (res.get("results") or [])[:12]:
         out.append({
             "vertical": r.get("vertical"),
             "name": r.get("name"),
@@ -312,16 +314,21 @@ def _search_query(messages: list[dict]) -> str:
 def _search_reply(messages: list[dict], geo: dict | None, filters: dict | None) -> dict:
     query = _search_query(messages)
     if not query:
-        return {"reply": "Tell me what you're looking for — a restaurant, temple, sweets shop, "
-                "event, and a city.", "cards": [], "provider": "search"}
+        return {"reply": "Tell me what you're looking for — say a category and a place, like "
+                "“biryani in Edison, NJ” or “Krishna temple near me”.",
+                "cards": [], "provider": "search"}
     res = _run_search({"query": query}, filters, geo)
-    n = res.get("count", 0)
+    cards = _cards(res)
+    n = len(cards)
     if n == 0:
-        text = (f"I couldn't find anything for “{query}”. Try adding a city/state, "
-                "or a broader search.")
-    else:
-        text = f"Here are {n} match{'es' if n != 1 else ''} for “{query}”:"
-    return {"reply": text, "cards": _cards(res), "provider": "search"}
+        return {"reply": f"I couldn't find anything for “{query}”. Try a nearby city, or a "
+                "broader search (just the cuisine or category).", "cards": [], "provider": "search"}
+    nearest = any(c.get("distance_miles") is not None for c in cards)
+    lead = "Here are the nearest matches" if nearest else "Here's what I found"
+    extra = (" Showing the top 6 — tap “show more”, or narrow by area, “open now”, or veg."
+             if n > 6 else
+             " Tap a card to call, visit, or map it — or name an area to narrow it down.")
+    return {"reply": f"{lead} for “{query}”.{extra}", "cards": cards, "provider": "search"}
 
 
 # --------------------------------------------- relevance gate + free web fallback

@@ -27,11 +27,28 @@ def test_search_fallback_reply_and_cards(no_db, monkeypatch):
     monkeypatch.setattr(settings, "llm_provider", "search")
     out = assistant.reply([{"role": "user", "content": "dosa near edison"}])
     assert out["provider"] == "search"
-    assert "2 matches" in out["reply"]
+    assert "dosa near edison" in out["reply"].lower()   # dynamic reply echoes the query
     assert len(out["cards"]) == 2
     c0 = out["cards"][0]
     assert c0["name"] == "Dosa Hut" and c0["vertical"] == "restaurants" and c0["is_featured"]
     assert c0["phone"] and c0["open_now"] is True
+
+
+def test_returns_up_to_12_cards_for_show_more(monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "search")
+    monkeypatch.setattr(assistant.analytics, "log_impressions", lambda *a, **k: None)
+    monkeypatch.setattr(assistant.analytics, "log_call", lambda *a, **k: None)
+    many = [{"vertical": "restaurants", "id": i, "name": f"Place {i}"} for i in range(20)]
+    monkeypatch.setattr(assistant.verticals, "search_all",
+                        lambda *a, **k: {"count": 20, "results": many})
+    out = assistant.reply([{"role": "user", "content": "biryani in edison nj"}])
+    assert len(out["cards"]) == 12          # capped at 12; UI shows 6 + "show more"
+    assert "show more" in out["reply"].lower()
+
+
+def test_chat_has_show_more_button():
+    t = TestClient(app).get("/chat").text
+    assert "morebtn" in t and "Show '+(cards.length-N)+' more" in t
 
 
 def test_empty_query_prompts_for_input(no_db):

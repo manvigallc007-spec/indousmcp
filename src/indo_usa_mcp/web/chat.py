@@ -142,6 +142,9 @@ a{color:var(--brand);text-decoration:none}
  color:var(--ink);transition:.15s}.lc-btn:hover{border-color:var(--brand);color:var(--brand)}
 .addcta{display:inline-block;margin-top:10px;background:var(--brand);color:#fff;border-radius:10px;
  padding:8px 14px;font-size:13px;font-weight:600;transition:.15s}.addcta:hover{background:var(--brand-d);color:#fff}
+.morebtn{display:block;margin-top:10px;background:#fff;border:1px solid var(--accent);color:var(--accent);
+ border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s}
+.morebtn:hover{background:var(--accent);color:#fff}
 .composer{background:var(--panel);border-top:1px solid var(--line);padding:12px 16px;
  padding-bottom:max(12px,env(safe-area-inset-bottom))}
 .composer-inner{max-width:760px;margin:0 auto;display:flex;align-items:flex-end;gap:10px;background:#fff;
@@ -240,7 +243,10 @@ function addBot(){const m=el('div','msg bot');m.appendChild(el('div','avatar','�
   const content=el('div','content');const b=el('div','bubble');b.appendChild(typing());content.appendChild(b);
   m.appendChild(content);thread.appendChild(m);scroll();return content;}
 function fillBot(content,reply,cards,suggest){content.innerHTML='';content.appendChild(el('div','bubble',reply||'…'));
-  if(cards&&cards.length){const w=el('div','cards');cards.forEach(c=>w.appendChild(card(c)));content.appendChild(w);
+  if(cards&&cards.length){const w=el('div','cards');const N=6;
+    cards.slice(0,N).forEach(c=>w.appendChild(card(c)));content.appendChild(w);
+    if(cards.length>N){const b=el('button','morebtn','Show '+(cards.length-N)+' more');
+      b.onclick=function(){cards.slice(N).forEach(c=>w.appendChild(card(c)));b.remove();scroll();};content.appendChild(b);}
     const vs=[...new Set(cards.map(c=>c.vertical).filter(Boolean))];syncChip(vs.length===1?vs[0]:'');}
   if(suggest&&suggest.url){const a=el('a','addcta',suggest.label||'➕ Add to directory');a.href=suggest.url;a.target='_blank';a.rel='noopener';content.appendChild(a);}
   scroll();}
