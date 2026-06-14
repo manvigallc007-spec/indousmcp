@@ -46,6 +46,11 @@ _ICON_SVG = (
 
 
 def icon(request: Request) -> Response:
+    """Favicon — the square Namaste America mark (static/logo-square.*) if present, else lotus."""
+    for ext in ("svg", "png", "webp", "jpg", "jpeg"):
+        f = _STATIC_DIR / f"logo-square.{ext}"
+        if f.exists():
+            return FileResponse(f, headers={"Cache-Control": "public, max-age=86400"})
     return Response(_ICON_SVG, media_type="image/svg+xml",
                     headers={"Cache-Control": "public, max-age=86400"})
 
