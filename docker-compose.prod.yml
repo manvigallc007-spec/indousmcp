@@ -23,6 +23,9 @@ services:
   server:
     build: .
     restart: unless-stopped
+    # `default` reaches db/worker; `caterbid` lets the shared front nginx (catering-bid_web) proxy
+    # this app over HTTPS. The external network must already exist (created by the caterbid stack).
+    networks: [default, caterbid]
     environment:
       # Password passed as a part (URL-encoded in code) so any characters are safe.
       POSTGRES_HOST: db
@@ -76,6 +79,7 @@ services:
   web:
     build: .
     restart: unless-stopped
+    networks: [default, caterbid]      # joined to the shared front nginx network for HTTPS
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
@@ -191,3 +195,11 @@ volumes:
   caddy_data:
   caddy_config:
   ollama_models:
+
+networks:
+  default:
+  # Shared with the caterbid stack's front nginx so it can reverse-proxy this app over HTTPS.
+  # External: created/owned by the caterbid compose project (must exist before `up`).
+  caterbid:
+    external: true
+    name: catering-bid_web
