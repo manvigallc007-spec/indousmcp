@@ -286,9 +286,17 @@ function startMic(){
  r.lang=LOCALE[lang]||'en-US';r.interimResults=false;r.maxAlternatives=1;
  const mic=document.getElementById('mic');if(mic)mic.classList.add('rec');
  r.onresult=function(e){const tx=(e.results[0][0]||{}).transcript||'';if(tx){ta.value=tx;submitForm(new Event('submit'));}};
- r.onerror=function(){};r.onend=function(){if(mic)mic.classList.remove('rec');};
+ r.onerror=function(ev){if(mic)mic.classList.remove('rec');var m=micError(ev.error);if(m)fillBot(addBot(),m,[]);};
+ r.onend=function(){if(mic)mic.classList.remove('rec');};
  try{r.start();}catch(e){if(mic)mic.classList.remove('rec');}
 }
+function micError(code){return {
+ 'not-allowed':'🎤 Microphone access is blocked. Tap the 🔒/ⓘ in the address bar → allow Microphone → reload, then try again.',
+ 'service-not-allowed':'🎤 Microphone access is blocked for this site — enable it in your browser settings and retry.',
+ 'no-speech':'🎤 I didn’t catch that — tap the mic and speak again.',
+ 'audio-capture':'🎤 No microphone found — check your device’s mic.',
+ 'language-not-supported':'🎤 Voice isn’t available for this language on your device — switch the language to English and try again.',
+ 'network':'🎤 Voice recognition needs an internet connection — please check your network.'}[code]||null;}
 function pickVoice(loc){const vs=(window.speechSynthesis?speechSynthesis.getVoices():[])||[];return vs.find(v=>v.lang===loc)||vs.find(v=>v.lang&&v.lang.slice(0,2)===loc.slice(0,2));}
 function speak(text){
   if(!speakOn||!('speechSynthesis' in window)||!text){if(convoMode)convoListen();return;}
@@ -328,7 +336,10 @@ function convoListen(){
   var got=false;convoStatus('listening');
   convoRecog.onresult=function(e){got=true;var tx=(e.results[0][0]||{}).transcript||'';
     if(tx&&tx.trim()){convoStatus('thinking');send(tx.trim(),false);}};
-  convoRecog.onerror=function(ev){if(convoMode&&ev.error!=='aborted'&&ev.error!=='no-speech')setTimeout(convoListen,700);};
+  convoRecog.onerror=function(ev){
+    if(ev.error==='not-allowed'||ev.error==='service-not-allowed'||ev.error==='language-not-supported'||ev.error==='audio-capture'){
+      stopConvo();var m=micError(ev.error);if(m)fillBot(addBot(),m,[]);return;}
+    if(convoMode&&ev.error!=='aborted'&&ev.error!=='no-speech')setTimeout(convoListen,700);};
   convoRecog.onend=function(){if(convoMode&&!got&&!(window.speechSynthesis&&speechSynthesis.speaking))setTimeout(convoListen,500);};
   try{convoRecog.start();}catch(e){}
 }
