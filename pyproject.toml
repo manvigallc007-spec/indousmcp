@@ -31,4 +31,4 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-indo_usa_mcp = ["sql/*.sql"]
+indo_usa_mcp = ["sql/*.sql", "web/static/*"]
