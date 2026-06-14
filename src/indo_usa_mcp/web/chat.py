@@ -194,6 +194,7 @@ function scroll(){log.scrollTop=log.scrollHeight;}
 function hideWelcome(){const w=document.getElementById('welcome');if(w)w.style.display='none';}
 function typing(){const t=el('div','typing');for(let i=0;i<3;i++)t.appendChild(el('span'));return t;}
 function setVertical(b){document.querySelectorAll('.fchip:not(.open)').forEach(c=>c.classList.remove('on'));b.classList.add('on');filters.vertical=b.dataset.v||null;if(lastQuery)rerun();}
+function syncChip(v){document.querySelectorAll('.fchip:not(.open):not(.loc)').forEach(c=>c.classList.toggle('on',(c.dataset.v||'')===(v||'')));filters.vertical=v||null;}
 function toggleOpen(b){filters.open_now=!filters.open_now;b.classList.toggle('on',filters.open_now);if(lastQuery)rerun();}
 function rerun(){if(lastQuery&&lastBot)send(lastQuery,true);}
 function useLocation(){
@@ -233,7 +234,8 @@ function addBot(){const m=el('div','msg bot');m.appendChild(el('div','avatar','�
   const content=el('div','content');const b=el('div','bubble');b.appendChild(typing());content.appendChild(b);
   m.appendChild(content);thread.appendChild(m);scroll();return content;}
 function fillBot(content,reply,cards,suggest){content.innerHTML='';content.appendChild(el('div','bubble',reply||'…'));
-  if(cards&&cards.length){const w=el('div','cards');cards.forEach(c=>w.appendChild(card(c)));content.appendChild(w);}
+  if(cards&&cards.length){const w=el('div','cards');cards.forEach(c=>w.appendChild(card(c)));content.appendChild(w);
+    const vs=[...new Set(cards.map(c=>c.vertical).filter(Boolean))];syncChip(vs.length===1?vs[0]:'');}
   if(suggest&&suggest.url){const a=el('a','addcta',suggest.label||'➕ Add to directory');a.href=suggest.url;a.target='_blank';a.rel='noopener';content.appendChild(a);}
   scroll();}
 async function send(text,isRerun){
