@@ -314,7 +314,8 @@ def events_page(request: Request) -> HTMLResponse:
 # -------------------------------------------------------------- crawler files
 def sitemap(request: Request) -> Response:
     base = _base()
-    urls = [f"{base}/", f"{base}/browse", f"{base}/chat", f"{base}/events"]
+    urls = [f"{base}/", f"{base}/browse", f"{base}/chat", f"{base}/events", f"{base}/submit",
+            f"{base}/about", f"{base}/privacy", f"{base}/terms", f"{base}/contact", f"{base}/faq"]
     urls += [f"{base}/browse/{v}" for v in verticals.VERTICALS]
     # All (vertical × city) pages that actually have active listings.
     for v in verticals.VERTICALS:

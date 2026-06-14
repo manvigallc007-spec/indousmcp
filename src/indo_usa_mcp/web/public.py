@@ -150,7 +150,8 @@ footer{text-align:center;color:#9aa0a6;font-size:14px;padding:22px 20px 48px;bor
   </div>
  </section>
 </main>
-<footer>Own a business? <a href="/submit">Add your listing</a> or <a href="/portal/login">sign in</a> to manage it · __PLAT__</footer>
+<footer>Own a business? <a href="/submit">Add your listing</a> or <a href="/portal/login">sign in</a> to manage it.
+<br><a href="/about">About</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/contact">Contact</a> · <a href="/faq">FAQ</a> · __PLAT__</footer>
 </body></html>"""
 
 
