@@ -128,6 +128,8 @@ def test_chat_has_language_selector_and_voice():
     assert "startMic" in t and "micbtn" in t                      # mic (SpeechRecognition)
     assert "speechSynthesis" in t                                 # speaker (SpeechSynthesis)
     assert "नमस्ते" in t                                          # Hindi UI string present
+    assert "toggleConvo" in t and "convobar" in t                # hands-free voice conversation mode
+    assert "convoListen" in t                                     # the listen->answer->listen loop
     assert "__" not in t                                          # all placeholders resolved
 
 

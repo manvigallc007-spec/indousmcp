@@ -101,6 +101,11 @@ a{color:var(--brand);text-decoration:none}
  cursor:pointer;font-size:18px;line-height:1}.micbtn:hover{border-color:var(--accent)}
 .micbtn.rec{background:#ffe3e3;border-color:#e57373;animation:micpulse 1s infinite}
 @keyframes micpulse{0%,100%{opacity:1}50%{opacity:.45}}
+.convobtn.on{background:var(--accent);border-color:var(--accent);color:#fff;animation:micpulse 1.4s infinite}
+.convobar{max-width:760px;margin:0 auto;display:flex;align-items:center;justify-content:center;gap:14px;
+ padding:11px 16px;background:#e7f6f4;border-top:1px solid var(--line);color:var(--accent-d);font-weight:600;font-size:14px}
+.convobar .cstop{background:#fff;border:1px solid var(--accent);color:var(--accent);border-radius:9px;
+ padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer}.convobar .cstop:hover{background:var(--accent);color:#fff}
 .status{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
 .status .dot{width:8px;height:8px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 3px #16a34a22}
 @media(max-width:600px){.status{display:none}}
@@ -199,9 +204,14 @@ a{color:var(--brand);text-decoration:none}
   </div>
  </section>
 </div></main>
+<div id="convobar" class="convobar" style="display:none">
+ <span id="convostatus">🎙️ Listening…</span>
+ <button class="cstop" type="button" onclick="stopConvo()">■ Stop</button>
+</div>
 <form class="composer" onsubmit="return submitForm(event)">
  <div class="composer-inner">
   <textarea id="q" rows="1" autocomplete="off" placeholder="Ask anything… e.g. vegetarian thali in Jersey City"></textarea>
+  <button class="micbtn convobtn" id="convo" type="button" onclick="toggleConvo()" title="Hands-free voice chat" aria-label="Voice conversation">🎙️</button>
   <button class="micbtn" id="mic" type="button" onclick="startMic()" title="Speak" aria-label="Speak">🎤</button>
   <button class="send" type="submit" aria-label="Send">
    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
@@ -269,8 +279,48 @@ function startMic(){
  try{r.start();}catch(e){if(mic)mic.classList.remove('rec');}
 }
 function pickVoice(loc){const vs=(window.speechSynthesis?speechSynthesis.getVoices():[])||[];return vs.find(v=>v.lang===loc)||vs.find(v=>v.lang&&v.lang.slice(0,2)===loc.slice(0,2));}
-function speak(text){if(!speakOn||!('speechSynthesis' in window)||!text)return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang=LOCALE[lang]||'en-US';const v=pickVoice(u.lang);if(v)u.voice=v;speechSynthesis.speak(u);}catch(e){}}
+function speak(text){
+  if(!speakOn||!('speechSynthesis' in window)||!text){if(convoMode)convoListen();return;}
+  try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang=LOCALE[lang]||'en-US';
+    const v=pickVoice(u.lang);if(v)u.voice=v;
+    u.onstart=function(){if(convoMode)convoStatus('speaking');};
+    u.onend=function(){if(convoMode)convoListen();};            // after Dost speaks, listen again
+    speechSynthesis.speak(u);
+  }catch(e){if(convoMode)convoListen();}
+}
 function toggleSpeak(){speakOn=!speakOn;localStorage.setItem('dost_speak',speakOn?'1':'0');const spk=document.getElementById('spk');if(spk)spk.classList.toggle('on',speakOn);if(!speakOn&&'speechSynthesis' in window){try{speechSynthesis.cancel();}catch(e){}}}
+
+// ---- hands-free voice conversation: talk -> hear answer -> auto-listen for the next question ----
+let convoMode=false, convoRecog=null;
+function convoStatus(s){var bar=document.getElementById('convobar'),txt=document.getElementById('convostatus');
+  if(bar)bar.style.display=convoMode?'flex':'none';
+  if(txt)txt.textContent=s==='listening'?'🎙️ Listening…':(s==='thinking'?'💭 Thinking…':'🔊 Speaking…');}
+function toggleConvo(){convoMode?stopConvo():startConvo();}
+function startConvo(){
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){fillBot(addBot(),'🎙️ Voice isn’t supported in this browser — try Chrome, or type instead.',[]);return;}
+  if(!window.isSecureContext){fillBot(addBot(),'🎙️ Voice needs a secure (https) connection.',[]);return;}
+  convoMode=true;speakOn=true;localStorage.setItem('dost_speak','1');
+  var cb=document.getElementById('convo');if(cb)cb.classList.add('on');
+  var spk=document.getElementById('spk');if(spk)spk.classList.add('on');
+  hideWelcome();convoListen();
+}
+function stopConvo(){convoMode=false;try{if(convoRecog)convoRecog.abort();}catch(e){}
+  if('speechSynthesis' in window){try{speechSynthesis.cancel();}catch(e){}}
+  var cb=document.getElementById('convo');if(cb)cb.classList.remove('on');
+  var bar=document.getElementById('convobar');if(bar)bar.style.display='none';}
+function convoListen(){
+  if(!convoMode)return;
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  try{convoRecog=new SR();}catch(e){return;}
+  convoRecog.lang=LOCALE[lang]||'en-US';convoRecog.interimResults=false;convoRecog.maxAlternatives=1;
+  var got=false;convoStatus('listening');
+  convoRecog.onresult=function(e){got=true;var tx=(e.results[0][0]||{}).transcript||'';
+    if(tx&&tx.trim()){convoStatus('thinking');send(tx.trim(),false);}};
+  convoRecog.onerror=function(ev){if(convoMode&&ev.error!=='aborted'&&ev.error!=='no-speech')setTimeout(convoListen,700);};
+  convoRecog.onend=function(){if(convoMode&&!got&&!(window.speechSynthesis&&speechSynthesis.speaking))setTimeout(convoListen,500);};
+  try{convoRecog.start();}catch(e){}
+}
 function newChat(){
   history=[];lastQuery='';lastBot=null;filters={vertical:null,open_now:false};
   document.querySelectorAll('.fchip').forEach(c=>c.classList.remove('on'));
