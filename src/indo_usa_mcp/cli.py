@@ -221,6 +221,13 @@ def cmd_temples_process(_: argparse.Namespace) -> None:
     _print(temples.process_raw())
 
 
+def cmd_temples_wikidata(_: argparse.Namespace) -> None:
+    print("Importing notable US Hindu temples from Wikidata (CC0)...")
+    n = temples.scrape_wikidata_to_raw()
+    print(f"Upserted {n} raw temple observation(s).")
+    _print(temples.process_raw())
+
+
 def cmd_temples_stats(_: argparse.Namespace) -> None:
     _print(temple_queries.stats())
 
@@ -583,6 +590,8 @@ def build_parser() -> argparse.ArgumentParser:
     ts = sub.add_parser("temples-scrape", help="Scrape Hindu/Sikh/Jain temples for a region")
     ts.add_argument("--metro", required=True, choices=SCRAPE_REGIONS, metavar="REGION")
     ts.set_defaults(func=cmd_temples_scrape)
+    sub.add_parser("temples-wikidata", help="Import notable US Hindu temples from Wikidata (CC0)"
+                   ).set_defaults(func=cmd_temples_wikidata)
 
     sub.add_parser("temples-process", help="Process raw temples -> canonical").set_defaults(
         func=cmd_temples_process)

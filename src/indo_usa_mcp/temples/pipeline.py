@@ -103,17 +103,36 @@ def _score(rec: dict) -> float:
 
 
 # ----------------------------------------------------------------- scrape & process
+def _raw_upsert(c: dict) -> None:
+    db.execute(
+        "INSERT INTO temple_raw (source_name, source_url, source_id, payload) "
+        "VALUES (%s, %s, %s, %s) ON CONFLICT (source_name, source_id) "
+        "DO UPDATE SET payload = EXCLUDED.payload, scraped_at = now(), "
+        "processed = false, processed_at = NULL",
+        (c["source_name"], c.get("source_url"), c.get("source_id"), Jsonb(c)),
+    )
+
+
 def scrape_to_raw(region: str) -> int:
     count = 0
     for c in TempleOverpassScraper().scrape(region):
-        db.execute(
-            "INSERT INTO temple_raw (source_name, source_url, source_id, payload) "
-            "VALUES (%s, %s, %s, %s) ON CONFLICT (source_name, source_id) "
-            "DO UPDATE SET payload = EXCLUDED.payload, scraped_at = now(), "
-            "processed = false, processed_at = NULL",
-            (c["source_name"], c.get("source_url"), c.get("source_id"), Jsonb(c)),
-        )
+        _raw_upsert(c)
         count += 1
+    return count
+
+
+def scrape_wikidata_to_raw() -> int:
+    """Add notable US Hindu temples from Wikidata (CC0) into temple_raw."""
+    import sys
+
+    from .wikidata import WikidataTempleScraper
+    scraper = WikidataTempleScraper()
+    count = 0
+    for c in scraper.scrape():
+        _raw_upsert(c)
+        count += 1
+    if count == 0 and scraper.last_error:  # never hide a systemic failure as a silent 0
+        print(f"  Wikidata temples warning: {scraper.last_error}", file=sys.stderr)
     return count
 
 
