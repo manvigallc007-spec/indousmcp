@@ -122,7 +122,7 @@ def scrape_to_raw(region: str) -> int:
 
 
 def scrape_wikidata_to_raw() -> int:
-    """Add notable US Hindu temples from Wikidata (CC0) into temple_raw."""
+    """Add notable US Hindu temples, Sikh gurdwaras & Jain temples from Wikidata (CC0) into raw."""
     import sys
 
     from .wikidata import WikidataTempleScraper

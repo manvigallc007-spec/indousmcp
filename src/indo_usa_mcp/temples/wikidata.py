@@ -1,8 +1,9 @@
-"""Wikidata importer for notable US Hindu temples (CC0, free SPARQL — no key).
+"""Wikidata importer for notable US Hindu temples, Sikh gurdwaras and Jain temples (CC0, no key).
 
-Complements OSM with notable, named temples (e.g. Malibu Hindu Temple, Hindu Temple of Greater
-Chicago). Coverage is modest (~dozens) but high-quality and fully free/open. City/state are filled
-from coordinates by the temple cleaner. Verified live: ~65 US Hindu temples with coordinates.
+Hindu temples are found by class (Q842402). Gurdwaras and Jain temples aren't reliably classed in
+Wikidata, so they're matched by name (their labels always carry "Gurdwara"/"Jain temple"...).
+Coordinates are required (filters out people / abstract items). City/state are filled from the
+coordinates by the temple cleaner. Free/open, polite (one request per query, dedup across queries).
 """
 
 from __future__ import annotations
@@ -17,8 +18,8 @@ from ..config import settings
 
 _ENDPOINT = "https://query.wikidata.org/sparql"
 
-# Hindu temples (Q842402 + subclasses) located in the USA (Q30) that carry coordinates.
-_SPARQL = """
+# Hindu temples (Q842402 + subclasses) in the USA (Q30) with coordinates.
+_HINDU_SPARQL = """
 SELECT ?item ?itemLabel ?coord ?website ?phone WHERE {
   ?item wdt:P31/wdt:P279* wd:Q842402 .
   ?item wdt:P17 wd:Q30 .
@@ -28,6 +29,20 @@ SELECT ?item ?itemLabel ?coord ?website ?phone WHERE {
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 }
 LIMIT 1500
+"""
+
+# Gurdwaras + Jain temples by name (not consistently classed). Coords required keeps it to places.
+_SIKH_JAIN_SPARQL = """
+SELECT ?item ?itemLabel ?coord ?website ?phone WHERE {
+  ?item wdt:P17 wd:Q30 ; wdt:P625 ?coord ; rdfs:label ?itemLabel .
+  FILTER(LANG(?itemLabel) = "en")
+  FILTER(CONTAINS(LCASE(?itemLabel), "gurdwara") || CONTAINS(LCASE(?itemLabel), "sikh temple")
+         || CONTAINS(LCASE(?itemLabel), "jain temple") || CONTAINS(LCASE(?itemLabel), "jain center")
+         || CONTAINS(LCASE(?itemLabel), "jain mandir") || CONTAINS(LCASE(?itemLabel), "jain society"))
+  OPTIONAL { ?item wdt:P856 ?website. }
+  OPTIONAL { ?item wdt:P1329 ?phone. }
+}
+LIMIT 500
 """
 
 
@@ -41,6 +56,15 @@ def _parse_point(point: str) -> tuple[float | None, float | None]:
         return None, None
 
 
+def _religion_for(name: str) -> str:
+    n = name.lower()
+    if "gurdwara" in n or "sikh" in n:
+        return "sikh"
+    if "jain" in n:
+        return "jain"
+    return "hindu"
+
+
 class WikidataTempleScraper:
     source_name = "wikidata"
 
@@ -48,16 +72,25 @@ class WikidataTempleScraper:
         self.last_error: str | None = None
 
     def scrape(self) -> Iterator[dict]:
-        time.sleep(1)  # politeness
+        seen: set[str] = set()
+        for sparql in (_HINDU_SPARQL, _SIKH_JAIN_SPARQL):
+            for cand in self._run(sparql):
+                if cand["source_id"] not in seen:
+                    seen.add(cand["source_id"])
+                    yield cand
+
+    def _run(self, sparql: str) -> Iterator[dict]:
+        time.sleep(1)  # politeness between queries
         try:
-            r = httpx.get(_ENDPOINT, params={"query": _SPARQL, "format": "json"},
+            r = httpx.get(_ENDPOINT, params={"query": sparql, "format": "json"},
                           headers={"User-Agent": settings.scraper_user_agent,
                                    "Accept": "application/sparql-results+json"},
                           timeout=settings.scraper_timeout_seconds)
             r.raise_for_status()
             bindings = r.json().get("results", {}).get("bindings", [])
         except Exception as exc:
-            self.last_error = f"{type(exc).__name__}: {exc}"
+            if self.last_error is None:
+                self.last_error = f"{type(exc).__name__}: {exc}"
             return
         for b in bindings:
             cand = self._to_candidate(b)
@@ -80,7 +113,7 @@ class WikidataTempleScraper:
             "name": name,
             "lat": lat, "lng": lng,
             "country": "USA",
-            "religion": "hindu",
+            "religion": _religion_for(name),
             "website": b.get("website", {}).get("value"),
             "phone": b.get("phone", {}).get("value"),
             "extra_tags": [],
