@@ -453,7 +453,8 @@ async def stripe_webhook(request: Request) -> HTMLResponse:
 
 
 routes = [
-    Route("/", home, methods=["GET"]),
+    # Home (/) is the Dost chatbot (see web/chat.py); the marketing/landing page lives at /explore.
+    Route("/explore", home, methods=["GET"]),
     Route("/icon.svg", icon, methods=["GET"]),
     Route("/favicon.ico", icon, methods=["GET"]),
     Route("/og-image.svg", og_image, methods=["GET"]),

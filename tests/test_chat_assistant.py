@@ -110,7 +110,16 @@ def test_grounded_mode_searches_then_single_call(no_db, monkeypatch):
 
 def test_chat_page_renders():
     r = TestClient(app).get("/chat")
-    assert r.status_code == 200 and "chat/api" in r.text
+    assert r.status_code == 200 and "chat/api" in r.text   # follows the redirect to /
+
+
+def test_home_is_chatbot_directory_secondary():
+    c = TestClient(app, follow_redirects=False)
+    home = c.get("/")
+    assert home.status_code == 200 and "chat/api" in home.text   # homepage IS the chatbot
+    assert "/browse" in home.text                                # directory linked (secondary)
+    assert c.get("/chat").status_code == 308                     # legacy /chat -> /
+    assert c.get("/explore").status_code == 200                  # marketing landing moved here
 
 
 def test_chat_page_is_dost_branded_with_meaning_and_jsonld():
