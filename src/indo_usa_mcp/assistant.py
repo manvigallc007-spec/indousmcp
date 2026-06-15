@@ -399,6 +399,10 @@ _VERTICAL_HINTS = {
     "finance": ("cpa", "accountant", "tax preparer", "tax prep", "financial advisor", "bookkeeping"),
 }
 
+# Verticals with no free bulk data source — they grow mainly from submissions, so when a search
+# here returns only a handful, we proactively invite the visitor to add one they know.
+_SPARSE_VERTICALS = {"legal", "finance", "realestate", "education", "community"}
+
 
 def is_indian_american_topic(text: str) -> bool:
     """Heuristic, free relevance check (no LLM). Permissive toward diaspora topics; rejects
@@ -419,6 +423,16 @@ def _guess_vertical(query: str) -> str | None:
             if w in t and len(w) > best_len:
                 best_v, best_len = v, len(w)
     return best_v
+
+
+def _thin_contribute(query: str, filters: dict | None, cards: list) -> dict | None:
+    """A thin (1-3) result in a sparse vertical is a growth chance: invite the visitor to add one
+    they know. Returns a contribute payload (shown as an '➕ Add a place you know' button) or None."""
+    v = (filters or {}).get("vertical") or _guess_vertical(query)
+    if v not in _SPARSE_VERTICALS or not (0 < len(cards or []) <= 3):
+        return None
+    city, state = _extract_location(query)
+    return {"vertical": v, "city": city, "state": state}
 
 
 def _suggest_add(query: str) -> dict:
@@ -677,4 +691,9 @@ def reply(messages: list[dict], geo: dict | None = None, filters: dict | None = 
         if _is_local_request(query, filters):
             return _discovery_reply(query, messages, geo, filters)
         return _web_fallback(query, geo, filters)
+    # Thin result in a submission-fed vertical -> invite the visitor to add one they know.
+    if query and out.get("cards") and "contribute" not in out:
+        inv = _thin_contribute(query, filters, out["cards"])
+        if inv:
+            out["contribute"] = inv
     return out
