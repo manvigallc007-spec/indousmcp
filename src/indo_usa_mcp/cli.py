@@ -39,6 +39,10 @@ from .sweets import pipeline as sweets, queries as sweets_queries
 from .studios import pipeline as studios, queries as studio_queries
 from .services import pipeline as services, queries as service_queries
 from .community import pipeline as community, queries as community_queries
+from .legal import pipeline as legal, queries as legal_queries
+from .education import pipeline as education, queries as education_queries
+from .realestate import pipeline as realestate, queries as realestate_queries
+from .finance import pipeline as finance, queries as finance_queries
 
 
 def _print(obj) -> None:
@@ -340,6 +344,14 @@ _BATCH_VERTICALS = {
                  service_queries.search_services_by_text),
     "community": (community, community_queries, community_queries.get_indian_community,
                   community_queries.search_community_by_text),
+    "legal": (legal, legal_queries, legal_queries.get_indian_legal,
+              legal_queries.search_legal_by_text),
+    "education": (education, education_queries, education_queries.get_indian_education,
+                  education_queries.search_education_by_text),
+    "realestate": (realestate, realestate_queries, realestate_queries.get_indian_realestate,
+                   realestate_queries.search_realestate_by_text),
+    "finance": (finance, finance_queries, finance_queries.get_indian_finance,
+                finance_queries.search_finance_by_text),
 }
 
 

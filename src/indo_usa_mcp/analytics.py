@@ -47,6 +47,14 @@ _TOOL_VERTICAL = {
     "search_services_by_text": "services",
     "get_indian_community": "community", "get_community_details": "community",
     "search_community_by_text": "community",
+    "get_indian_legal": "legal", "get_legal_details": "legal",
+    "search_legal_by_text": "legal",
+    "get_indian_education": "education", "get_education_details": "education",
+    "search_education_by_text": "education",
+    "get_indian_realestate": "realestate", "get_realestate_details": "realestate",
+    "search_realestate_by_text": "realestate",
+    "get_indian_finance": "finance", "get_finance_details": "finance",
+    "search_finance_by_text": "finance",
 }
 
 

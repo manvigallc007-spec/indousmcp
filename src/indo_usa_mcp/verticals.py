@@ -23,6 +23,11 @@ from .services import pipeline as sv_pipeline, queries as sv_queries
 from .studios import pipeline as st_pipeline, queries as st_queries
 from .sweets import pipeline as sw_pipeline, queries as sw_queries
 from .temples import pipeline as t_pipeline, queries as t_queries
+# Phase-2 verticals (legal / education / real estate / finance).
+from .education import pipeline as ed_pipeline, queries as ed_queries
+from .finance import pipeline as fi_pipeline, queries as fi_queries
+from .legal import pipeline as lg_pipeline, queries as lg_queries
+from .realestate import pipeline as re_pipeline, queries as re_queries
 
 
 def _update_restaurant(existing: dict, diff: dict) -> None:
@@ -67,6 +72,22 @@ def _update_service(existing: dict, diff: dict) -> None:
 
 def _update_community(existing: dict, diff: dict) -> None:
     co_pipeline._update(existing, {**existing, **diff}, diff)
+
+
+def _update_legal(existing: dict, diff: dict) -> None:
+    lg_pipeline._update(existing, {**existing, **diff}, diff)
+
+
+def _update_education(existing: dict, diff: dict) -> None:
+    ed_pipeline._update(existing, {**existing, **diff}, diff)
+
+
+def _update_realestate(existing: dict, diff: dict) -> None:
+    re_pipeline._update(existing, {**existing, **diff}, diff)
+
+
+def _update_finance(existing: dict, diff: dict) -> None:
+    fi_pipeline._update(existing, {**existing, **diff}, diff)
 
 
 # label, queries module, stats fn, scalar edit fields, has_hours, has_dietary, update fn
@@ -146,6 +167,34 @@ VERTICALS: dict[str, dict[str, Any]] = {
         "edit_fields": ["phone", "email", "website", "address_full", "city", "state",
                         "org_type", "region_tag", "festival_specials"],
         "has_hours": True, "has_dietary": False, "update": _update_community,
+        "supports_claims": False,
+    },
+    "legal": {
+        "label": "Immigration & Legal", "table": "legal", "queries": lg_queries,
+        "edit_fields": ["phone", "email", "website", "address_full", "city", "state",
+                        "legal_type", "region_tag", "festival_specials"],
+        "has_hours": True, "has_dietary": False, "update": _update_legal,
+        "supports_claims": False,
+    },
+    "education": {
+        "label": "Education & Tutoring", "table": "education", "queries": ed_queries,
+        "edit_fields": ["phone", "email", "website", "address_full", "city", "state",
+                        "edu_type", "region_tag", "festival_specials"],
+        "has_hours": True, "has_dietary": False, "update": _update_education,
+        "supports_claims": False,
+    },
+    "realestate": {
+        "label": "Real Estate", "table": "realestate", "queries": re_queries,
+        "edit_fields": ["phone", "email", "website", "address_full", "city", "state",
+                        "realestate_type", "region_tag", "festival_specials"],
+        "has_hours": True, "has_dietary": False, "update": _update_realestate,
+        "supports_claims": False,
+    },
+    "finance": {
+        "label": "Finance & Tax", "table": "finance", "queries": fi_queries,
+        "edit_fields": ["phone", "email", "website", "address_full", "city", "state",
+                        "finance_type", "region_tag", "festival_specials"],
+        "has_hours": True, "has_dietary": False, "update": _update_finance,
         "supports_claims": False,
     },
 }

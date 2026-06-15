@@ -22,6 +22,10 @@ from .services import queries as service_queries
 from .studios import queries as studio_queries
 from .sweets import queries as sweets_queries
 from .temples import queries as temple_queries
+from .legal import queries as legal_queries
+from .education import queries as education_queries
+from .realestate import queries as realestate_queries
+from .finance import queries as finance_queries
 
 mcp = FastMCP("indo-usa-diaspora", host=settings.mcp_host, port=settings.mcp_port)
 
@@ -493,6 +497,142 @@ def search_community_by_text(
 ) -> dict[str, Any]:
     """Free-text/semantic search over Indian community organizations & associations."""
     return community_queries.search_community_by_text(query, city=city, state=state, limit=limit)
+
+
+# --------------------------------------------------------------- immigration & legal
+@mcp.tool()
+def get_indian_legal(
+    lat: float | None = None, lng: float | None = None, radius_miles: float = 25.0,
+    city: str | None = None, state: str | None = None, tag: str | None = None,
+    open_now: bool = False, limit: int = 25,
+) -> dict[str, Any]:
+    """Find Indian-American immigration attorneys & law firms.
+
+    Provide a point (`lat`+`lng`, optional `radius_miles`) or `city`/`state`. Filter by `tag`
+    (e.g. "immigration").
+    """
+    return legal_queries.get_indian_legal(
+        lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
+        tag=tag, open_now=open_now, limit=limit)
+
+
+@mcp.tool()
+def get_legal_details(legal_id: int) -> dict[str, Any]:
+    """Full canonical record for one immigration/legal listing, plus its version history."""
+    record = legal_queries.get_legal_details(legal_id)
+    if record is None:
+        return {"error": "not_found", "legal_id": legal_id}
+    return record
+
+
+@mcp.tool()
+def search_legal_by_text(
+    query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+) -> dict[str, Any]:
+    """Free-text/semantic search over Indian-American immigration attorneys & law firms."""
+    return legal_queries.search_legal_by_text(query, city=city, state=state, limit=limit)
+
+
+# --------------------------------------------------------------- education & tutoring
+@mcp.tool()
+def get_indian_education(
+    lat: float | None = None, lng: float | None = None, radius_miles: float = 25.0,
+    city: str | None = None, state: str | None = None, tag: str | None = None,
+    open_now: bool = False, limit: int = 25,
+) -> dict[str, Any]:
+    """Find Indian-American education & tutoring (heritage/language schools, Bal Vihar, coaching).
+
+    Provide a point (`lat`+`lng`, optional `radius_miles`) or `city`/`state`. Filter by `tag`
+    (e.g. "language_school", "heritage", "tutoring").
+    """
+    return education_queries.get_indian_education(
+        lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
+        tag=tag, open_now=open_now, limit=limit)
+
+
+@mcp.tool()
+def get_education_details(education_id: int) -> dict[str, Any]:
+    """Full canonical record for one education/tutoring listing, plus its version history."""
+    record = education_queries.get_education_details(education_id)
+    if record is None:
+        return {"error": "not_found", "education_id": education_id}
+    return record
+
+
+@mcp.tool()
+def search_education_by_text(
+    query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+) -> dict[str, Any]:
+    """Free-text/semantic search over Indian-American education & tutoring."""
+    return education_queries.search_education_by_text(query, city=city, state=state, limit=limit)
+
+
+# --------------------------------------------------------------- real estate
+@mcp.tool()
+def get_indian_realestate(
+    lat: float | None = None, lng: float | None = None, radius_miles: float = 25.0,
+    city: str | None = None, state: str | None = None, tag: str | None = None,
+    open_now: bool = False, limit: int = 25,
+) -> dict[str, Any]:
+    """Find Indian-American realtors & real-estate agencies.
+
+    Provide a point (`lat`+`lng`, optional `radius_miles`) or `city`/`state`. Filter by `tag`
+    (e.g. "agency", "mortgage").
+    """
+    return realestate_queries.get_indian_realestate(
+        lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
+        tag=tag, open_now=open_now, limit=limit)
+
+
+@mcp.tool()
+def get_realestate_details(realestate_id: int) -> dict[str, Any]:
+    """Full canonical record for one real-estate listing, plus its version history."""
+    record = realestate_queries.get_realestate_details(realestate_id)
+    if record is None:
+        return {"error": "not_found", "realestate_id": realestate_id}
+    return record
+
+
+@mcp.tool()
+def search_realestate_by_text(
+    query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+) -> dict[str, Any]:
+    """Free-text/semantic search over Indian-American realtors & real-estate agencies."""
+    return realestate_queries.search_realestate_by_text(query, city=city, state=state, limit=limit)
+
+
+# --------------------------------------------------------------- finance & tax
+@mcp.tool()
+def get_indian_finance(
+    lat: float | None = None, lng: float | None = None, radius_miles: float = 25.0,
+    city: str | None = None, state: str | None = None, tag: str | None = None,
+    open_now: bool = False, limit: int = 25,
+) -> dict[str, Any]:
+    """Find Indian-American CPAs, tax preparers & financial advisors.
+
+    Provide a point (`lat`+`lng`, optional `radius_miles`) or `city`/`state`. Filter by `tag`
+    (e.g. "cpa", "tax", "financial_advisor").
+    """
+    return finance_queries.get_indian_finance(
+        lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
+        tag=tag, open_now=open_now, limit=limit)
+
+
+@mcp.tool()
+def get_finance_details(finance_id: int) -> dict[str, Any]:
+    """Full canonical record for one finance/tax listing, plus its version history."""
+    record = finance_queries.get_finance_details(finance_id)
+    if record is None:
+        return {"error": "not_found", "finance_id": finance_id}
+    return record
+
+
+@mcp.tool()
+def search_finance_by_text(
+    query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+) -> dict[str, Any]:
+    """Free-text/semantic search over Indian-American CPAs, tax preparers & financial advisors."""
+    return finance_queries.search_finance_by_text(query, city=city, state=state, limit=limit)
 
 
 @mcp.tool()

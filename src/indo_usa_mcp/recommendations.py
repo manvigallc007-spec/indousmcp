@@ -35,6 +35,13 @@ _KW = {
     "immigration": "services", "forex": "services",
     "association": "community", "samaj": "community", "sangam": "community",
     "mandal": "community", "cultural center": "community", "community center": "community",
+    "lawyer": "legal", "attorney": "legal", "law firm": "legal", "green card": "legal",
+    "tutoring": "education", "tutor": "education", "coaching": "education", "tuition": "education",
+    "vidyalaya": "education", "gurukul": "education", "bal vihar": "education",
+    "realtor": "realestate", "real estate": "realestate", "realty": "realestate",
+    "mortgage": "realestate",
+    "cpa": "finance", "accountant": "finance", "tax preparer": "finance",
+    "financial advisor": "finance",
 }
 _MIN_MISSES = 3          # min searches before recommending coverage / a topic
 _NEW_VERTICAL_MIN = 4    # min TOTAL searches across a cluster before proposing a new vertical
@@ -47,11 +54,7 @@ _CANDIDATE_VERTICALS: dict[str, tuple[str, ...]] = {
     "Caterers": ("caterer", "catering"),
     "Wedding services": ("photographer", "videographer", "wedding planner", "decorator",
                          "mandap", "dj", "dhol", "makeup artist", "mehndi artist", "bridal"),
-    "Tutors & coaching": ("tutor", "tutoring", "coaching", "sat prep", "kumon", "tuition"),
     "Tiffin & meal services": ("tiffin", "home cooked", "home food", "meal service", "dabba"),
-    "Realtors": ("realtor", "real estate", "realty"),
-    "Finance & legal": ("cpa", "tax preparer", "accountant", "financial advisor",
-                        "insurance agent", "immigration attorney", "lawyer", "attorney"),
     "Matrimony": ("matrimony", "matchmaker", "matchmaking", "rishta", "biodata"),
     "Cargo & shipping to India": ("cargo", "shipping to india", "courier to india",
                                   "excess baggage", "ship to india"),

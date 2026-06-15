@@ -136,6 +136,18 @@ def extract(vertical: str, rec: dict) -> list[str]:
     if vertical == "community":
         out = [rec.get("org_type"), rec.get("region_tag")]
         return sorted({str(x).lower() for x in out if x})
+    if vertical == "legal":
+        out = [rec.get("legal_type"), rec.get("region_tag")]
+        return sorted({str(x).lower() for x in out if x})
+    if vertical == "education":
+        out = [rec.get("edu_type"), rec.get("region_tag")]
+        return sorted({str(x).lower() for x in out if x})
+    if vertical == "realestate":
+        out = [rec.get("realestate_type"), rec.get("region_tag")]
+        return sorted({str(x).lower() for x in out if x})
+    if vertical == "finance":
+        out = [rec.get("finance_type"), rec.get("region_tag")]
+        return sorted({str(x).lower() for x in out if x})
 
     text = " ".join(str(rec.get(f) or "") for f in (
         "name", "description", "cuisine_type", "store_type", "region_tag")).lower()

@@ -164,10 +164,49 @@ def _community(rec: dict) -> str:
     return s + _hours(rec)
 
 
+def _legal(rec: dict) -> str:
+    lt = (rec.get("legal_type") or "attorney").replace("_", " ")
+    kind = {"immigration": "immigration law firm", "law firm": "law firm",
+            "attorney": "attorney / law office"}.get(lt, "law office")
+    s = (f"{rec.get('name', 'This firm')} is {_a(kind)} {kind} serving the Indian-American "
+         f"community{_loc(rec)}.")
+    return s + _hours(rec)
+
+
+def _education(rec: dict) -> str:
+    et = (rec.get("edu_type") or "school").replace("_", " ")
+    region = f"{rec['region_tag']} " if rec.get("region_tag") else ""
+    kind = {"language school": "language & heritage school", "heritage": "Indian heritage school",
+            "tutoring": "tutoring & coaching center", "school": "school"}.get(et, "education center")
+    s = (f"{rec.get('name', 'This center')} is {_a(region or kind)} {region}Indian-American "
+         f"{kind}{_loc(rec)}.")
+    return s + _hours(rec)
+
+
+def _realestate(rec: dict) -> str:
+    rt = (rec.get("realestate_type") or "agent").replace("_", " ")
+    kind = {"agency": "real-estate agency", "mortgage": "mortgage & home-loan service",
+            "agent": "real-estate agent"}.get(rt, "real-estate service")
+    s = (f"{rec.get('name', 'This business')} is {_a(kind)} {kind} serving the Indian-American "
+         f"community{_loc(rec)}.")
+    return s + _hours(rec)
+
+
+def _finance(rec: dict) -> str:
+    ft = (rec.get("finance_type") or "accountant").replace("_", " ")
+    kind = {"cpa": "CPA (certified public accountant)", "tax": "tax & accounting service",
+            "financial advisor": "financial advisory service",
+            "accountant": "accounting service"}.get(ft, "finance service")
+    s = (f"{rec.get('name', 'This firm')} is {_a(kind)} {kind} serving the Indian-American "
+         f"community{_loc(rec)}.")
+    return s + _hours(rec)
+
+
 _BUILDERS = {"restaurants": _restaurant, "temples": _temple, "groceries": _grocery,
              "professionals": _professional, "salons": _salon, "events": _event,
              "apparel": _apparel, "sweets": _sweets, "studios": _studio, "services": _service,
-             "community": _community}
+             "community": _community, "legal": _legal, "education": _education,
+             "realestate": _realestate, "finance": _finance}
 
 
 def _rating(rec: dict) -> str:

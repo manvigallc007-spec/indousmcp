@@ -20,7 +20,8 @@ from .verticals import VERTICALS
 _RAW = {"restaurants": "restaurant_raw", "temples": "temple_raw", "groceries": "grocery_raw",
         "professionals": "professional_raw", "salons": "salon_raw", "events": "event_raw",
         "apparel": "apparel_raw", "sweets": "sweets_raw", "studios": "studio_raw",
-        "services": "service_raw", "community": "community_raw"}
+        "services": "service_raw", "community": "community_raw", "legal": "legal_raw",
+        "education": "education_raw", "realestate": "realestate_raw", "finance": "finance_raw"}
 
 
 def _scalar(sql: str, params=None) -> int:

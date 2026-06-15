@@ -24,7 +24,8 @@ from .config import settings
 
 # Verticals that have a real website to scrape (all carry a `website` + enrichment columns).
 FETCHABLE = ("restaurants", "temples", "groceries", "professionals", "salons", "events",
-             "apparel", "sweets", "studios", "services", "community")
+             "apparel", "sweets", "studios", "services", "community",
+             "legal", "education", "realestate", "finance")
 
 _JSONLD_RE = re.compile(
     r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', re.I | re.S)

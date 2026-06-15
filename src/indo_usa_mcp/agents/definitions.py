@@ -23,6 +23,10 @@ from ..services import pipeline as services
 from ..studios import pipeline as studios
 from ..sweets import pipeline as sweets
 from ..temples import pipeline as temples
+from ..legal import pipeline as legal
+from ..education import pipeline as education
+from ..realestate import pipeline as realestate
+from ..finance import pipeline as finance
 from .base import Agent
 
 
@@ -383,6 +387,114 @@ class CommunityCleanerAgent(Agent):
         return result
 
 
+class LegalScraperAgent(Agent):
+    name = "legal_scraper"
+    description = "Scrapes Indian-American immigration attorneys & law firms across every metro."
+    default_interval_s = 259200  # every 3 days
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        metros = params.get("metros") or list(METROS)
+        total, errors = 0, []
+        for metro in metros:
+            try:
+                total += legal.scrape_to_raw(metro)
+            except Exception as exc:
+                errors.append({"metro": metro, "error": str(exc)})
+        return {"upserted": total, "errors": errors}
+
+
+class LegalCleanerAgent(Agent):
+    name = "legal_cleaner"
+    description = "Processes raw legal listings into canonical; deactivates stale ones."
+    default_interval_s = 86400
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        result = legal.process_raw()
+        result.update(legal.deactivate_stale(days=params.get("stale_days", 180)))
+        return result
+
+
+class EducationScraperAgent(Agent):
+    name = "education_scraper"
+    description = "Scrapes Indian-American education & tutoring (heritage/language schools)."
+    default_interval_s = 259200
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        metros = params.get("metros") or list(METROS)
+        total, errors = 0, []
+        for metro in metros:
+            try:
+                total += education.scrape_to_raw(metro)
+            except Exception as exc:
+                errors.append({"metro": metro, "error": str(exc)})
+        return {"upserted": total, "errors": errors}
+
+
+class EducationCleanerAgent(Agent):
+    name = "education_cleaner"
+    description = "Processes raw education listings into canonical; deactivates stale ones."
+    default_interval_s = 86400
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        result = education.process_raw()
+        result.update(education.deactivate_stale(days=params.get("stale_days", 180)))
+        return result
+
+
+class RealEstateScraperAgent(Agent):
+    name = "realestate_scraper"
+    description = "Scrapes Indian-American realtors & real-estate agencies across every metro."
+    default_interval_s = 259200
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        metros = params.get("metros") or list(METROS)
+        total, errors = 0, []
+        for metro in metros:
+            try:
+                total += realestate.scrape_to_raw(metro)
+            except Exception as exc:
+                errors.append({"metro": metro, "error": str(exc)})
+        return {"upserted": total, "errors": errors}
+
+
+class RealEstateCleanerAgent(Agent):
+    name = "realestate_cleaner"
+    description = "Processes raw real-estate listings into canonical; deactivates stale ones."
+    default_interval_s = 86400
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        result = realestate.process_raw()
+        result.update(realestate.deactivate_stale(days=params.get("stale_days", 180)))
+        return result
+
+
+class FinanceScraperAgent(Agent):
+    name = "finance_scraper"
+    description = "Scrapes Indian-American CPAs, tax preparers & financial advisors across metros."
+    default_interval_s = 259200
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        metros = params.get("metros") or list(METROS)
+        total, errors = 0, []
+        for metro in metros:
+            try:
+                total += finance.scrape_to_raw(metro)
+            except Exception as exc:
+                errors.append({"metro": metro, "error": str(exc)})
+        return {"upserted": total, "errors": errors}
+
+
+class FinanceCleanerAgent(Agent):
+    name = "finance_cleaner"
+    description = "Processes raw finance listings into canonical; deactivates stale ones."
+    default_interval_s = 86400
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        result = finance.process_raw()
+        result.update(finance.deactivate_stale(days=params.get("stale_days", 180)))
+        return result
+
+
 class EventFeedDiscoveryAgent(Agent):
     name = "event_feed_discovery"
     description = "Scans org websites for public iCal calendar feeds (auto-finds event sources)."
@@ -562,6 +674,14 @@ ALL_AGENTS = [
     ServiceCleanerAgent(),
     CommunityScraperAgent(),
     CommunityCleanerAgent(),
+    LegalScraperAgent(),
+    LegalCleanerAgent(),
+    EducationScraperAgent(),
+    EducationCleanerAgent(),
+    RealEstateScraperAgent(),
+    RealEstateCleanerAgent(),
+    FinanceScraperAgent(),
+    FinanceCleanerAgent(),
     EventFeedDiscoveryAgent(),
     EventScraperAgent(),
     EventCleanerAgent(),

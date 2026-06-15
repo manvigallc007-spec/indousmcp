@@ -23,7 +23,8 @@ from .config import settings
 _SYSTEM = (
     "You are a warm, concise local guide to Indian-American businesses, temples, and events "
     "across the USA — restaurants, groceries, temples, doctors, salons, events, apparel & "
-    "jewelry, sweets & bakeries, yoga/dance studios, and money-transfer/travel services. "
+    "jewelry, sweets & bakeries, yoga/dance studios, money-transfer/travel services, "
+    "immigration lawyers, tutoring & heritage schools, real-estate agents, and CPAs/tax advisors. "
     "When the user asks for places or things to do, ALWAYS call the search_directory tool to "
     "find real listings — never invent businesses or details. After searching, reply in 1-3 "
     "short sentences and let the listing cards show the specifics; mention if something is "
@@ -384,13 +385,18 @@ _VERTICAL_HINTS = {
     "restaurants": ("restaurant", "food", "eat", "dinner", "lunch", "thali", "biryani", "dosa", "cafe"),
     "groceries": ("grocery", "spice", "vegetables", "atta", "lentil"),
     "temples": ("temple", "mandir", "gurdwara", "puja", "worship"),
-    "professionals": ("doctor", "dentist", "clinic", "lawyer", "attorney", "accountant", "cpa", "physician"),
+    "professionals": ("doctor", "dentist", "clinic", "physician", "healthcare", "pharmacy", "hospital"),
     "salons": ("salon", "threading", "henna", "mehndi", "beauty", "hairdresser", "bridal"),
     "sweets": ("sweets", "mithai", "bakery", "ladoo", "jalebi", "halwa"),
     "studios": ("yoga", "dance", "music", "studio", "bharatanatyam", "tabla", "kathak", "class"),
     "apparel": ("saree", "sari", "lehenga", "jewelry", "jeweler", "clothing", "boutique"),
     "services": ("money transfer", "remittance", "travel", "cargo", "shipping", "visa"),
     "community": ("association", "samaj", "sangam", "organization", "cultural"),
+    "legal": ("lawyer", "attorney", "immigration", "green card", "h1b", "law firm"),
+    "education": ("tutoring", "tutor", "coaching", "vidyalaya", "gurukul", "bal vihar",
+                  "sanskrit", "language school", "heritage school"),
+    "realestate": ("realtor", "real estate", "realty", "mortgage", "property"),
+    "finance": ("cpa", "accountant", "tax preparer", "tax prep", "financial advisor", "bookkeeping"),
 }
 
 
@@ -404,11 +410,15 @@ def is_indian_american_topic(text: str) -> bool:
 
 
 def _guess_vertical(query: str) -> str | None:
+    # Longest matched keyword wins, so a specific word ("tutoring", "immigration") beats a generic
+    # one in another vertical ("class", "store") regardless of dict order.
     t = (query or "").lower()
+    best_v, best_len = None, 0
     for v, words in _VERTICAL_HINTS.items():
-        if any(w in t for w in words):
-            return v
-    return None
+        for w in words:
+            if w in t and len(w) > best_len:
+                best_v, best_len = v, len(w)
+    return best_v
 
 
 def _suggest_add(query: str) -> dict:
