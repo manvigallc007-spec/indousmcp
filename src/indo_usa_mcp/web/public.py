@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import functools
 import html
 import pathlib
 import time
@@ -64,32 +66,55 @@ def brand_logo(request: Request) -> Response:
     return icon(request)
 
 
+@functools.lru_cache(maxsize=1)
+def _logo_data_uri() -> str | None:
+    """The real square brand logo as a cached data: URI, for embedding in the SVG social card so a
+    shared link shows the actual Namaste America mark (not a placeholder)."""
+    for ext, mime in (("png", "image/png"), ("webp", "image/webp"),
+                      ("jpg", "image/jpeg"), ("jpeg", "image/jpeg")):
+        f = _STATIC_DIR / f"logo-square.{ext}"
+        if f.exists():
+            return f"data:{mime};base64," + base64.b64encode(f.read_bytes()).decode("ascii")
+    return None
+
+
 def og_image(request: Request) -> Response:
-    """A 1200x630 branded social-share card (temp name + lotus logo). Swap for the real brand
-    later by editing this one route. SVG keeps it dependency-free; a raster can replace it."""
-    aname = html.escape(settings.assistant_name)
-    tag = html.escape(settings.assistant_tagline)
-    mean = html.escape(settings.assistant_meaning)
+    """A 1200x630 branded social-share card: the real Namaste America logo + brand + tagline,
+    so a shared link looks professional and on-brand. SVG keeps it dependency-free; the inline
+    lotus mark is the fallback when no logo file is present."""
     plat = html.escape(settings.platform_name)
+    ptag = html.escape(settings.platform_tagline)
+    aname = html.escape(settings.assistant_name)
     f = "font-family='Segoe UI,Helvetica,Arial,sans-serif'"
+    logo = _logo_data_uri()
+    if logo:
+        mark = (
+            "<defs><clipPath id='lc'><rect x='96' y='205' width='220' height='220' rx='48'/></clipPath></defs>"
+            f"<image href='{logo}' x='96' y='205' width='220' height='220' "
+            "preserveAspectRatio='xMidYMid slice' clip-path='url(#lc)'/>")
+        tx = 360
+    else:
+        mark = (
+            "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>"
+            "<stop offset='0' stop-color='#ffce93'/><stop offset='1' stop-color='#e8772e'/>"
+            "</linearGradient></defs>"
+            "<rect x='96' y='220' width='190' height='190' rx='44' fill='url(#g)'/>"
+            "<g fill='#fff' opacity='.96' transform='translate(191 315) scale(2.5)'>"
+            "<ellipse cx='0' cy='0' rx='5.5' ry='14'/>"
+            "<ellipse cx='0' cy='0' rx='5.5' ry='14' transform='rotate(38)'/>"
+            "<ellipse cx='0' cy='0' rx='5.5' ry='14' transform='rotate(-38)'/>"
+            "<ellipse cx='0' cy='2' rx='5' ry='10.5' transform='rotate(70)'/>"
+            "<ellipse cx='0' cy='2' rx='5' ry='10.5' transform='rotate(-70)'/></g>")
+        tx = 330
     svg = (
         "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='630' viewBox='0 0 1200 630'>"
-        "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>"
-        "<stop offset='0' stop-color='#ffce93'/><stop offset='1' stop-color='#e8772e'/>"
-        "</linearGradient></defs>"
-        "<rect width='1200' height='630' fill='#faf7f2'/>"
+        "<rect width='1200' height='630' fill='#faf8f4'/>"
         "<rect width='1200' height='16' fill='#e8772e'/><rect y='614' width='1200' height='16' fill='#0f9b8e'/>"
-        "<rect x='96' y='220' width='190' height='190' rx='44' fill='url(#g)'/>"
-        "<g fill='#fff' opacity='.96' transform='translate(191 315) scale(2.5)'>"
-        "<ellipse cx='0' cy='0' rx='5.5' ry='14'/>"
-        "<ellipse cx='0' cy='0' rx='5.5' ry='14' transform='rotate(38)'/>"
-        "<ellipse cx='0' cy='0' rx='5.5' ry='14' transform='rotate(-38)'/>"
-        "<ellipse cx='0' cy='2' rx='5' ry='10.5' transform='rotate(70)'/>"
-        "<ellipse cx='0' cy='2' rx='5' ry='10.5' transform='rotate(-70)'/></g>"
-        f"<text x='330' y='300' {f} font-size='128' font-weight='700' fill='#25303a'>{aname}</text>"
-        f"<text x='334' y='362' {f} font-size='42' fill='#0f9b8e'>{tag}</text>"
-        f"<text x='334' y='420' {f} font-size='30' fill='#6b7280'>{mean}</text>"
-        f"<text x='96' y='566' {f} font-size='26' fill='#9aa0a6'>{plat} · Indian-American directory · USA</text>"
+        + mark +
+        f"<text x='{tx}' y='292' {f} font-size='90' font-weight='700' fill='#222b33'>{plat}</text>"
+        f"<text x='{tx + 4}' y='350' {f} font-size='40' fill='#0f9b8e'>{ptag}</text>"
+        f"<text x='{tx + 4}' y='406' {f} font-size='29' fill='#667085'>Ask {aname}, your desi friend — by voice or text</text>"
+        f"<text x='96' y='566' {f} font-size='25' fill='#9aa0a6'>Indian restaurants · temples · groceries · events · classes · USA</text>"
         "</svg>")
     return Response(svg, media_type="image/svg+xml",
                     headers={"Cache-Control": "public, max-age=86400"})

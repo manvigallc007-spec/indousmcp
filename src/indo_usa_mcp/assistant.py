@@ -181,10 +181,15 @@ def _lang_note(filters: dict | None) -> str | None:
     name = _LANG_NAMES.get((filters or {}).get("lang") or "en")
     if not name or name == "English":
         return None
-    return (f"Always reply to the user entirely in {name} (its native script). The user may type "
-            f"or speak in {name} or a romanized form — understand either. When you search the "
-            f"directory or call a tool, TRANSLATE the request into English search terms (the "
-            f"listings are stored in English); keep business names as they are.")
+    return (f"LANGUAGE: Reply ENTIRELY in {name}, in its native script, using warm, natural, "
+            f"everyday {name} the way a friendly local actually speaks — not stiff, not overly "
+            f"formal, and NOT a word-for-word translation of English. Short, clear sentences that "
+            f"sound good when read aloud. Keep proper nouns (business names, cities) in their usual "
+            f"spelling, and you may keep common English words people normally use (e.g. "
+            f"'restaurant', 'temple', 'open'). The user may type or speak in {name} or a romanized "
+            f"form — understand either. When you search the directory or call a tool, TRANSLATE the "
+            f"request into English search terms (listings are stored in English); never show the "
+            f"English translation to the user.")
 
 
 def _cards(res: dict) -> list[dict]:

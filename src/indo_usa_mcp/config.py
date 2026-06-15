@@ -157,6 +157,14 @@ class Settings(BaseSettings):
     # asking for a city if this is off or fails. Set False to disable the IP lookup entirely.
     geoip_enabled: bool = True
 
+    # Text-to-speech for the chatbot's spoken replies.
+    #   "browser" -> the device's free on-device Web Speech API (default, $0). Hindi/Telugu voice
+    #                quality depends on what the visitor's OS ships; we pick the best one available.
+    # PROVISION ONLY: set this to a paid native-voice provider later (e.g. "google" / "azure" /
+    # "elevenlabs") for natural Hindi/Telugu narration. The chat page reads this value, so wiring a
+    # server-side /chat/tts route is a pure addition — no UI rework. Keys live in env only, never code.
+    tts_provider: str = "browser"
+
     # MCP server transport
     # "stdio" for local clients (Claude Desktop), "streamable-http" for a hosted service.
     mcp_transport: str = "stdio"
