@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     # NPPES (free CMS NPI registry) API base. NOTE the host is npiregistry.cms.HHS.gov — the
     # cms.gov variant does NOT resolve. Configurable so a future move is an env change, not code.
     nppes_api_url: str = "https://npiregistry.cms.hhs.gov/api/"
+    # Optional free Socrata app token (higher SODA API rate limits). The open-data API works
+    # without one; set it only if you register for higher throughput. Token via env only.
+    socrata_app_token: str = ""
     # Optional free US Census API key (https://api.census.gov/data/key_signup.html). Low-volume
     # demographics pulls work without one; set it to be safe under rate limits.
     census_api_key: str = ""

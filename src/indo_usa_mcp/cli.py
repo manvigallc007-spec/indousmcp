@@ -77,6 +77,16 @@ def cmd_caterbid_import(_: argparse.Namespace) -> None:
     _print(ingest.process_raw())
 
 
+def cmd_socrata_import(args: argparse.Namespace) -> None:
+    from .pipeline.scrapers.socrata import SOCRATA_SOURCES, import_source
+    keys = [args.source] if args.source else list(SOCRATA_SOURCES)
+    for key in keys:
+        print(f"Importing Socrata source '{key}' ...")
+        _print(import_source(key))
+    print("Processing into restaurants ...")
+    _print(ingest.process_raw())
+
+
 def cmd_approvals(args: argparse.Namespace) -> None:
     status = "" if args.all else "WHERE status = 'pending'"
     rows = db.query(
@@ -454,6 +464,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("caterbid-import",
                    help="Import the operator's own caterbid.co restaurants (DB-direct, tagged catering)"
                    ).set_defaults(func=cmd_caterbid_import)
+
+    ssp = sub.add_parser("socrata-import",
+                         help="Import South-Asian restaurants from city open data (Socrata SODA)")
+    ssp.add_argument("--source", help="one Socrata source key (default: all). e.g. nyc_restaurants")
+    ssp.set_defaults(func=cmd_socrata_import)
 
     ap = sub.add_parser("approvals", help="List approval-queue items")
     ap.add_argument("--all", action="store_true", help="Include resolved items")
