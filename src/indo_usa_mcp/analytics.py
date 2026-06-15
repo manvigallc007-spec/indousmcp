@@ -136,7 +136,7 @@ def top_misses(days: int = 30, limit: int = 25) -> list[dict]:
         "count(DISTINCT client) AS sources "
         "FROM tool_log "
         f"WHERE result_count = 0 AND {win} "
-        "AND (tool LIKE 'search\\_%%' OR tool LIKE 'get\\_indian\\_%%' OR tool IN ('search_all', 'chat')) "
+        "AND (tool LIKE 'search\\_%%' OR tool LIKE 'get\\_indian\\_%%' OR tool IN ('search_all', 'chat', 'api_search')) "
         "GROUP BY 1, 2, 3 ORDER BY n DESC, last_seen DESC LIMIT %s", (limit,))
 
 

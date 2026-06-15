@@ -19,10 +19,21 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route
 
-from .. import verticals
+from .. import analytics, metering, verticals
 from ..config import settings
 
 _HITS: dict[str, list[float]] = {}
+
+
+def _agent_id(request: Request, ip: str) -> str:
+    """Identity for usage metering: an explicit agent/API-key header if present, else the IP."""
+    h = request.headers
+    key = h.get("x-api-key") or h.get("x-agent-id")
+    if not key:
+        auth = h.get("authorization") or ""
+        if auth.lower().startswith("bearer "):
+            key = auth[7:].strip()
+    return (key or f"ip:{ip}")[:120]
 
 # Stable, documented output fields. We project onto these so internal/DB columns never leak and
 # the contract stays predictable for third-party consumers.
@@ -60,6 +71,11 @@ def search(request: Request) -> JSONResponse:
     if not _rate_ok(ip):
         return JSONResponse({"error": "rate_limited",
                              "message": "Too many requests — slow down a moment."}, status_code=429)
+    # Per-agent metering guard — a no-op until AGENT_METERING_ENABLED is turned on (points 12/15).
+    agent = _agent_id(request, ip)
+    if not metering.within_quota(agent):
+        return JSONResponse({"error": "quota_exceeded", "message":
+                             "Monthly free quota reached for this agent."}, status_code=429)
 
     qp = request.query_params
     query = (qp.get("q") or qp.get("query") or "").strip()
@@ -95,6 +111,13 @@ def search(request: Request) -> JSONResponse:
                                    lat=lat, lng=lng)
 
     rows = [_public_row(r) for r in res.get("results", [])]
+    # Record the call (best-effort): feeds the admin Traffic view + per-agent metering, and lets
+    # zero-result API searches flow into the miss-log -> recommendations, same as MCP/chat.
+    try:
+        analytics.log_call("api_search", {"query": query, "city": city, "state": state,
+                                          "vertical": vertical}, len(rows), agent)
+    except Exception:
+        pass
     return JSONResponse({
         "query": query, "count": len(rows), "ranking": res.get("ranking"),
         "vertical": vertical, "results": rows,

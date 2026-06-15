@@ -119,6 +119,9 @@ services:
       FEATURED_DAYS: ${FEATURED_DAYS:-30}
       # Selling Featured stays OFF until a city+vertical has traffic (Stripe plumbing intact).
       FEATURED_SALES_ENABLED: ${FEATURED_SALES_ENABLED:-false}
+      # Agent metering (charge agents for retrieval) — DORMANT. Flip on later; see SCALING.md.
+      AGENT_METERING_ENABLED: ${AGENT_METERING_ENABLED:-false}
+      AGENT_FREE_MONTHLY_QUOTA: ${AGENT_FREE_MONTHLY_QUOTA:-1000}
     ports:
       - "8080:8080"
     depends_on:

@@ -148,6 +148,13 @@ class Settings(BaseSettings):
         return bool(preset["llm_use_tools"]) if preset else self.llm_use_tools
     chat_rate_per_min: int = 20            # per-IP request cap on the chat API (abuse guard)
     api_rate_per_min: int = 60             # per-IP request cap on the public read-only JSON API
+
+    # Agent metering (future monetization — points 12 & 15). DORMANT by default: every MCP/API call
+    # is already logged per-client, so usage is COUNTABLE now (see metering.py + the admin Traffic
+    # view). Flip this on later to ENFORCE a per-agent monthly quota (charge for retrieval beyond
+    # it). Off = zero behavior change (within_quota() always returns True).
+    agent_metering_enabled: bool = False
+    agent_free_monthly_quota: int = 1000   # calls/agent/month before metering would gate
     # When the directory has no answer but the question is relevant to Indian-American life in
     # the USA, fetch a general-info answer from free, key-less web sources (Wikipedia + DuckDuckGo)
     # and have the LLM phrase it. Answers are labelled "general info, not from our directory".
