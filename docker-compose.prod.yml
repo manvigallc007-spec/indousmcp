@@ -53,6 +53,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-diaspora}
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-fastembed}
       EVENT_ICAL_FEEDS: ${EVENT_ICAL_FEEDS:-}
+      # caterbid.co import (operator's own data, same VPS). Blank = disabled. CATERBID_QUERY blank
+      # = use the built-in default SELECT; set it only if caterbid's schema differs (see config.py).
+      CATERBID_DATABASE_URL: ${CATERBID_DATABASE_URL:-}
+      CATERBID_QUERY: ${CATERBID_QUERY:-}
       # Outreach (OutreachAgent runs here). Auto-send stays OFF until SMTP *and*
       # OUTREACH_POSTAL_ADDRESS are set (CAN-SPAM); otherwise it only drafts.
       SECRET_KEY: ${SECRET_KEY:-dev-insecure-change-me}      # signs one-click opt-out links

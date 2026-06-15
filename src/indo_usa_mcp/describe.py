@@ -48,7 +48,8 @@ def _restaurant(rec: dict) -> str:
         s += f" Price: {rec['price_range']}."
     if rec.get("festival_specials"):
         s += f" Festival specials: {rec['festival_specials']}."
-    return s + _amenities(rec) + _hours(rec)
+    cater = " Also offers catering." if "catering" in (rec.get("tags") or []) else ""
+    return s + _amenities(rec) + _hours(rec) + cater
 
 
 def _temple(rec: dict) -> str:

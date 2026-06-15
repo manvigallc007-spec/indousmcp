@@ -22,6 +22,14 @@ _LLM_PRESETS: dict[str, dict] = {
 }
 
 
+# Default SELECT for the caterbid import — aliases caterbid's columns to our field names. Override
+# via CATERBID_QUERY if caterbid's schema differs. Expected aliases: source_id, name, address_full,
+# city, state, phone, email, website, cuisine_type, lat, lng.
+_CATERBID_DEFAULT_QUERY = (
+    "SELECT id AS source_id, name, address AS address_full, city, state, phone, email, "
+    "website, cuisine AS cuisine_type, latitude AS lat, longitude AS lng FROM restaurants")
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -57,6 +65,20 @@ class Settings(BaseSettings):
     # demographics pulls work without one; set it to be safe under rate limits.
     census_api_key: str = ""
     scraper_timeout_seconds: int = 180
+
+    # caterbid.co import — the operator's OWN restaurant directory, on the same VPS. We read its
+    # Postgres directly over the shared docker network (NO website scraping — it's our data). Blank
+    # = disabled. All rows land in `restaurants`, tagged 'catering' (every caterbid business caters),
+    # South-Asian cuisines kept. If caterbid's schema differs from the default query, set
+    # CATERBID_QUERY to a SELECT that aliases columns to our names:
+    #   source_id, name, address_full, city, state, phone, email, website, cuisine_type, lat, lng
+    caterbid_database_url: str = ""
+    caterbid_query: str = ""   # blank -> _CATERBID_DEFAULT_QUERY (so compose can pass an empty default)
+    caterbid_site_url: str = "https://caterbid.co"
+
+    @property
+    def effective_caterbid_query(self) -> str:
+        return self.caterbid_query.strip() or _CATERBID_DEFAULT_QUERY
 
     # Public claim web page (owner-facing)
     web_host: str = "0.0.0.0"

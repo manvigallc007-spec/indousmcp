@@ -65,6 +65,18 @@ def cmd_process(_: argparse.Namespace) -> None:
     _print(result)
 
 
+def cmd_caterbid_import(_: argparse.Namespace) -> None:
+    from .config import settings
+    if not (settings.caterbid_database_url or "").strip():
+        print("CATERBID_DATABASE_URL is not set — nothing to import.")
+        print("Set it (and CATERBID_QUERY if caterbid's schema differs) in .env, then re-run.")
+        return
+    print("Importing caterbid.co restaurants (own DB, every row tagged 'catering')...")
+    n = ingest.scrape_to_raw("caterbid", "caterbid")
+    print(f"Upserted {n} raw observation(s) into restaurant_raw.")
+    _print(ingest.process_raw())
+
+
 def cmd_approvals(args: argparse.Namespace) -> None:
     status = "" if args.all else "WHERE status = 'pending'"
     rows = db.query(
@@ -438,6 +450,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("process", help="Process raw -> canonical/approval").set_defaults(
         func=cmd_process
     )
+
+    sub.add_parser("caterbid-import",
+                   help="Import the operator's own caterbid.co restaurants (DB-direct, tagged catering)"
+                   ).set_defaults(func=cmd_caterbid_import)
 
     ap = sub.add_parser("approvals", help="List approval-queue items")
     ap.add_argument("--all", action="store_true", help="Include resolved items")
