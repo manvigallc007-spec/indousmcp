@@ -214,6 +214,33 @@ class ProfessionalScraperAgent(Agent):
         return {"upserted": total, "errors": errors}
 
 
+class NppesScraperAgent(Agent):
+    name = "nppes_scraper"
+    description = ("Adds Indian-American healthcare providers from the free CMS NPPES registry "
+                  "(rotates a few US states per week — polite, no key).")
+    default_interval_s = 604800  # weekly — gentle on the public government API
+
+    # Indian-population-heavy states, rotated a few per run (keyed off the ISO week) so we never
+    # hammer NPPES. Over ~7 weeks this covers the whole list; pass states=[...] to target manually.
+    _STATES = ["CA", "NJ", "NY", "TX", "IL", "GA", "PA", "VA", "FL", "MI", "WA", "MA", "MD",
+               "OH", "NC", "AZ", "MN", "CT", "CO", "WI"]
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        import datetime
+        states = params.get("states")
+        if not states:
+            per = max(1, int(params.get("states_per_run", 3)))
+            start = (datetime.date.today().isocalendar()[1] * per) % len(self._STATES)
+            states = [self._STATES[(start + i) % len(self._STATES)] for i in range(per)]
+        total, errors = 0, []
+        for st in states:
+            try:
+                total += professionals.scrape_nppes_to_raw(st)
+            except Exception as exc:
+                errors.append({"state": st, "error": str(exc)})
+        return {"source": "nppes", "states": states, "upserted": total, "errors": errors}
+
+
 class ProfessionalCleanerAgent(Agent):
     name = "professional_cleaner"
     description = "Processes raw professionals into canonical; deactivates stale ones."
@@ -668,6 +695,7 @@ ALL_AGENTS = [
     GroceryScraperAgent(),
     GroceryCleanerAgent(),
     ProfessionalScraperAgent(),
+    NppesScraperAgent(),
     ProfessionalCleanerAgent(),
     SalonScraperAgent(),
     SalonCleanerAgent(),
