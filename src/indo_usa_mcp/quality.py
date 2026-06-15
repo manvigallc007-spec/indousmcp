@@ -63,3 +63,36 @@ def duplicates(vertical: str, limit: int = 50) -> list[dict]:
 
 def scan_all() -> dict[str, Any]:
     return {v: summary(v) for v in VERTICALS}
+
+
+# Genuinely-unusable: below the confidence floor AND no way to locate OR contact the place. Kept
+# strict on purpose (OSM rows always carry coordinates, so real listings are never touched) — this
+# only sweeps sparse junk that slipped in (e.g. an empty submission or a failed geocode).
+_UNUSABLE = ("deleted_at IS NULL AND is_active AND NOT is_claimed AND NOT is_featured "
+             "AND confidence_score < %s "
+             "AND lat IS NULL AND address_full IS NULL AND city IS NULL "
+             "AND phone IS NULL AND website IS NULL AND email IS NULL")
+
+
+def suppress_low_quality(min_confidence: float = 0.35, dry_run: bool = True) -> dict[str, Any]:
+    """Deactivate (reversible) active, unclaimed, unfeatured rows that are genuinely unusable.
+    Complements the stale lifecycle: that decays by AGE, this by QUALITY. `dry_run=True` only
+    counts what would be suppressed. Events are skipped (date-managed)."""
+    out: dict[str, Any] = {"dry_run": dry_run, "min_confidence": min_confidence,
+                           "by_vertical": {}, "total": 0}
+    for v in VERTICALS:
+        if v == "events":
+            continue
+        t = _table(v)
+        try:
+            ids = [r["id"] for r in
+                   db.query(f"SELECT id FROM {t} WHERE {_UNUSABLE}", (min_confidence,))]
+        except Exception:
+            continue
+        if ids and not dry_run:
+            db.execute(f"UPDATE {t} SET is_active = false, updated_at = now() "
+                       f"WHERE id = ANY(%s)", (ids,))
+        if ids:
+            out["by_vertical"][v] = len(ids)
+            out["total"] += len(ids)
+    return out

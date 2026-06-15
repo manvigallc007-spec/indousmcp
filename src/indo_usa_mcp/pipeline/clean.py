@@ -192,3 +192,23 @@ def score(record: dict) -> float:
         if value not in (None, "", [], {}):
             total += weight
     return round(min(total, 1.0), 3)
+
+
+# Below this confidence a record is treated as low-quality (held for review, not auto-published).
+QUALITY_FLOOR = 0.35
+
+
+def _has(record: dict, *fields: str) -> bool:
+    return any(record.get(f) not in (None, "", [], {}) for f in fields)
+
+
+def is_publishable(record: dict) -> bool:
+    """Quality gate for what shows publicly. A record is fit to publish only if it clears the
+    confidence floor AND is at least locatable (geo/address/city) or contactable (phone/web/email).
+    Genuinely-empty rows (no way to find or reach the place) are held inactive for review instead
+    of polluting public results. OSM rows carry coordinates, so real listings pass easily; this
+    mainly catches sparse submissions / failed geocodes."""
+    conf = record.get("confidence_score")
+    conf = score(record) if conf is None else float(conf)
+    return conf >= QUALITY_FLOOR and (_has(record, "lat", "address_full", "city")
+                                      or _has(record, "phone", "website", "email"))

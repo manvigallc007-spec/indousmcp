@@ -107,7 +107,7 @@ def _reconcile(rec: dict) -> str:
     if existing is None:
         _insert(rec)
         return "inserted"
-    if not existing["is_active"] and not existing["is_claimed"]:
+    if not existing["is_active"] and not existing["is_claimed"] and rclean.is_publishable(rec):
         db.execute("UPDATE realestate SET is_active = true, updated_at = now() WHERE id = %s",
                    (existing["id"],))
     diff = {f: rec[f] for f in _DIFF_FIELDS
@@ -123,9 +123,9 @@ def _insert(rec: dict) -> None:
     cols = list(_CANONICAL_FIELDS)
     placeholders = ", ".join(["%s"] * len(cols))
     row = db.query_one(
-        f"INSERT INTO realestate ({', '.join(cols)}, last_seen_at) "
-        f"VALUES ({placeholders}, now()) RETURNING *",
-        [_adapt(rec.get(c)) for c in cols],
+        f"INSERT INTO realestate ({', '.join(cols)}, is_active, last_seen_at) "
+        f"VALUES ({placeholders}, %s, now()) RETURNING *",
+        [_adapt(rec.get(c)) for c in cols] + [rclean.is_publishable(rec)],
     )
     _snapshot(row, f"insert from {rec.get('source_name')}")
 

@@ -221,12 +221,19 @@ def quality_page(request: Request) -> HTMLResponse:
         f"<td>{' '.join(f'<a href=\"/admin/data/{vertical}/{i}\">#{i}</a>' for i in d['ids'])}</td>"
         f"<td>{_merge_btn(d['ids'])}</td></tr>"
         for d in dupes)
+    n_unusable = quality.suppress_low_quality(dry_run=True)["total"]
+    suppress_btn = (f"<form method='post' action='/admin/quality' class='inline'>"
+                    f"<input type='hidden' name='vertical' value='{vertical}'>"
+                    "<input type='hidden' name='op' value='suppress'>"
+                    f"<button class='btn gray'>Suppress {n_unusable} unusable row(s) "
+                    "— all verticals</button></form>"
+                    if n_unusable else "<span class='muted'>· no unusable rows 🎉</span>")
     body = (f"<p>{tabs}</p><p class='muted'>{s['total']} active records · "
             "click an issue to see affected records, then fix them inline.</p>"
             f"<div class='cards'>{cards}</div>"
             "<p><form method='post' action='/admin/quality' class='inline'>"
             f"<input type='hidden' name='vertical' value='{vertical}'>"
-            "<button>Normalize city/state now</button></form></p>"
+            "<button>Normalize city/state now</button></form> " + suppress_btn + "</p>"
             + (f"<h3>Possible duplicates ({len(dupes)})</h3>"
                "<p class='muted'>Merge fills the keeper's empty fields from the others, then "
                "soft-deletes them.</p><table><tr><th>Name</th><th>Location</th><th>Count</th>"
@@ -238,8 +245,11 @@ def quality_page(request: Request) -> HTMLResponse:
 async def quality_action(request: Request) -> HTMLResponse:
     if (r := require_admin(request)):
         return r
-    vertical = (await request.form()).get("vertical")
-    if vertical in verticals.VERTICALS:
+    form = await request.form()
+    vertical = form.get("vertical")
+    if form.get("op") == "suppress":
+        quality.suppress_low_quality(dry_run=False)
+    elif vertical in verticals.VERTICALS:
         verticals.normalize_geography(vertical)
     return RedirectResponse(f"/admin/quality/{vertical}", status_code=303)
 

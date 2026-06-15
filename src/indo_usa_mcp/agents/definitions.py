@@ -571,8 +571,12 @@ class LifecycleAgent(Agent):
     default_interval_s = 604800  # weekly
 
     def run(self, **params: Any) -> dict[str, Any]:
-        from .. import lifecycle
-        return lifecycle.run(unseen_days=params.get("unseen_days", 180))
+        from .. import lifecycle, quality
+        out = lifecycle.run(unseen_days=params.get("unseen_days", 180))
+        # Also sweep genuinely-unusable low-quality rows out of public view (reversible).
+        out["low_quality"] = quality.suppress_low_quality(
+            min_confidence=params.get("min_confidence", 0.35), dry_run=False)
+        return out
 
 
 class LearningAgent(Agent):
