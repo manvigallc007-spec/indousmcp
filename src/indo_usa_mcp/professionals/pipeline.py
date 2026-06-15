@@ -104,9 +104,12 @@ def scrape_to_raw(region: str) -> int:
 
 def scrape_nppes_to_raw(state: str, limit_per: int = 200) -> int:
     """Pull Indian-American providers for a US state from the NPPES NPI registry into raw."""
+    import sys
+
     from .nppes import NppesScraper
+    scraper = NppesScraper()
     count = 0
-    for c in NppesScraper().scrape(state, limit_per=limit_per):
+    for c in scraper.scrape(state, limit_per=limit_per):
         db.execute(
             "INSERT INTO professional_raw (source_name, source_url, source_id, payload) "
             "VALUES (%s, %s, %s, %s) ON CONFLICT (source_name, source_id) "
@@ -115,6 +118,8 @@ def scrape_nppes_to_raw(state: str, limit_per: int = 200) -> int:
             (c["source_name"], c.get("source_url"), c.get("source_id"), Jsonb(c)),
         )
         count += 1
+    if count == 0 and scraper.last_error:  # don't hide a systemic failure as a silent 0
+        print(f"  NPPES warning ({state}): {scraper.last_error}", file=sys.stderr)
     return count
 
 

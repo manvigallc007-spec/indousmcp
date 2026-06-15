@@ -18,8 +18,6 @@ import httpx
 
 from ..config import settings
 
-_API = "https://npiregistry.cms.gov/api/"
-
 # Common Indian surnames used to find diaspora providers (NPPES has no ethnicity field). Curated
 # for signal; admin curation handles the occasional non-Indian namesake.
 _SURNAMES = [
@@ -47,6 +45,11 @@ def _profession_type(desc: str | None) -> str:
 class NppesScraper:
     source_name = "nppes"
 
+    def __init__(self) -> None:
+        # First request failure reason (HTTP status / exception), surfaced by the pipeline so a
+        # systemic problem — wrong host, blocked egress — is never again hidden as a silent "0".
+        self.last_error: str | None = None
+
     def scrape(self, state: str, surnames: list[str] | None = None,
                limit_per: int = 200) -> Iterator[dict]:
         st = (state or "").strip().upper()[:2]
@@ -54,14 +57,22 @@ class NppesScraper:
             return
         for sn in (surnames or _SURNAMES):
             try:
-                r = httpx.get(_API, params={"version": "2.1", "last_name": sn, "state": st,
-                                            "enumeration_type": "NPI-1", "country_code": "US",
-                                            "limit": limit_per},
+                r = httpx.get(settings.nppes_api_url,
+                              params={"version": "2.1", "last_name": sn, "state": st,
+                                      "enumeration_type": "NPI-1", "country_code": "US",
+                                      "limit": limit_per},
                               headers={"User-Agent": settings.scraper_user_agent}, timeout=20.0)
-                results = r.json().get("results", []) if r.status_code == 200 else []
-            except Exception:
+                if r.status_code != 200:
+                    if self.last_error is None:
+                        self.last_error = f"HTTP {r.status_code} from {settings.nppes_api_url}"
+                    results = []
+                else:
+                    results = r.json().get("results", []) or []
+            except Exception as exc:
+                if self.last_error is None:
+                    self.last_error = f"{type(exc).__name__}: {exc}"
                 results = []
-            for res in results or []:
+            for res in results:
                 cand = self._to_candidate(res)
                 if cand:
                     yield cand

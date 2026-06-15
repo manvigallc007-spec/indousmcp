@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     # Scraper politeness
     overpass_url: str = "https://overpass-api.de/api/interpreter"
     scraper_user_agent: str = "indo-usa-diaspora-mcp/0.1"
+    # NPPES (free CMS NPI registry) API base. NOTE the host is npiregistry.cms.HHS.gov — the
+    # cms.gov variant does NOT resolve. Configurable so a future move is an env change, not code.
+    nppes_api_url: str = "https://npiregistry.cms.hhs.gov/api/"
     # Optional free US Census API key (https://api.census.gov/data/key_signup.html). Low-volume
     # demographics pulls work without one; set it to be safe under rate limits.
     census_api_key: str = ""
