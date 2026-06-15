@@ -685,6 +685,8 @@ def _scalar(sql: str) -> int:
 def recommendations_page(request: Request) -> HTMLResponse:
     if (r := require_admin(request)):
         return r
+    from .. import assistant
+    llm_on = assistant.llm_active()
     s = recommendations.summary()
     recs = recommendations.list_pending()
     rows = ""
@@ -702,8 +704,13 @@ def recommendations_page(request: Request) -> HTMLResponse:
             actions = btn("approve_scrape", "Approve &amp; scrape") + actions
         else:
             actions = btn("approve", "Approve") + actions
+        if llm_on and not x.get("research"):
+            actions = btn("research", "🔎 Research") + actions
+        research_html = (f"<div class='muted' style='margin-top:6px;white-space:pre-line'>"
+                         f"🔎 {esc(x['research'])}</div>" if x.get("research") else "")
         rows += (f"<tr><td>{tag}<br><span class='muted'>{esc(loc)}</span></td>"
-                 f"<td>{esc(x['suggestion'])}</td><td>{x['n_misses']}</td><td>{actions}</td></tr>")
+                 f"<td>{esc(x['suggestion'])}{research_html}</td><td>{x['n_misses']}</td>"
+                 f"<td>{actions}</td></tr>")
     cards = (f"<div class='cards'><div class='kpi'><b>{s['pending']}</b><span>pending</span></div>"
              f"<div class='kpi'><b>{s['approved']}</b><span>approved</span></div>"
              f"<div class='kpi'><b>{s['done']}</b><span>done</span></div>"
@@ -711,9 +718,12 @@ def recommendations_page(request: Request) -> HTMLResponse:
     table = (f"<table><tr><th>Type / area</th><th>Recommendation</th><th>Demand</th><th></th></tr>{rows}</table>"
              if rows else "<p class='muted'>No pending recommendations. The agent generates these "
              "from unanswered searches (see <a href='/admin/misses'>Misses</a>).</p>")
+    research_hint = (" A free-LLM 🔎 research note (mission-fit, category & best free source) is "
+                     "added automatically; use “Research” to (re)run it on any row."
+                     if llm_on else " Configure an LLM to get automatic 🔎 research notes.")
     body = ("<p class='muted'>Demand-driven build suggestions, generated from searches that "
-            "returned nothing. Approve to act (scrape / add / outreach), or dismiss.</p>"
-            + cards + table)
+            "returned nothing. Approve to act (scrape / add / outreach), or dismiss." + research_hint
+            + "</p>" + cards + table)
     return admin_page("Recommendations", body, active="Recommendations")
 
 
@@ -732,6 +742,8 @@ async def recommendations_action(request: Request) -> HTMLResponse:
         recommendations.approve(rid, run_scrape=True)
     elif op == "dismiss":
         recommendations.dismiss(rid)
+    elif op == "research":
+        recommendations.research_one(rid)
     return RedirectResponse("/admin/recommendations", status_code=303)
 
 

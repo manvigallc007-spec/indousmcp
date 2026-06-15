@@ -544,6 +544,19 @@ def llm_active() -> bool:
                                          and settings.effective_llm_model)
 
 
+def complete_text(system: str, user: str) -> str | None:
+    """One-shot LLM completion (no tools) for non-chat callers like recommendation research.
+    Returns the model's text, or None if the LLM is inactive or the call fails (caller decides)."""
+    if not llm_active():
+        return None
+    try:
+        msg = _chat([{"role": "system", "content": system},
+                     {"role": "user", "content": user}], use_tools=False)
+        return (msg.get("content") or "").strip() or None
+    except Exception:
+        return None
+
+
 # Local-intent words that benefit from a location; and a crude "did they name a place" check.
 _LOCAL_WORDS = ("restaurant", "food", "eat", "dinner", "lunch", "thali", "temple", "mandir",
                 "grocery", "store", "salon", "threading", "doctor", "clinic", "dentist",

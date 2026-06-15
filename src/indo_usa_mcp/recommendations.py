@@ -164,6 +164,71 @@ def generate(days: int = 90) -> dict[str, int]:
             "proposed_verticals": [k for k, v in clusters.items() if v["n"] >= _NEW_VERTICAL_MIN]}
 
 
+# ------------------------------------------------------------------ LLM research (Phase 3)
+# Optional free-LLM step: for each unmet-demand recommendation, judge mission-relevance, classify
+# the category, and propose the best FREE source + next step — so the admin can approve from an
+# informed place. Advisory only: it never approves or scrapes (human stays in the loop). No-ops
+# at zero cost when no LLM is configured.
+_RESEARCH_SYSTEM = (
+    "You curate Namaste America, a directory for Indians FROM INDIA living in the USA. For an "
+    "unmet search, judge whether it is relevant to that specific audience and how to source it "
+    "from FREE/public data (OpenStreetMap tags, public datasets, owner submissions, or the open "
+    "web). Be concise, concrete and honest — never invent businesses.")
+
+
+def _verticals_blurb() -> str:
+    return ", ".join(f"{k} ({cfg['label']})" for k, cfg in verticals.VERTICALS.items())
+
+
+def _research_prompt(rec: dict) -> str:
+    loc = ", ".join(x for x in (rec.get("city"), rec.get("state")) if x) or "unspecified location"
+    subject = rec.get("query") or rec.get("suggestion") or ""
+    return (f'Unmet search: "{subject}" (location: {loc}; {rec.get("n_misses")} searches).\n'
+            f"Existing categories: {_verticals_blurb()}.\n"
+            "Reply in exactly these 4 short lines:\n"
+            "Relevant: yes/no - one-line why (audience = Indians from India in the USA)\n"
+            "Category: one existing category key above, or 'new: <short name>'\n"
+            "Free source: OpenStreetMap <tag> / <public dataset> / submissions / web\n"
+            "Action: one concrete next step")
+
+
+def _research_one(rec: dict) -> str | None:
+    from . import assistant  # lazy import: avoid any import cycle at module load
+    note = assistant.complete_text(_RESEARCH_SYSTEM, _research_prompt(rec))
+    return note[:800] if note else None
+
+
+def research_pending(limit: int = 6) -> dict[str, Any]:
+    """Annotate pending recommendations that lack a research note, using the free LLM (if active).
+    Advisory only — never approves or scrapes. Returns counts (or a skip reason when no LLM)."""
+    from . import assistant
+    if not assistant.llm_active():
+        return {"researched": 0, "skipped": "llm_inactive"}
+    rows = db.query("SELECT * FROM recommendations WHERE status = 'pending' AND research IS NULL "
+                    "ORDER BY n_misses DESC LIMIT %s", (limit,))
+    done = 0
+    for rec in rows:
+        note = _research_one(rec)
+        if note:
+            db.execute("UPDATE recommendations SET research = %s, researched_at = now() "
+                       "WHERE id = %s", (note, rec["id"]))
+            done += 1
+    return {"researched": done, "candidates": len(rows)}
+
+
+def research_one(rec_id: int) -> dict[str, Any]:
+    """On-demand research for a single recommendation (admin 'Research' button)."""
+    rec = db.query_one("SELECT * FROM recommendations WHERE id = %s", (rec_id,))
+    if rec is None:
+        return {"ok": False, "error": "not_found"}
+    note = _research_one(rec)
+    if not note:
+        return {"ok": False, "error": "llm_inactive_or_failed"}
+    db.execute("UPDATE recommendations SET research = %s, researched_at = now() WHERE id = %s",
+               (note, rec_id))
+    return {"ok": True, "research": note}
+
+
 def list_pending(limit: int = 100) -> list[dict]:
     return db.query("SELECT * FROM recommendations WHERE status = 'pending' "
                     "ORDER BY n_misses DESC, created_at DESC LIMIT %s", (limit,))

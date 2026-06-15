@@ -546,7 +546,10 @@ class RecommendationAgent(Agent):
 
     def run(self, **params: Any) -> dict[str, Any]:
         from .. import recommendations
-        return recommendations.generate(days=params.get("days", 90))
+        out = recommendations.generate(days=params.get("days", 90))
+        # Annotate fresh recommendations with a free-LLM research note (no-op without an LLM).
+        out.update(recommendations.research_pending(limit=params.get("research_limit", 6)))
+        return out
 
 
 class LinkCheckAgent(Agent):
