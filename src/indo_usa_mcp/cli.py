@@ -204,7 +204,14 @@ def cmd_backfill_geo(args: argparse.Namespace) -> None:
 
 def cmd_demographics_refresh(args: argparse.Namespace) -> None:
     from . import demographics
+    print("Population (state + metro):")
     _print(demographics.refresh(year=args.year))
+    print("Languages spoken at home (B16001, no key needed):")
+    _print(demographics.refresh_languages(year=args.year))
+    print("Income/education/work for Asian-Indians (S0201 — needs free CENSUS_API_KEY):")
+    _print(demographics.refresh_profile(year=args.year))
+    print("Feeding stats into the knowledge base:")
+    _print(demographics.to_knowledge())
     print("Top Indian-American metros:")
     for r in demographics.top("metro", 12):
         print(f"  {r['indian_population']:>8,}  {r['name']}")

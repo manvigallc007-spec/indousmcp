@@ -76,7 +76,10 @@ _Q_START = re.compile(
 _KNOWLEDGE_PHRASES = ("celebrat", "significance", "history of", "meaning of", "tradition",
                       "how to apply", "documents for", "documents do i need", "difference between",
                       "what is", "what are", "how is", "how do", "how does", "tell me about",
-                      "explain")
+                      "explain",
+                      # diaspora-stats cues (Census facts answered in prose, not listings)
+                      "how many", "population of", "median income", "per capita", "average income",
+                      "most educated", "languages spoken", "what languages", "median age")
 _PLACE_CUES = ("near me", "nearby", "open now", "find ", "show me", "list ", "recommend",
                "closest", "around me", "directions")
 

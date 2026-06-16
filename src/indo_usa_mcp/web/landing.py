@@ -395,12 +395,53 @@ def insights(request: Request) -> HTMLResponse:
         return "".join(f"<tr><td style='{td}'>{html.escape(r['name'])}</td>"
                        f"<td style='{tdr}'>{(r['indian_population'] or 0):,}</td></tr>" for r in items)
     total = (demographics.summary().get("total_indian") or 0)
+
+    # Income / education / work (Census Selected Population Profile for Asian-Indian alone).
+    f = demographics.facts("us")
+
+    def _stat(metric, fmt):
+        r = f.get(metric)
+        if not r or r.get("value") is None:
+            return ""
+        v = fmt(r["value"])
+        return (f"<div style='flex:1 1 150px;background:#fbf6ef;border:1px solid #efe1d2;"
+                f"border-radius:12px;padding:14px 16px'><div style='font-size:24px;font-weight:700;"
+                f"color:#b4530f'>{v}</div><div class='muted' style='font-size:13px'>"
+                f"{html.escape(r['label'])}</div></div>")
+    cards = "".join([
+        _stat("median_household_income", lambda v: f"${v:,.0f}"),
+        _stat("pct_bachelors_plus", lambda v: f"{v:.0f}%"),
+        _stat("pct_prof_occupations", lambda v: f"{v:.0f}%"),
+        _stat("per_capita_income", lambda v: f"${v:,.0f}"),
+        _stat("median_age", lambda v: f"{v:.0f} yrs"),
+    ])
+    profile_html = ""
+    if cards:
+        profile_html = (
+            "<h2 style='margin-top:26px'>Income, education &amp; work</h2>"
+            "<div style='display:flex;flex-wrap:wrap;gap:12px'>" + cards + "</div>"
+            "<p class='muted' style='margin-top:8px'>Asian-Indian population, U.S. Census ACS "
+            "Selected Population Profile.</p>")
+
+    langs = demographics.languages("us")
+    langs_html = ""
+    if langs:
+        chips = "".join(
+            f"<span style='display:inline-block;background:#eef6f4;border:1px solid #cfe6e0;"
+            f"border-radius:999px;padding:5px 12px;margin:0 6px 8px 0;font-size:14px'>"
+            f"{html.escape(r['label'])} <b>{int(r['value']):,}</b></span>"
+            for r in langs if r["value"])
+        langs_html = ("<h2 style='margin-top:26px'>Languages spoken at home</h2>"
+                      f"<div>{chips}</div><p class='muted' style='margin-top:4px'>Speakers of "
+                      "Indian &amp; South-Asian languages nationwide (U.S. Census ACS).</p>")
+
     body = (
         f"<h1>{title}</h1>"
         f"<p class='lead'>Where Indian-Americans live across the USA, from the U.S. Census Bureau "
         f"(American Community Survey). Roughly <b>{total:,}</b> people of Asian-Indian origin "
         f"nationwide.</p>"
-        f"<h2>Top metro areas</h2><table style='border-collapse:collapse;width:100%'>"
+        f"{profile_html}{langs_html}"
+        f"<h2 style='margin-top:26px'>Top metro areas</h2><table style='border-collapse:collapse;width:100%'>"
         f"<tr><th style='{th}'>Metro area</th><th style='{th};text-align:right'>Asian-Indian population</th></tr>"
         f"{_rows(metros)}</table>"
         f"<h2 style='margin-top:24px'>Top states</h2><table style='border-collapse:collapse;width:100%'>"

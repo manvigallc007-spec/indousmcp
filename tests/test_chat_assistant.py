@@ -376,7 +376,10 @@ def test_lang_note():
 def test_knowledge_vs_listing_intent():
     kq = assistant._is_knowledge_question
     for q in ("tell me about diwali", "how is pongal celebrated", "what is dosa",
-              "explain navratri", "how to apply for a green card", "what documents for h1b"):
+              "explain navratri", "how to apply for a green card", "what documents for h1b",
+              # Census diaspora-stat questions answer in prose, not listing cards
+              "median income of indian americans", "how many indians live in the usa",
+              "what languages do indians speak in america", "how educated are indian americans"):
         assert kq(q, {}) is True, q                          # explain -> free-form knowledge answer
     for q in ("dosa near me", "immigration lawyer in dallas", "restaurants in edison",
               "best biryani", "where can i get sweets", "hindu temple near me"):

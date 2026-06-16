@@ -631,6 +631,18 @@ class KnowledgeIndexerAgent(Agent):
         return out
 
 
+class DemographicsAgent(Agent):
+    name = "demographics"
+    description = ("Refreshes the free U.S. Census picture of Indians-from-India in the USA — "
+                  "population by state/metro, languages spoken, and income/education/work — and "
+                  "feeds those stats into Dost's knowledge base. Census updates yearly, so monthly.")
+    default_interval_s = 2592000  # monthly — the underlying ACS data changes once a year
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from .. import demographics
+        return demographics.refresh_all(year=params.get("year", "2022"))
+
+
 class DiasporaIntelligenceAgent(Agent):
     name = "intelligence"
     description = ("Continuously develops Dost's knowledge about Indians from India in the USA: "
@@ -752,6 +764,7 @@ ALL_AGENTS = [
     LifecycleAgent(),
     LearningAgent(),
     KnowledgeIndexerAgent(),
+    DemographicsAgent(),
     DiasporaIntelligenceAgent(),
     ReportingAgent(),
     MonitoringAgent(),

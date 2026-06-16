@@ -60,6 +60,11 @@ services:
       # = use the built-in default SELECT; set it only if caterbid's schema differs (see config.py).
       CATERBID_DATABASE_URL: ${CATERBID_DATABASE_URL:-}
       CATERBID_QUERY: ${CATERBID_QUERY:-}
+      # Free U.S. Census key (https://api.census.gov/data/key_signup.html) — unlocks the Asian-Indian
+      # income/education/work profile. Blank = population + languages still work (those need no key).
+      CENSUS_API_KEY: ${CENSUS_API_KEY:-}
+      # Free Socrata app token (open city/state datasets) — optional, just raises rate limits.
+      SOCRATA_APP_TOKEN: ${SOCRATA_APP_TOKEN:-}
       # Outreach (OutreachAgent runs here). Auto-send stays OFF until SMTP *and*
       # OUTREACH_POSTAL_ADDRESS are set (CAN-SPAM); otherwise it only drafts.
       SECRET_KEY: ${SECRET_KEY:-dev-insecure-change-me}      # signs one-click opt-out links
