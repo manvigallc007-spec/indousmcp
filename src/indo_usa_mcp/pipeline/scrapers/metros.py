@@ -39,6 +39,22 @@ METROS: dict[str, tuple[float, float, float, float]] = {
     "portland": (45.35, -123.00, 45.65, -122.45),
     "las_vegas": (35.95, -115.35, 36.35, -114.95),
     "hartford": (41.55, -72.90, 41.90, -72.45),
+    # Batch 3 — more diaspora hubs (single-state envelopes)
+    "san_antonio": (29.20, -98.75, 29.65, -98.25),
+    "miami": (25.55, -80.45, 26.40, -80.05),       # Miami-Dade + Broward (Davie/Pembroke Pines)
+    "nashville": (35.95, -87.05, 36.40, -86.55),
+    "indianapolis": (39.55, -86.40, 39.95, -85.90),
+    "cleveland": (41.35, -81.95, 41.65, -81.45),
+    "cincinnati": (39.00, -84.75, 39.30, -84.30),
+    "pittsburgh": (40.30, -80.20, 40.60, -79.75),
+    "overland_park": (38.85, -94.85, 39.10, -94.55),   # KC's Indian hub is on the KS side
+    "st_louis": (38.50, -90.45, 38.80, -90.10),
+    "milwaukee": (42.90, -88.10, 43.20, -87.85),
+    "salt_lake_city": (40.50, -112.10, 40.90, -111.75),
+    "richmond": (37.40, -77.65, 37.70, -77.25),
+    "long_island": (40.60, -73.75, 40.95, -72.85),     # Nassau + Suffolk, NY
+    "orange_county": (33.55, -118.10, 33.95, -117.60),  # Irvine/Anaheim, CA
+    "inland_empire": (33.75, -117.65, 34.20, -117.10),  # Riverside/San Bernardino, CA
 }
 
 
@@ -84,6 +100,21 @@ _METRO_STATE: dict[str, str] = {
     "portland": "OR",
     "las_vegas": "NV",
     "hartford": "CT",
+    "san_antonio": "TX",
+    "miami": "FL",
+    "nashville": "TN",
+    "indianapolis": "IN",
+    "cleveland": "OH",
+    "cincinnati": "OH",
+    "pittsburgh": "PA",
+    "overland_park": "KS",
+    "st_louis": "MO",
+    "milwaukee": "WI",
+    "salt_lake_city": "UT",
+    "richmond": "VA",
+    "long_island": "NY",
+    "orange_county": "CA",
+    "inland_empire": "CA",
 }
 
 

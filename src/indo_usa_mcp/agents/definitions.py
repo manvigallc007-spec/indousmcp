@@ -631,6 +631,20 @@ class KnowledgeIndexerAgent(Agent):
         return out
 
 
+class IrsEoAgent(Agent):
+    name = "irs_eo"
+    description = ("Adds Indian temples & community orgs from the free IRS nonprofit master file "
+                  "(coverage OSM/Wikidata miss). DORMANT until IRS_EO_ENABLED=true.")
+    default_interval_s = 7776000  # quarterly — the IRS file updates monthly; quarterly is plenty
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from ..config import settings
+        if not settings.irs_eo_enabled:
+            return {"skipped": "disabled"}
+        from ..pipeline.scrapers import irs
+        return irs.import_eo(limit=params.get("limit"))
+
+
 class SubmissionReviewAgent(Agent):
     name = "submission_review"
     description = ("Auto-approves obviously-good, complete, clearly-Indian business submissions "
@@ -875,6 +889,7 @@ ALL_AGENTS = [
     H1BAgent(),
     ContactReplyAgent(),
     SubmissionReviewAgent(),
+    IrsEoAgent(),
     DiasporaIntelligenceAgent(),
     ReportingAgent(),
     MonitoringAgent(),

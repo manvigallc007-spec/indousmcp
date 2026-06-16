@@ -105,6 +105,12 @@ class Settings(BaseSettings):
     dol_h1b_disclosure_url: str = ""
     dol_h1b_fiscal_year: str = ""
 
+    # IRS Exempt-Org Business Master File (free nonprofit CSVs) -> Indian temples & community orgs.
+    # Blank irs_eo_urls = the 4 standard IRS files. The IrsEoAgent stays DORMANT until irs_eo_enabled;
+    # `cli irs-import` runs it manually anytime (streams ~200MB total, keeps only clearly-Indian orgs).
+    irs_eo_urls: str = ""
+    irs_eo_enabled: bool = False
+
     # Public claim web page (owner-facing)
     web_host: str = "0.0.0.0"
     web_port: int = 8080

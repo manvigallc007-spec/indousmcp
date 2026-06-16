@@ -222,6 +222,11 @@ def cmd_h1b_import(args: argparse.Namespace) -> None:
     _print(labor.import_disclosure(source=args.source, fiscal_year=args.year, max_rows=args.limit))
 
 
+def cmd_irs_import(args: argparse.Namespace) -> None:
+    from .pipeline.scrapers import irs
+    _print(irs.import_eo(limit=args.limit))
+
+
 def cmd_approval_digest(_: argparse.Namespace) -> None:
     _print(ingest.summarize_approvals())
 
@@ -615,6 +620,11 @@ def build_parser() -> argparse.ArgumentParser:
     h1.add_argument("--year", default=None, help="Fiscal year label, e.g. 2024")
     h1.add_argument("--limit", type=int, default=None, help="Max rows to read (for a quick sample)")
     h1.set_defaults(func=cmd_h1b_import)
+
+    ir = sub.add_parser("irs-import",
+                        help="Add Indian temples & community orgs from the free IRS nonprofit master file")
+    ir.add_argument("--limit", type=int, default=None, help="Max records to add (for a quick sample)")
+    ir.set_defaults(func=cmd_irs_import)
 
     sub.add_parser("approval-digest", help="Human-readable summary of pending approvals").set_defaults(
         func=cmd_approval_digest
