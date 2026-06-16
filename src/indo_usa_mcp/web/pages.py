@@ -8,12 +8,35 @@ The legal text is a reasonable starting template — have it reviewed before a p
 from __future__ import annotations
 
 import html
+import json
 
 from starlette.requests import Request
 from starlette.responses import HTMLResponse
 from starlette.routing import Route
 
 from ..config import settings
+
+# SEO keywords (Google) — Namaste America is the app brand; Dost is the assistant.
+_KEYWORDS = ("Namaste America, Indian America, Indian-American directory, Indian restaurants near me, "
+             "Indian grocery store, Hindu temple, gurdwara, Jain temple, desi, South Asian, "
+             "Indian immigration lawyer, Indian CPA, Indian tax preparer, Diwali, Holi, Navratri, "
+             "Telugu Tamil Gujarati Punjabi Bengali community, Indian sweets mithai, Bharatanatyam "
+             "classes, Indian salon threading, Indian realtor, NRI, MCP server, AI agent directory")
+
+
+def _org_jsonld() -> str:
+    base = settings.public_web_url.rstrip("/")
+    return json.dumps({
+        "@context": "https://schema.org", "@type": "Organization",
+        "name": settings.platform_name, "url": base + "/", "logo": base + "/logo",
+        "description": ("An agent-first directory & knowledge hub for Indians from India in the USA — "
+                        "restaurants, temples, groceries, events, professionals and culture, "
+                        "searchable by people and by AI agents."),
+        "areaServed": "US",
+        "knowsAbout": ["Indian restaurants", "Hindu temples", "Indian grocery stores",
+                       "Indian festivals", "Indian-American community", "Indian immigration",
+                       "Indian culture"],
+    }, ensure_ascii=False).replace("<", "\\u003c")
 
 # Footer links shown on every content page (and reusable elsewhere).
 FOOTER_LINKS = [("Home", "/"), ("Ask " + settings.assistant_name, "/chat"), ("Browse", "/browse"),
@@ -50,6 +73,8 @@ def _doc(path: str, title: str, desc: str, body: str, status: int = 200) -> HTML
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{t}"><meta name="twitter:description" content="{d}">
 <meta name="twitter:image" content="{html.escape(img)}">
+<meta name="keywords" content="{html.escape(_KEYWORDS)}">
+<script type="application/ld+json">{_org_jsonld()}</script>
 <link rel="icon" type="image/svg+xml" href="/icon.svg"><meta name="theme-color" content="#e8772e">
 <style>
 :root{{--brand:#e8772e;--accent:#0f9b8e;--ink:#25303a;--muted:#6b7280;--line:#efe9e1;--bg:#faf7f2}}
@@ -74,25 +99,74 @@ footer a{{color:var(--accent)}} .flinks{{margin-bottom:8px}} .attr{{margin:6px 0
     return HTMLResponse(doc, status_code=status)
 
 
+_ABOUT_CSS = """<style>
+.hero{text-align:center;padding:6px 0 2px}.hero h1{font-size:32px;margin:14px 0 8px}
+.tagrow{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:12px 0}
+.pill{background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;color:#475467}
+.ctarow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:18px 0}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:10px 0}
+.card ul{margin:6px 0}.feat{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin:12px 0}
+.feat .f{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px}
+.feat .f b{display:block;margin-bottom:4px;color:var(--ink)}.feat .f span{font-size:14px;color:var(--muted)}
+</style>"""
+
+
 def about(request: Request) -> HTMLResponse:
+    plat = html.escape(settings.platform_name)
     a = html.escape(settings.assistant_name)
-    body = f"""<h1>About {html.escape(settings.platform_name)}</h1>
-<p class="lead">A free, community directory of Indian-American life across the USA — restaurants,
- groceries, temples, doctors, salons, sweets, classes, jewelry, money-transfer/travel services,
- community associations and events.</p>
-<h2>Built for people and AI</h2>
-<p>Listings are discovered and kept fresh by automated agents (from open data like OpenStreetMap
- and Wikidata), enriched from businesses' own websites, and corrected by owners and visitors.
- You can search it conversationally through <a href="/chat">{a}</a> — our friendly assistant
- (“{a}” means “friend” in Hindi &amp; Urdu) — or browse by city. AI assistants can use it too,
- via our open tools.</p>
-<h2>Free to use, free to list</h2>
-<p>Searching is free. Businesses can <a href="/submit">add a listing</a> or claim and correct an
- existing one at no cost.</p>
-<a class="cta" href="/chat">Ask {a} →</a>"""
-    return _doc("/about", f"About {settings.platform_name}",
-                "A free community directory of Indian-American businesses, temples, and events "
-                "across the USA — searchable conversationally or by city.", body)
+    body = _ABOUT_CSS + f"""<section class="hero">
+ <h1>{plat}</h1>
+ <p class="lead">Your guide to Indian America — and the first directory built for <b>both people
+  and AI agents</b>. Find Indian restaurants, temples, groceries, events, classes, doctors, sweets,
+  jewelry and more across the USA — or just ask {a}, your desi friend.</p>
+ <div class="tagrow"><span class="pill">🍛 Restaurants</span><span class="pill">🛕 Temples</span>
+  <span class="pill">🛒 Groceries</span><span class="pill">🎉 Events</span><span class="pill">🩺 Doctors</span>
+  <span class="pill">⚖️ Immigration</span><span class="pill">🧾 CPAs</span><span class="pill">🤝 Community</span></div>
+ <div class="ctarow"><a class="cta" href="/">💬 Ask {a}</a> <a class="cta" href="/browse">🗂️ Browse by city</a>
+  <a class="cta" href="/submit">➕ Add your business</a></div>
+</section>
+
+<h2>For everyone</h2>
+<div class="card">Search conversationally with <a href="/">{a}</a> (“{a}” means “friend” in Hindi &amp;
+ Urdu) — by text or <b>voice</b>, in <b>English, हिंदी or తెలుగు</b>. Ask for places <i>and</i> ask
+ about Indian life: “how is Pongal celebrated?”, “what's an H-1B?”, “best veg thali near me”. Results
+ are nearest-first, with ratings, hours and “open now”.</div>
+
+<h2>For businesses — why listing here is promising</h2>
+<div class="card"><ul>
+ <li><b>AI agents can find &amp; recommend you.</b> {plat} is an <b>MCP server</b> — AI assistants
+  (and a free public API) can search the directory directly. As more people ask AI “find me an Indian
+  caterer in New Jersey,” you want your business <i>in that answer</i>, not invisible.</li>
+ <li><b>Humans find you too</b> — conversational search ({a}), browse-by-city, voice, and Google
+  (we publish SEO-friendly pages + structured data for every listing).</li>
+ <li><b>Free</b> to list, claim and correct — you stay in control of your own listing.</li>
+ <li><b>Always fresh</b> — autonomous agents keep details current, and you can update anytime.</li>
+</ul><a class="cta" href="/submit">➕ Add your business — free →</a></div>
+
+<h2>Modern AI features</h2>
+<div class="feat">
+ <div class="f"><b>🤖 MCP server</b><span>Agent-searchable: AI tools query dozens of structured
+  capabilities over the live directory.</span></div>
+ <div class="f"><b>🧠 {a}, a smart assistant</b><span>Free-form answers on culture, festivals,
+  temples, visas &amp; taxes — a real “little India” guide, not just a search box.</span></div>
+ <div class="f"><b>🔌 Free JSON API + llms.txt</b><span>Open, documented endpoints so any app or
+  agent can use the data.</span></div>
+ <div class="f"><b>🎙️ Voice + multilingual</b><span>Ask and hear answers in English, हिंदी or
+  తెలుగు.</span></div>
+ <div class="f"><b>📍 Near-me &amp; live</b><span>Nearest-first results, “open now”, ratings and
+  freshness signals.</span></div>
+ <div class="f"><b>🌱 Self-updating</b><span>Autonomous agents discover, enrich and verify listings
+  continuously.</span></div>
+</div>
+
+<p class="lead" style="margin-top:18px">Focused on the Indian (from India) diaspora in the USA — a
+ little India, searchable by the world.</p>
+<div class="ctarow"><a class="cta" href="/">💬 Ask {a}</a> <a class="cta" href="/submit">➕ Add your business</a></div>"""
+    return _doc("/about", f"{settings.platform_name} — Indian America, searchable by people & AI",
+                f"{settings.platform_name} is an agent-first directory & AI guide ({settings.assistant_name}) "
+                "for Indians from India in the USA — find restaurants, temples, groceries, events, "
+                "doctors and more, or list your business free. Built for people and AI agents (MCP).",
+                body)
 
 
 def privacy(request: Request) -> HTMLResponse:

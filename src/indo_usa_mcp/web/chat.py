@@ -64,15 +64,16 @@ _CAT_BLURB = {"restaurants": "Dosa, biryani, thali & more", "temples": "Hindu ·
 _CHAT_HTML = """<!doctype html><html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>__ANAME__ — __ATAG__</title>
+<title>__PLAT__ — __ANAME__: __ATAG__</title>
 <meta name="description" content="__OGDESC__">
-<meta property="og:title" content="__ANAME__ — __ATAG__">
+<meta name="keywords" content="__KEYWORDS__">
+<meta property="og:title" content="__PLAT__ — __ANAME__: __ATAG__">
 <meta property="og:description" content="__OGDESC__">
 <meta property="og:type" content="website">
 <meta property="og:url" content="__OGURL__">
 <meta property="og:image" content="__OGIMG__">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="__ANAME__ — __ATAG__">
+<meta name="twitter:title" content="__PLAT__ — __ANAME__: __ATAG__">
 <meta name="twitter:description" content="__OGDESC__">
 <meta name="twitter:image" content="__OGIMG__">
 <link rel="canonical" href="__OGURL__">
@@ -215,6 +216,7 @@ a{color:var(--brand);text-decoration:none}
   <button class="voicecta" onclick="startConvo()">🎙️ <span class="voicebtn-t">Talk to Dost</span></button>
   <p class="voicetip">Hands-free voice — speak in English, हिंदी or తెలుగు</p>
   <p class="browselink"><a href="/browse">🗂️ <span class="browselink-t">Browse the full directory by city</span> →</a></p>
+  <p class="browselink" style="margin-top:4px"><a href="/about">ℹ️ <span>What is __PLAT__? · List your business</span> →</a></p>
   <p class="welcome-contrib">New here? Help the community grow — add a place you love and others
    will find it too:</p>
   <div class="chips">
@@ -519,6 +521,7 @@ ta.focus();
 def chat_page(request: Request) -> HTMLResponse:
     if not assistant.enabled():
         return HTMLResponse("<h2>Chat is disabled.</h2>", status_code=503)
+    from .pages import _KEYWORDS
     plat = html.escape(settings.platform_name)
     aname = html.escape(settings.assistant_name)
     mode = "live assistant" if assistant.llm_active() else "smart search"
@@ -559,6 +562,7 @@ def chat_page(request: Request) -> HTMLResponse:
         "__ICONS__": json.dumps(_CAT_ICON, ensure_ascii=False),
         "__COLORS__": json.dumps(_CAT_COLOR),
         "__TTS__": html.escape(settings.tts_provider),
+        "__KEYWORDS__": html.escape(_KEYWORDS),
     }
     doc = _CHAT_HTML
     for k, v in repl.items():

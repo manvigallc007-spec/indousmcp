@@ -124,8 +124,9 @@ def test_home_is_chatbot_directory_secondary():
 
 def test_chat_page_is_dost_branded_with_meaning_and_jsonld():
     t = TestClient(app).get("/chat").text
-    assert "<title>Dost" in t                 # chatbot brand leads the title
+    assert "<title>Namaste America" in t and "Dost" in t   # app brand leads; Dost is the assistant
     assert "friend" in t.lower()               # meaning is explained for non-Hindi speakers
+    assert 'name="keywords"' in t              # SEO keywords for Google
     assert "WebApplication" in t and "SearchAction" in t   # chatbot SEO/indexing
     assert "#e8772e" in t and "#0f9b8e" in t   # warm saffron + teal palette
     assert "__" not in t                       # all template placeholders resolved
