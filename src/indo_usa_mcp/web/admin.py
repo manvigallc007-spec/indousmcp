@@ -413,39 +413,59 @@ async def data_action(request: Request) -> HTMLResponse:
 
 
 # ------------------------------------------------------------------- approvals
+_SELECT_ALL = ("<input type='checkbox' title='select all' onclick=\"for(var c of this.closest('form')"
+               ".querySelectorAll('[name=ids]'))c.checked=this.checked\">")
+
+
 def approvals(request: Request) -> HTMLResponse:
     if (r := require_admin(request)):
         return r
     digest = ingest.summarize_approvals(limit=100)
     trs = "".join(
-        f"<tr><td>{it['id']}</td><td>{it['change_type']}</td>"
+        f"<tr><td><input type='checkbox' name='ids' value=\"{it['id']}\"></td>"
+        f"<td>{it['id']}</td><td>{it['change_type']}</td>"
         f"<td class='{'warn' if it['risk']=='high' else ''}'>{it['risk']}</td>"
         f"<td>{it['confidence']}</td><td>{esc(it['summary'])}</td>"
-        f"<td>{_approve_btns(it['id'])}</td></tr>" for it in digest["items"])
+        f"<td><button name='one' value=\"{it['id']}:approve\">Approve</button> "
+        f"<button class='btn gray' name='one' value=\"{it['id']}:reject\">Reject</button></td></tr>"
+        for it in digest["items"])
+    bulk = ("<div style='margin:10px 0'><button name='bulk' value='approve'>Approve selected</button> "
+            "<button class='btn gray' name='bulk' value='reject'>Reject selected</button></div>")
     body = (f"<p class='muted'>{digest['pending']} pending · by risk {digest['by_risk']}</p>"
-            f"<table><tr><th>ID</th><th>Type</th><th>Risk</th><th>Conf</th><th>Summary</th>"
-            f"<th></th></tr>{trs}</table>")
+            "<form method='post' action='/admin/approvals'>" + bulk
+            + f"<table><tr><th>{_SELECT_ALL}</th><th>ID</th><th>Type</th><th>Risk</th><th>Conf</th>"
+            + f"<th>Summary</th><th></th></tr>{trs}</table>" + (bulk if trs else "") + "</form>")
     return admin_page("Approvals", body, active="Approvals")
-
-
-def _approve_btns(aid: int) -> str:
-    return (f"<form method='post' action='/admin/approvals' class='inline'>"
-            f"<input type='hidden' name='id' value='{aid}'><input type='hidden' name='op' value='approve'>"
-            f"<button>Approve</button></form> "
-            f"<form method='post' action='/admin/approvals' class='inline'>"
-            f"<input type='hidden' name='id' value='{aid}'><input type='hidden' name='op' value='reject'>"
-            f"<button class='btn gray'>Reject</button></form>")
 
 
 async def approvals_action(request: Request) -> HTMLResponse:
     if (r := require_admin(request)):
         return r
     form = await request.form()
-    aid, op = int(form.get("id")), form.get("op")
-    if op == "approve":
-        ingest.apply_approval(aid, reviewed_by="admin")
-    else:
-        ingest.reject_approval(aid, reviewed_by="admin")
+
+    def act(aid: int, op: str) -> None:
+        if op == "approve":
+            ingest.apply_approval(aid, reviewed_by="admin")
+        else:
+            ingest.reject_approval(aid, reviewed_by="admin")
+    if form.get("bulk"):                                   # bulk approve/reject the checked rows
+        op = form.get("bulk")
+        for sid in form.getlist("ids"):
+            try:
+                act(int(sid), op)
+            except (TypeError, ValueError):
+                pass
+    elif form.get("one"):                                  # a single row's button ("id:op")
+        sid, _, op = (form.get("one") or "").partition(":")
+        try:
+            act(int(sid), op or "reject")
+        except (TypeError, ValueError):
+            pass
+    elif form.get("id"):                                   # legacy single form
+        try:
+            act(int(form.get("id")), form.get("op") or "reject")
+        except (TypeError, ValueError):
+            pass
     return RedirectResponse("/admin/approvals", status_code=303)
 
 
@@ -908,23 +928,24 @@ def moderation_page(request: Request) -> HTMLResponse:
         return r
     flagged = verticals.flagged_non_india()
     rows = "".join(
-        f"<tr><td><a href='/admin/data/{x['vertical']}/{x['id']}'>{esc(x['name'])}</a></td>"
+        f"<tr><td><input type='checkbox' name='ids' value=\"{x['vertical']}:{x['id']}\"></td>"
+        f"<td><a href='/admin/data/{x['vertical']}/{x['id']}'>{esc(x['name'])}</a></td>"
         f"<td>{esc(x['vertical'])}</td><td class='muted'>{esc(x.get('city'))}, {esc(x.get('state'))}</td>"
-        f"<td><form method='post' action='/admin/moderation' class='inline'>"
-        f"<input type='hidden' name='vertical' value='{x['vertical']}'>"
-        f"<input type='hidden' name='id' value='{x['id']}'>"
-        f"<button class='btn' name='op' value='remove'>Remove</button></form></td></tr>"
+        f"<td><button class='btn gray' name='one' value=\"{x['vertical']}:{x['id']}\">Remove</button></td></tr>"
         for x in flagged)
-    bulk = (f"<form method='post' action='/admin/moderation' class='inline'>"
-            f"<input type='hidden' name='op' value='remove_all'>"
-            f"<button class='btn gray'>Remove all {len(flagged)} flagged</button></form>"
+    bulk = (f"<div style='margin:10px 0'><button name='op' value='remove_selected'>Remove selected</button> "
+            f"<button class='btn gray' name='op' value='remove_all'>Remove all {len(flagged)} flagged</button></div>"
             if flagged else "")
-    body = ("<p class='muted'>Listings whose name suggests they are NOT India-from-India "
-            "(Native American / West Indian / brand homonyms). Review and remove anything that "
-            "doesn't represent India or Indians — removal is reversible. You can also remove any "
-            "listing from its <a href='/admin/data/restaurants'>Data</a> page.</p>" + bulk
-            + (f"<table><tr><th>Name</th><th>Category</th><th>Location</th><th></th></tr>{rows}</table>"
-               if flagged else "<p class='muted'>Nothing flagged \U0001f389 — the scraping guardrails are holding.</p>"))
+    intro = ("<p class='muted'>Listings whose name suggests they are NOT India-from-India "
+             "(Native American / West Indian / brand homonyms). Review and remove anything that "
+             "doesn't represent India or Indians — removal is reversible. You can also remove any "
+             "listing from its <a href='/admin/data/restaurants'>Data</a> page.</p>")
+    if flagged:
+        body = (intro + "<form method='post' action='/admin/moderation'>" + bulk
+                + f"<table><tr><th>{_SELECT_ALL}</th><th>Name</th><th>Category</th><th>Location</th>"
+                + f"<th></th></tr>{rows}</table></form>")
+    else:
+        body = intro + "<p class='muted'>Nothing flagged \U0001f389 — the scraping guardrails are holding.</p>"
     return admin_page("Moderation", body, active="Moderation")
 
 
@@ -933,9 +954,19 @@ async def moderation_action(request: Request) -> HTMLResponse:
         return r
     form = await request.form()
     op = form.get("op")
+
+    def _remove(token: str) -> None:
+        v, _, sid = (token or "").partition(":")
+        if v in verticals.VERTICALS and sid.isdigit():
+            verticals.set_deleted(v, int(sid), True)
     if op == "remove_all":
         verticals.purge_excluded(dry_run=False)
-    elif op == "remove":
+    elif op == "remove_selected":
+        for token in form.getlist("ids"):
+            _remove(token)
+    elif form.get("one"):
+        _remove(form.get("one"))
+    elif op == "remove":                                   # legacy: separate vertical + id fields
         v = form.get("vertical")
         try:
             rid = int(form.get("id"))
@@ -977,23 +1008,42 @@ def messages_page(request: Request) -> HTMLResponse:
              "smtp": "<p class='err'>Saved, but SMTP isn't configured — set SMTP_* to actually send.</p>",
              "empty": "<p class='err'>Add a reply before sending.</p>"}.get(
                  request.query_params.get("flash"), "")
-    new, drafted = inbox.list_messages("new"), inbox.list_messages("drafted")
-    replied = inbox.recent_replies(12)
-    pending = drafted + new                       # needs action: drafted first, then undrafted
-    body = flash + ("<p class='muted'>Visitor messages from the contact form. The agent auto-replies "
-                    "to clearly-routine notes (a copy is kept below + emailed to you) and drafts the "
-                    "rest here for your review. Sensitive topics always wait for you.</p>")
-    if not pending and not replied:
-        body += "<p class='muted'>No messages yet.</p>"
-    if pending:
-        body += f"<h3>Needs a reply ({len(pending)})</h3>" + "".join(_msg_card(m) for m in pending)
-    if replied:
+    show = request.query_params.get("show", "needs")
+    if show not in ("needs", "replied", "auto", "all"):
+        show = "needs"
+    pending = inbox.list_messages("drafted") + inbox.list_messages("new")   # drafted first
+    recent = inbox.recent_replies(40)
+
+    def _tab(key: str, label: str) -> str:
+        on = " style='background:var(--brand);color:#fff;border-color:var(--brand)'" if show == key else ""
+        return f"<a class='btn gray'{on} href='/admin/messages?show={key}'>{esc(label)}</a>"
+    tabs = ("<div style='display:flex;gap:6px;flex-wrap:wrap;margin:10px 0'>"
+            + _tab("needs", f"Needs you ({len(pending)})") + _tab("replied", "Replied")
+            + _tab("auto", "Auto-replied") + _tab("all", "All") + "</div>")
+    body = flash + ("<p class='muted'>The agent auto-replies to clearly-routine notes (a copy is kept "
+                    "here + emailed to you) and drafts the rest for your review. Sensitive topics "
+                    "always wait for you.</p>") + tabs
+
+    if show in ("needs", "all"):
+        if pending:
+            body += f"<h3>Needs a reply ({len(pending)})</h3>" + "".join(_msg_card(m) for m in pending)
+        elif show == "needs":
+            body += "<p class='ok'>&#10003; Nothing waiting — you're all caught up.</p>"
+    if show == "auto":
+        rep = [m for m in recent if m.get("status") == "auto_replied"]
+    elif show == "replied":
+        rep = [m for m in recent if m.get("status") == "replied"]
+    elif show == "all":
+        rep = recent
+    else:
+        rep = []
+    if rep:
         rows = "".join(
             f"<tr><td>{esc(str(m.get('reply_sent_at') or '')[:16])}</td>"
             f"<td>{esc(m.get('email'))}</td><td>{esc(m.get('subject') or '')}</td>"
             f"<td>{'&#129302; auto' if m.get('status') == 'auto_replied' else '&#9995; you'}</td></tr>"
-            for m in replied)
-        body += ("<h3>Recently replied <span class='muted'>(your reference copy)</span></h3>"
+            for m in rep)
+        body += ("<h3>Replied <span class='muted'>(your reference copy)</span></h3>"
                  f"<table><tr><th>When</th><th>To</th><th>Subject</th><th>By</th></tr>{rows}</table>")
     return admin_page("Messages", body, active="Messages")
 

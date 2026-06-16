@@ -79,17 +79,18 @@ def _page(title: str, body: str, status: int = 200) -> HTMLResponse:
     return HTMLResponse(doc, status_code=status)
 
 
+# Grouped admin nav: (section label, [(item label, href), ...]).
 _ADMIN_NAV = [
-    ("Overview", "/admin"), ("Operations", "/admin/ops"), ("Dashboard", "/admin/dashboard"),
-    ("Data", "/admin/data/restaurants"),
-    ("Geography", "/admin/geo/restaurants"), ("Quality", "/admin/quality/restaurants"),
-    ("Moderation", "/admin/moderation"), ("Messages", "/admin/messages"),
-    ("Approvals", "/admin/approvals"), ("Feedback", "/admin/feedback"),
-    ("Submissions", "/admin/submissions"),
-    ("Events", "/admin/events"), ("Claims", "/admin/claims"), ("Agents", "/admin/agents"),
-    ("Traffic", "/admin/traffic"), ("Misses", "/admin/misses"),
-    ("Recommendations", "/admin/recommendations"),
-    ("Payments", "/admin/payments"), ("Reports", "/admin/reports"),
+    ("", [("Overview", "/admin"), ("Operations", "/admin/ops"), ("Dashboard", "/admin/dashboard")]),
+    ("Listings", [("Data", "/admin/data/restaurants"), ("Geography", "/admin/geo/restaurants"),
+                  ("Quality", "/admin/quality/restaurants"), ("Moderation", "/admin/moderation")]),
+    ("Inbox", [("Messages", "/admin/messages"), ("Submissions", "/admin/submissions"),
+               ("Approvals", "/admin/approvals"), ("Feedback", "/admin/feedback"),
+               ("Claims", "/admin/claims")]),
+    ("Growth", [("Events", "/admin/events"), ("Recommendations", "/admin/recommendations"),
+                ("Misses", "/admin/misses"), ("Payments", "/admin/payments")]),
+    ("System", [("Agents", "/admin/agents"), ("Traffic", "/admin/traffic"),
+                ("Reports", "/admin/reports")]),
 ]
 
 
@@ -115,13 +116,17 @@ def _nav_badges() -> dict[str, int]:
 
 
 def admin_page(title: str, body: str, active: str = "", status: int = 200) -> HTMLResponse:
-    """Wide layout with a nav bar (+ attention badges) for the admin dashboard."""
+    """Wide layout with a grouped nav bar (+ attention badges) for the admin dashboard."""
     badges = _nav_badges()
-    nav = " ".join(
-        f"<a href='{href}' class='{'on' if label == active else ''}'>{label}"
-        + (f"<span class='badge'>{badges[label]}</span>" if badges.get(label) else "") + "</a>"
-        for label, href in _ADMIN_NAV
-    )
+
+    def _link(label: str, href: str) -> str:
+        b = f"<span class='badge'>{badges[label]}</span>" if badges.get(label) else ""
+        return f"<a href='{href}' class='{'on' if label == active else ''}'>{label}{b}</a>"
+
+    nav = "".join(
+        "<span class='navgrp'>" + (f"<span class='navsec'>{sec}</span>" if sec else "")
+        + "".join(_link(lbl, href) for lbl, href in items) + "</span>"
+        for sec, items in _ADMIN_NAV)
     doc = f"""<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)} · Admin</title>
@@ -133,8 +138,11 @@ def admin_page(title: str, body: str, active: str = "", status: int = 200) -> HT
  header{{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;
    background:#fff;border-bottom:1px solid var(--line);padding:12px 18px;margin:0 -18px 22px;
    position:sticky;top:0;z-index:5}}
- nav{{display:flex;flex-wrap:wrap;gap:4px}}
- nav a{{text-decoration:none;color:#475467;font-size:13.5px;padding:6px 10px;border-radius:8px}}
+ nav{{display:flex;flex-wrap:wrap;align-items:center;gap:2px}}
+ .navgrp{{display:inline-flex;align-items:center;gap:2px;padding:2px 4px;border-radius:9px}}
+ .navgrp+.navgrp{{border-left:1px solid var(--line);margin-left:4px;padding-left:8px}}
+ .navsec{{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#a9b1bd;margin-right:3px}}
+ nav a{{text-decoration:none;color:#475467;font-size:13.5px;padding:6px 9px;border-radius:8px}}
  nav a:hover{{background:#f3efe9}} nav a.on{{color:#fff;background:var(--brand)}}
  .badge{{display:inline-block;background:#e5484d;color:#fff;font-size:11px;font-weight:700;
    border-radius:999px;padding:1px 7px;margin-left:5px;vertical-align:middle}}
