@@ -47,6 +47,9 @@ services:
   worker:
     build: .
     restart: unless-stopped
+    # `caterbid` lets the worker reach caterbid's Postgres (caterbid-postgres on catering-bid_web)
+    # for the caterbid-import. The external network must already exist (created by the caterbid stack).
+    networks: [default, caterbid]
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
