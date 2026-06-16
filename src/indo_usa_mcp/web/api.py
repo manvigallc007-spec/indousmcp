@@ -129,6 +129,86 @@ def verticals_list(request: Request) -> JSONResponse:
         {"key": k, "label": cfg["label"]} for k, cfg in verticals.VERTICALS.items()]})
 
 
+def openapi(request: Request) -> JSONResponse:
+    """Machine-readable OpenAPI 3 spec so agent frameworks can auto-consume the JSON API."""
+    base = settings.public_web_url.rstrip("/")
+    spec = {
+        "openapi": "3.0.3",
+        "info": {
+            "title": f"{settings.platform_name} Search API",
+            "version": "1.0.0",
+            "description": ("Read-only JSON search over a directory of Indian-American businesses, "
+                            "temples, and events across the USA. No auth. Agents that speak MCP "
+                            f"should prefer the MCP server at {base}/mcp (see {base}/for-agents)."),
+        },
+        "servers": [{"url": base}],
+        "paths": {
+            "/api/v1/search": {"get": {
+                "operationId": "searchDirectory",
+                "summary": "Search the Indian-American directory",
+                "parameters": [
+                    {"name": "q", "in": "query", "required": True, "schema": {"type": "string"},
+                     "description": "Free-text query, e.g. 'vegetarian thali' or 'hindu temple'"},
+                    {"name": "city", "in": "query", "schema": {"type": "string"}},
+                    {"name": "state", "in": "query", "schema": {"type": "string"},
+                     "description": "2-letter US state code, e.g. NJ"},
+                    {"name": "vertical", "in": "query", "description": "Scope to one category",
+                     "schema": {"type": "string", "enum": list(verticals.VERTICALS)}},
+                    {"name": "lat", "in": "query", "schema": {"type": "number"}},
+                    {"name": "lng", "in": "query", "schema": {"type": "number"},
+                     "description": "With lat, enables proximity ranking + distance_miles"},
+                    {"name": "limit", "in": "query",
+                     "schema": {"type": "integer", "default": 20, "minimum": 1, "maximum": 50}},
+                ],
+                "responses": {"200": {"description": "Matching listings", "content": {
+                    "application/json": {"schema": {"$ref": "#/components/schemas/SearchResult"}}}}},
+            }},
+            "/api/v1/verticals": {"get": {
+                "operationId": "listVerticals", "summary": "List the category keys",
+                "responses": {"200": {"description": "Category list"}}}},
+        },
+        "components": {"schemas": {
+            "SearchResult": {"type": "object", "properties": {
+                "query": {"type": "string"}, "count": {"type": "integer"},
+                "ranking": {"type": "string"}, "vertical": {"type": "string", "nullable": True},
+                "results": {"type": "array", "items": {"$ref": "#/components/schemas/Listing"}}}},
+            "Listing": {"type": "object", "properties": {
+                "vertical": {"type": "string"}, "name": {"type": "string"},
+                "city": {"type": "string"}, "state": {"type": "string"},
+                "address": {"type": "string"}, "phone": {"type": "string"},
+                "website": {"type": "string"}, "latitude": {"type": "number"},
+                "longitude": {"type": "number"}, "rating": {"type": "number"},
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "description": {"type": "string"}, "distance_miles": {"type": "number"},
+                "open_now": {"type": "boolean", "nullable": True}}},
+        }},
+    }
+    return JSONResponse(spec)
+
+
+def ai_plugin(request: Request) -> JSONResponse:
+    """Legacy ai-plugin manifest (still read by some agent tools); points at the OpenAPI spec."""
+    base = settings.public_web_url.rstrip("/")
+    man = {
+        "schema_version": "v1",
+        "name_for_human": settings.platform_name,
+        "name_for_model": "namaste_america",
+        "description_for_human": ("Find Indian-American restaurants, temples, grocers, salons, "
+                                  "doctors and events across the USA."),
+        "description_for_model": ("Search a directory of Indian and South-Asian businesses, temples "
+            "and events for people of Indian origin living in the USA. Use it for questions about "
+            "Indian restaurants, groceries, sweets, temples, salons, doctors, legal/immigration "
+            "help, finance/tax help, and community events in US cities and states."),
+        "auth": {"type": "none"},
+        "api": {"type": "openapi", "url": f"{base}/openapi.json"},
+        "logo_url": f"{base}/icon.svg",
+        "legal_info_url": f"{base}/terms",
+    }
+    if settings.outreach_contact_email:
+        man["contact_email"] = settings.outreach_contact_email
+    return JSONResponse(man)
+
+
 _DOCS = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>API · {plat}</title>
@@ -161,7 +241,7 @@ AI agents: prefer the MCP server (structured tools); this HTTP API is for client
 }}</pre>
 <h2><code>GET /api/v1/verticals</code></h2>
 <p>Lists the category keys you can pass to <code>?vertical=</code>.</p>
-<p class="muted">See also <a href="/llms.txt">/llms.txt</a> · <a href="/chat">chat</a> · <a href="/browse">browse</a></p>
+<p class="muted">AI agents: see <a href="/for-agents">/for-agents</a> (MCP + setup) · machine spec <a href="/openapi.json">/openapi.json</a> · <a href="/llms.txt">/llms.txt</a> · <a href="/chat">chat</a> · <a href="/browse">browse</a></p>
 </body></html>"""
 
 
@@ -176,4 +256,6 @@ routes = [
     Route("/api", docs, methods=["GET"]),
     Route("/api/v1/search", search, methods=["GET"]),
     Route("/api/v1/verticals", verticals_list, methods=["GET"]),
+    Route("/openapi.json", openapi, methods=["GET"]),
+    Route("/.well-known/ai-plugin.json", ai_plugin, methods=["GET"]),
 ]

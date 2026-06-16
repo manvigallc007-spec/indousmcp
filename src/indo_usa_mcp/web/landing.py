@@ -319,8 +319,8 @@ def events_page(request: Request) -> HTMLResponse:
 def sitemap(request: Request) -> Response:
     base = _base()
     urls = [f"{base}/", f"{base}/browse", f"{base}/explore", f"{base}/events", f"{base}/insights",
-            f"{base}/for-business", f"{base}/submit", f"{base}/about", f"{base}/privacy",
-            f"{base}/terms", f"{base}/contact", f"{base}/faq"]
+            f"{base}/for-business", f"{base}/for-agents", f"{base}/submit", f"{base}/about",
+            f"{base}/privacy", f"{base}/terms", f"{base}/contact", f"{base}/faq"]
     urls += [f"{base}/browse/{v}" for v in verticals.VERTICALS]
     # All (vertical × city) pages that actually have active listings.
     for v in verticals.VERTICALS:
@@ -339,7 +339,13 @@ def sitemap(request: Request) -> Response:
 
 
 def robots(request: Request) -> Response:
-    return Response(f"User-agent: *\nAllow: /\nSitemap: {_base()}/sitemap.xml\n",
+    # Agent-first: explicitly welcome AI crawlers & answer engines (we WANT to be indexed/cited).
+    bots = ["GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "anthropic-ai", "Claude-Web",
+            "PerplexityBot", "Perplexity-User", "Google-Extended", "Applebot-Extended", "CCBot",
+            "Amazonbot", "cohere-ai", "Bingbot", "Googlebot"]
+    stanzas = [f"User-agent: {b}\nAllow: /" for b in bots]
+    stanzas.append("User-agent: *\nAllow: /")
+    return Response("\n\n".join(stanzas) + f"\n\nSitemap: {_base()}/sitemap.xml\n",
                     media_type="text/plain")
 
 
@@ -462,11 +468,14 @@ def llms_txt(request: Request) -> Response:
            f"> {settings.platform_tagline}. A directory of Indian-American businesses, temples, "
            f"and events across the USA, maintained by autonomous agents.\n\n"
            f"## For people\n- Ask the assistant: {base}/chat\n- Browse by city: {base}/browse\n\n"
-           f"## For AI agents\nThis directory is also a Model Context Protocol (MCP) server with "
-           f"structured tools (get_indian_restaurants, search_all, get_indian_temples, …) returning "
-           f"JSON listings with address, geo, hours and contact. Prefer those tools for accurate, "
-           f"current data over scraping these HTML pages.\n"
-           f"No MCP client? Use the read-only JSON API: {base}/api/v1/search?q=... (docs: {base}/api)\n\n"
+           f"## For AI agents\n"
+           f"This directory is a Model Context Protocol (MCP) server — connect at {base}/mcp "
+           f"(transport: streamable-http). Tools: get_indian_<category>, search_<category>_by_text, "
+           f"get_<category>_details, and search_all across every category; each returns JSON "
+           f"listings with address, geo, hours and contact. Prefer these over scraping the HTML.\n"
+           f"- Connect guide (MCP config + examples): {base}/for-agents\n"
+           f"- No MCP client? Read-only JSON API: {base}/api/v1/search?q=... "
+           f"(docs: {base}/api , OpenAPI: {base}/openapi.json )\n\n"
            f"## Categories\n{cats}\n")
     return Response(txt, media_type="text/plain")
 
@@ -528,11 +537,68 @@ def for_business(request: Request) -> HTMLResponse:
     return _page(title, desc, body)
 
 
+def for_agents(request: Request) -> HTMLResponse:
+    """Developer/agent-facing connect guide: MCP endpoint + config, plus the JSON API."""
+    base = _base()
+    plat = settings.platform_name
+    mcp_url = f"{base}/mcp"
+    title = f"{plat} for AI agents & developers"
+    desc = (f"Connect your AI agent to {plat} — a Model Context Protocol (MCP) server + read-only "
+            "JSON API over a live directory of Indian-American businesses, temples and events.")
+    cfg = ('{\n  "mcpServers": {\n    "namaste-america": {\n      "url": "' + mcp_url +
+           '",\n      "transport": "streamable-http"\n    }\n  }\n}')
+    curl = f'curl "{base}/api/v1/search?q=south+indian+breakfast&state=NJ&limit=5"'
+    pre = ("background:#0f1720;color:#e6edf3;border-radius:10px;padding:14px;overflow:auto;"
+           "font-size:13px;line-height:1.5")
+    cats = ", ".join(cfg2["label"] for cfg2 in verticals.VERTICALS.values())
+    body = (
+        f"<h1>{html.escape(title)}</h1>"
+        f"<p class='lead'>{html.escape(plat)} is <b>agent-first</b>: every listing is available to "
+        "AI agents as structured data, not scraped HTML. Two free, read-only ways to connect — both "
+        "served from the same ranked directory the website uses.</p>"
+        "<h2>1 · Model Context Protocol (recommended)</h2>"
+        f"<p>Streamable-HTTP endpoint: <code>{html.escape(mcp_url)}</code>. Tools cover every "
+        "category — <code>get_indian_&lt;category&gt;</code>, <code>search_&lt;category&gt;_by_text</code>, "
+        "<code>get_&lt;category&gt;_details</code> — plus <code>search_all</code> across everything, "
+        "each returning JSON with address, geo, hours and contact. Add to an MCP client:</p>"
+        f"<pre style='{pre}'>{html.escape(cfg)}</pre>"
+        "<h2>2 · JSON API (no MCP)</h2>"
+        f"<pre style='{pre}'>{html.escape(curl)}</pre>"
+        f"<p>Reference: <a href='/api'>/api</a> · machine spec <a href='/openapi.json'>/openapi.json</a> "
+        f"· <a href='/llms.txt'>/llms.txt</a></p>"
+        f"<h2>Categories</h2><p class='muted'>{html.escape(cats)}</p>"
+        "<p class='muted' style='margin-top:16px'>Free and read-only. Please identify your client "
+        "(MCP <code>clientInfo</code>, or an <code>X-Agent-Id</code> header on the API) so we can "
+        "keep access free as usage grows.</p>")
+    return _page(title, desc, body)
+
+
+def mcp_well_known(request: Request) -> Response:
+    """A small descriptor of the MCP server for registries/tooling that look for one."""
+    base = _base()
+    data = {
+        "name": "namaste-america",
+        "title": settings.platform_name,
+        "description": (f"{settings.platform_tagline}. A directory of Indian-American businesses, "
+                        "temples, and events across the USA, usable by AI agents via MCP."),
+        "version": "0.1.0",
+        "transport": "streamable-http",
+        "url": f"{base}/mcp",
+        "documentation": f"{base}/for-agents",
+        "categories": [c["label"] for c in verticals.VERTICALS.values()],
+        "tool_patterns": ["get_indian_<category>", "search_<category>_by_text",
+                          "get_<category>_details", "search_all"],
+    }
+    return Response(json.dumps(data), media_type="application/json")
+
+
 routes = [
     Route("/browse", browse_root, methods=["GET"]),
     Route("/events", events_page, methods=["GET"]),
     Route("/insights", insights, methods=["GET"]),
     Route("/for-business", for_business, methods=["GET"]),
+    Route("/for-agents", for_agents, methods=["GET"]),
+    Route("/.well-known/mcp.json", mcp_well_known, methods=["GET"]),
     Route("/browse/{vertical}", browse_vertical, methods=["GET"]),
     Route("/browse/{vertical}/{state}", browse_state, methods=["GET"]),
     Route("/browse/{vertical}/{state}/{city}", browse_city, methods=["GET"]),
