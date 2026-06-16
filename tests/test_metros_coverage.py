@@ -30,3 +30,11 @@ def test_every_metro_has_a_state_except_split_nyc():
 def test_scrape_regions_include_new_metros():
     assert "denver" in M.SCRAPE_REGIONS and "northern_virginia" in M.SCRAPE_REGIONS
     assert "usa" in M.SCRAPE_REGIONS
+
+
+def test_scrape_set_rotates_and_keeps_priority():
+    batch = M.scrape_set()
+    assert set(batch) <= set(M.METROS)                  # only valid metros
+    assert set(M._PRIORITY) <= set(batch)               # priority metros always included
+    assert len(batch) < len(M.METROS)                   # it's a rotating subset, not everything
+    assert batch == [m for m in M.METROS if m in batch]  # deterministic METROS order

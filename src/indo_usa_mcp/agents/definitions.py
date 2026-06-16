@@ -12,7 +12,7 @@ from typing import Any
 from .. import db
 from ..pipeline import feedback, ingest, outreach
 from ..pipeline.scrapers import SCRAPERS
-from ..pipeline.scrapers.metros import METROS
+from ..pipeline.scrapers.metros import METROS, scrape_set
 from ..apparel import pipeline as apparel
 from ..community import pipeline as community
 from ..events import pipeline as events
@@ -64,7 +64,7 @@ class ScraperAgent(Agent):
     default_interval_s = 86400
 
     def run(self, **params: Any) -> dict[str, Any]:
-        metros = params.get("metros") or list(METROS)
+        metros = params.get("metros") or scrape_set()
         sources = params.get("sources") or list(SCRAPERS)
         per_source: dict[str, int] = {}
         errors: list[dict[str, str]] = []
@@ -150,7 +150,7 @@ class TempleScraperAgent(Agent):
     default_interval_s = 172800  # every 2 days (temples change rarely)
 
     def run(self, **params: Any) -> dict[str, Any]:
-        metros = params.get("metros") or list(METROS)
+        metros = params.get("metros") or scrape_set()
         total, errors = 0, []
         for metro in metros:
             try:
@@ -177,7 +177,7 @@ class GroceryScraperAgent(Agent):
     default_interval_s = 172800
 
     def run(self, **params: Any) -> dict[str, Any]:
-        metros = params.get("metros") or list(METROS)
+        metros = params.get("metros") or scrape_set()
         total, errors = 0, []
         for metro in metros:
             try:
@@ -204,7 +204,7 @@ class ProfessionalScraperAgent(Agent):
     default_interval_s = 259200  # every 3 days
 
     def run(self, **params: Any) -> dict[str, Any]:
-        metros = params.get("metros") or list(METROS)
+        metros = params.get("metros") or scrape_set()
         total, errors = 0, []
         for metro in metros:
             try:
@@ -258,7 +258,7 @@ class SalonScraperAgent(Agent):
     default_interval_s = 259200
 
     def run(self, **params: Any) -> dict[str, Any]:
-        metros = params.get("metros") or list(METROS)
+        metros = params.get("metros") or scrape_set()
         total, errors = 0, []
         for metro in metros:
             try:
@@ -285,7 +285,7 @@ class ApparelScraperAgent(Agent):
     default_interval_s = 259200  # every 3 days
 
     def run(self, **params: Any) -> dict[str, Any]:
-        metros = params.get("metros") or list(METROS)
+        metros = params.get("metros") or scrape_set()
         total, errors = 0, []
         for metro in metros:
             try:
@@ -312,7 +312,7 @@ class SweetsScraperAgent(Agent):
     default_interval_s = 259200
 
     def run(self, **params: Any) -> dict[str, Any]:
-        metros = params.get("metros") or list(METROS)
+        metros = params.get("metros") or scrape_set()
         total, errors = 0, []
         for metro in metros:
             try:
@@ -339,7 +339,7 @@ class StudioScraperAgent(Agent):
     default_interval_s = 259200
 
     def run(self, **params: Any) -> dict[str, Any]:
-        metros = params.get("metros") or list(METROS)
+        metros = params.get("metros") or scrape_set()
         total, errors = 0, []
         for metro in metros:
             try:
@@ -366,7 +366,7 @@ class ServiceScraperAgent(Agent):
     default_interval_s = 259200
 
     def run(self, **params: Any) -> dict[str, Any]:
-        metros = params.get("metros") or list(METROS)
+        metros = params.get("metros") or scrape_set()
         total, errors = 0, []
         for metro in metros:
             try:
@@ -393,7 +393,7 @@ class CommunityScraperAgent(Agent):
     default_interval_s = 259200  # every 3 days
 
     def run(self, **params: Any) -> dict[str, Any]:
-        metros = params.get("metros") or list(METROS)
+        metros = params.get("metros") or scrape_set()
         total, errors = 0, []
         for metro in metros:
             try:
@@ -420,7 +420,7 @@ class LegalScraperAgent(Agent):
     default_interval_s = 259200  # every 3 days
 
     def run(self, **params: Any) -> dict[str, Any]:
-        metros = params.get("metros") or list(METROS)
+        metros = params.get("metros") or scrape_set()
         total, errors = 0, []
         for metro in metros:
             try:
@@ -447,7 +447,7 @@ class EducationScraperAgent(Agent):
     default_interval_s = 259200
 
     def run(self, **params: Any) -> dict[str, Any]:
-        metros = params.get("metros") or list(METROS)
+        metros = params.get("metros") or scrape_set()
         total, errors = 0, []
         for metro in metros:
             try:
@@ -474,7 +474,7 @@ class RealEstateScraperAgent(Agent):
     default_interval_s = 259200
 
     def run(self, **params: Any) -> dict[str, Any]:
-        metros = params.get("metros") or list(METROS)
+        metros = params.get("metros") or scrape_set()
         total, errors = 0, []
         for metro in metros:
             try:
@@ -501,7 +501,7 @@ class FinanceScraperAgent(Agent):
     default_interval_s = 259200
 
     def run(self, **params: Any) -> dict[str, Any]:
-        metros = params.get("metros") or list(METROS)
+        metros = params.get("metros") or scrape_set()
         total, errors = 0, []
         for metro in metros:
             try:

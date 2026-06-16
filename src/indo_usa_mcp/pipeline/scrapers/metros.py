@@ -61,6 +61,25 @@ METROS: dict[str, tuple[float, float, float, float]] = {
 # Valid scrape regions: each metro, plus "usa" for an occasional nationwide sweep.
 SCRAPE_REGIONS: list[str] = sorted(METROS) + ["usa"]
 
+# The densest diaspora metros — always scraped each run so they stay fresh; the rest rotate.
+_PRIORITY = ("nyc_nj", "bay_area", "central_nj", "chicago", "dallas", "houston", "atlanta",
+             "los_angeles", "northern_virginia", "seattle")
+
+
+def scrape_set(per_run: int = 22) -> list[str]:
+    """A rotating batch of metros so a single run never hammers the free APIs with all 40+ at once.
+    Priority metros are always included; the rest cycle (full coverage over a couple of runs)."""
+    import datetime
+    keys = list(METROS)
+    if len(keys) <= per_run:
+        return keys
+    now = datetime.datetime.utcnow()
+    idx = now.timetuple().tm_yday * 24 + now.hour          # advances each hour -> new ground per run
+    start = (idx * per_run) % len(keys)
+    batch = {keys[(start + i) % len(keys)] for i in range(per_run)}
+    batch.update(m for m in _PRIORITY if m in METROS)
+    return [m for m in keys if m in batch]                 # keep METROS order (deterministic)
+
 
 def bbox(metro: str) -> tuple[float, float, float, float]:
     try:
