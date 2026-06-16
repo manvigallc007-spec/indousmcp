@@ -24,6 +24,21 @@ METROS: dict[str, tuple[float, float, float, float]] = {
     "raleigh": (35.70, -78.80, 35.95, -78.50),
     "detroit": (42.20, -83.35, 42.55, -82.90),
     "central_nj": (40.40, -74.55, 40.70, -74.20),
+    # Additional diaspora hubs (broaden coverage). DC-area is split into NoVA + suburban MD so the
+    # state backfill stays single-state (the actual Indian hubs are Fairfax/Loudoun + Montgomery Co.).
+    "northern_virginia": (38.60, -77.70, 39.12, -77.00),
+    "suburban_maryland": (38.85, -77.35, 39.25, -76.80),
+    "sacramento": (38.35, -121.65, 38.85, -121.05),
+    "minneapolis": (44.70, -93.55, 45.15, -92.90),
+    "san_diego": (32.53, -117.40, 33.18, -116.90),
+    "denver": (39.55, -105.20, 39.95, -104.70),
+    "tampa": (27.70, -82.75, 28.20, -82.25),
+    "orlando": (28.25, -81.65, 28.85, -81.15),
+    "charlotte": (35.05, -81.05, 35.45, -80.60),
+    "columbus": (39.85, -83.20, 40.20, -82.80),
+    "portland": (45.35, -123.00, 45.65, -122.45),
+    "las_vegas": (35.95, -115.35, 36.35, -114.95),
+    "hartford": (41.55, -72.90, 41.90, -72.45),
 }
 
 
@@ -56,6 +71,19 @@ _METRO_STATE: dict[str, str] = {
     "raleigh": "NC",
     "detroit": "MI",
     "central_nj": "NJ",
+    "northern_virginia": "VA",
+    "suburban_maryland": "MD",
+    "sacramento": "CA",
+    "minneapolis": "MN",
+    "san_diego": "CA",
+    "denver": "CO",
+    "tampa": "FL",
+    "orlando": "FL",
+    "charlotte": "NC",
+    "columbus": "OH",
+    "portland": "OR",
+    "las_vegas": "NV",
+    "hartford": "CT",
 }
 
 
