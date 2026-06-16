@@ -143,6 +143,15 @@ a{color:var(--brand);text-decoration:none}
 .voicetip{color:var(--muted);font-size:14px;margin:8px 0 0}
 .browselink{margin:18px 0 0;font-size:15px}.browselink a{color:var(--accent);font-weight:600}
 .welcome-contrib{margin-top:26px;color:var(--muted);font-size:15px}
+.topnav{display:flex;gap:18px;font-size:14px}.topnav a{color:var(--ink);font-weight:500}
+.topnav a:hover{color:var(--brand)}
+@media(max-width:880px){.topnav{display:none}}
+.trustrow{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:2px 0 20px}
+.tpill{background:#fff;border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:12.5px;color:#475467}
+.homefoot{margin:32px auto 4px;max-width:640px;border-top:1px solid var(--line);padding-top:16px;text-align:center}
+.homefoot .disclaim{font-size:12.5px;color:var(--muted);line-height:1.55;margin:0 0 10px}
+.homefoot .footnav{font-size:13px;margin:0 0 8px;line-height:1.9}.homefoot .footnav a{color:var(--accent);font-weight:500}
+.homefoot .copyr{font-size:12px;color:#98a2b3;margin:0}
 .msg{display:flex;gap:11px;margin:18px 0;align-items:flex-start}.msg.user{justify-content:flex-end}
 .avatar{flex:0 0 auto;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;
  font-size:18px;background:linear-gradient(135deg,#ffd9a0,#ffb56b)}
@@ -195,6 +204,7 @@ a{color:var(--brand);text-decoration:none}
 </style></head><body>
 <header class="topbar">
  <a class="brand" href="/"><img class="brandlogo" src="/logo" alt="__PLAT__"><span><b>__ANAME__</b><i>__AMEAN__</i></span></a>
+ <nav class="topnav"><a href="/about">About</a><a href="/browse">Browse</a><a href="/submit">For business</a></nav>
  <div class="actions">
   <select id="lang" class="langsel" onchange="setLang(this.value)" aria-label="Language">
    <option value="en">English</option><option value="hi">हिंदी</option><option value="te">తెలుగు</option>
@@ -212,6 +222,10 @@ a{color:var(--brand);text-decoration:none}
   <p class="heroSub">Think of me as your desi friend for finding Indian America — restaurants,
    sweets, temples, events, classes, salons, doctors, jewelry and more across the USA. Tell me what
    you're looking for and roughly where, and I'll find the closest ones.</p>
+  <div class="trustrow">
+   <span class="tpill">🆓 Free to use</span><span class="tpill">📍 All 50 states</span>
+   <span class="tpill">🤖 AI + human search</span><span class="tpill">🗂️ 15 categories</span>
+  </div>
   <div class="chips">__CHIPS__</div>
   <button class="voicecta" onclick="startConvo()">🎙️ <span class="voicebtn-t">Talk to Dost</span></button>
   <p class="voicetip">Hands-free voice — speak in English, हिंदी or తెలుగు</p>
@@ -224,6 +238,18 @@ a{color:var(--brand);text-decoration:none}
    <button class="chip contribchip" onclick="openContribute('groceries','')">➕ My go-to grocery</button>
    <button class="chip contribchip" onclick="openContribute('temples','')">➕ My temple</button>
   </div>
+  <footer class="homefoot">
+   <p class="disclaim">ℹ️ <b>__PLAT__</b> is a free informational directory for the Indian-from-India
+    community in the USA. Information is provided “as is” for general purposes only and is <b>not
+    legal, tax, immigration, medical, or professional advice</b> — always verify details with the
+    business or a qualified professional. Listings may be incomplete or out of date.</p>
+   <nav class="footnav">
+    <a href="/about">About us</a> · <a href="/submit">List your business</a> ·
+    <a href="/insights">Insights</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> ·
+    <a href="/contact">Contact</a> · <a href="/faq">FAQ</a>
+   </nav>
+   <p class="copyr">© __PLAT__ · Built for people &amp; AI · Data from OpenStreetMap (ODbL) &amp; Wikidata (CC0)</p>
+  </footer>
  </section>
 </div></main>
 <div id="convobar" class="convobar" style="display:none">
