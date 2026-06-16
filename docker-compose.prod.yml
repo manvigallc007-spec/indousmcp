@@ -122,6 +122,8 @@ services:
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
       GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
       SECRET_KEY: ${SECRET_KEY:-dev-insecure-change-me}
+      # Google Analytics 4 (GA4) measurement ID, e.g. G-XXXXXXXXXX. Blank = no tracking.
+      GOOGLE_ANALYTICS_ID: ${GOOGLE_ANALYTICS_ID:-}
       REPORT_EMAIL: ${REPORT_EMAIL:-}
       # SMTP (shared with outreach) — also used for the daily report + magic-links.
       SMTP_HOST: ${SMTP_HOST:-}

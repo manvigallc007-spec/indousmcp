@@ -15,11 +15,24 @@ def esc(value) -> str:
     return html.escape(str(value)) if value not in (None, "") else ""
 
 
+def analytics_tag() -> str:
+    """Google Analytics (GA4) gtag snippet for the <head>, or '' when GOOGLE_ANALYTICS_ID is unset.
+    The measurement ID is public (it's visible in page source), so it's plain config, not a secret."""
+    gid = (settings.google_analytics_id or "").strip()
+    if not gid:
+        return ""
+    g = html.escape(gid)
+    return (f'<script async src="https://www.googletagmanager.com/gtag/js?id={g}"></script>'
+            "<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}"
+            f"gtag('js',new Date());gtag('config','{g}');</script>")
+
+
 def _page(title: str, body: str, status: int = 200) -> HTMLResponse:
     """Narrow card layout for public / owner-facing pages."""
     doc = f"""<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)}</title>
+{analytics_tag()}
 <style>
  body{{font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;max-width:560px;
    margin:48px auto;padding:0 16px;color:#1a1a1a;line-height:1.5}}

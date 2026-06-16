@@ -16,6 +16,7 @@ from starlette.routing import Route
 
 from .. import assistant, verticals
 from ..config import settings
+from .common import analytics_tag
 
 # --- tiny in-memory per-IP rate limiter (abuse guard; LLM calls cost CPU or money) ---
 _HITS: dict[str, list[float]] = {}
@@ -79,6 +80,7 @@ _CHAT_HTML = """<!doctype html><html lang="en"><head>
 <link rel="canonical" href="__OGURL__">
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
 <link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#e8772e">
+__GA__
 <script type="application/ld+json">__JSONLD__</script>
 <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}</script>
 <style>
@@ -585,6 +587,7 @@ def chat_page(request: Request) -> HTMLResponse:
         "__COLORS__": json.dumps(_CAT_COLOR),
         "__TTS__": html.escape(settings.tts_provider),
         "__KEYWORDS__": html.escape(_KEYWORDS),
+        "__GA__": analytics_tag(),
     }
     doc = _CHAT_HTML
     for k, v in repl.items():

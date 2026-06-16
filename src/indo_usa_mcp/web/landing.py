@@ -19,6 +19,7 @@ from starlette.routing import Route
 from .. import db, verticals
 from ..config import settings
 from .chat import _CAT_BLURB, _CAT_COLOR, _CAT_ICON
+from .common import analytics_tag
 
 _BRAND = "#c1440e"
 _FEATURED = "(is_featured AND (featured_until IS NULL OR featured_until > now()))"
@@ -101,6 +102,7 @@ def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200)
 <meta property="og:title" content="{html.escape(title)}">
 <meta property="og:description" content="{html.escape(desc)}">
 <meta property="og:type" content="website">
+{analytics_tag()}
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
 <link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#c1440e">
 <script>if('serviceWorker' in navigator){{window.addEventListener('load',function(){{navigator.serviceWorker.register('/sw.js').catch(function(){{}})}})}}</script>

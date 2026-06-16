@@ -117,6 +117,9 @@ class Settings(BaseSettings):
     session_https_only: bool = False
     report_email: str = ""                       # daily report recipient (defaults to contact)
     magic_link_ttl_minutes: int = 30
+    # Google Analytics 4 measurement ID, e.g. G-XXXXXXXXXX. Blank = no tracking. NOT a secret —
+    # it's public in the page source; injected into every public page's <head> when set.
+    google_analytics_id: str = ""
     # Google sign-in for the business-owner portal (optional; magic-link still works without it).
     # Create an OAuth 2.0 Web client at console.cloud.google.com -> APIs & Services -> Credentials.
     # Authorized redirect URI = <PUBLIC_WEB_URL>/portal/google/callback. Secrets via env only.
