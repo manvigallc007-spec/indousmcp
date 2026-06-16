@@ -20,7 +20,20 @@ from psycopg.types.json import Jsonb
 from ... import db, osm as _osm
 from ...config import settings
 
+# Distinctive Indian / South-Asian tokens for the name-match mode (used where a dataset has no
+# cuisine field). Server-side SoQL `like`, so we only fetch matching rows. Kept specific to limit
+# noise; the OSM exclusion filter + admin moderation catch the occasional false positive.
+_NM_TOKENS = (
+    "INDIA", "DESI", "MASALA", "TANDOOR", "BIRYANI", "BIRIYANI", "CURRY", "DOSA", "IDLI", "CHAAT",
+    "PANEER", "SAMOSA", "TIKKA", "KARAHI", "KABAB", "PUNJAB", "BOMBAY", "MUMBAI", "DELHI", "CHENNAI",
+    "MADRAS", "HYDERABAD", "KERALA", "AMRITSAR", "JAIPUR", "RAJASTHAN", "GUJARAT", "BHARAT",
+    "MAHARAJA", "NAMASTE", "ZAIKA", "DHABA", "RASOI", "MIRCHI", "SWAGAT", "SWAAD", "HAVELI", "SITAR",
+    "ANNAPURNA", "SARAVANA", "UDUPI", "GANESH", "KRISHNA", "BAWARCHI", "PARADISE BIRYANI", "TIFFIN",
+)
+
 # Verified city datasets. Each maps a dataset's columns to our restaurant candidate fields.
+# Mode A (cuisine_col): server-filtered by a tagged cuisine (no name guessing). Mode B (name_match):
+# server-filtered by Indian/South-Asian name tokens, for datasets without a cuisine field.
 SOCRATA_SOURCES: dict[str, dict] = {
     # NYC DOHMH restaurant inspections — cuisine_description is tagged; verified live.
     "nyc_restaurants": {
@@ -30,6 +43,21 @@ SOCRATA_SOURCES: dict[str, dict] = {
         "id_col": "camis", "name_col": "dba",
         "addr_cols": ["building", "street"], "city_col": "boro", "state": "NY",
         "zip_col": "zipcode", "phone_col": "phone", "lat_col": "latitude", "lng_col": "longitude",
+    },
+    # Chicago food inspections — no cuisine field, so name-match (restaurants only). Verified live.
+    "chicago_restaurants": {
+        "domain": "data.cityofchicago.org", "dataset": "4ijn-s7e5", "vertical": "restaurants",
+        "name_match": True, "facility_filter": "facility_type='Restaurant'",
+        "name_col": "dba_name", "addr_cols": ["address"], "city_col": "city", "state": "IL",
+        "zip_col": "zip", "lat_col": "latitude", "lng_col": "longitude",
+    },
+    # San Francisco restaurant scores — no cuisine field, name-match. Verified live.
+    "sf_restaurants": {
+        "domain": "data.sfgov.org", "dataset": "pyih-qa8i", "vertical": "restaurants",
+        "name_match": True,
+        "name_col": "business_name", "addr_cols": ["business_address"], "city_col": "business_city",
+        "state": "CA", "zip_col": "business_postal_code",
+        "lat_col": "business_latitude", "lng_col": "business_longitude",
     },
 }
 
@@ -54,15 +82,22 @@ class SocrataScraper:
     def scrape(self, region: str = "") -> Iterator[dict]:
         cfg = self.cfg
         base = f"https://{cfg['domain']}/resource/{cfg['dataset']}.json"
-        cuisines = "','".join(c.replace("'", "''") for c in cfg["cuisines"])
-        where = f"{cfg['cuisine_col']} in('{cuisines}')"
+        if cfg.get("name_match"):                          # filter by Indian/South-Asian name tokens
+            col = cfg["name_col"]
+            where = "(" + " OR ".join(f"upper({col}) like '%{t}%'" for t in _NM_TOKENS) + ")"
+            if cfg.get("facility_filter"):
+                where = f"{where} AND {cfg['facility_filter']}"
+        else:                                              # filter by tagged cuisine (no name guessing)
+            cuisines = "','".join(c.replace("'", "''") for c in cfg["cuisines"])
+            where = f"{cfg['cuisine_col']} in('{cuisines}')"
+        order = cfg.get("id_col") or cfg["name_col"]       # name_match datasets lack a stable id col
         headers = {"User-Agent": settings.scraper_user_agent}
         if settings.socrata_app_token.strip():
             headers["X-App-Token"] = settings.socrata_app_token.strip()
         seen: set[str] = set()
         offset, page = 0, 1000
         for _ in range(60):  # safety cap (60k rows); real South-Asian subsets are far smaller
-            params = {"$where": where, "$limit": page, "$offset": offset, "$order": cfg["id_col"]}
+            params = {"$where": where, "$limit": page, "$offset": offset, "$order": order}
             try:
                 r = httpx.get(base, params=params, headers=headers, timeout=30.0)
                 if r.status_code != 200:
@@ -91,14 +126,19 @@ class SocrataScraper:
         name = (str(row.get(cfg["name_col"]) or "")).strip().title()
         if not name or _osm.is_excluded_name(name):
             return None
-        rid = str(row.get(cfg["id_col"]) or name)
         street = " ".join(str(row.get(c) or "").strip() for c in cfg["addr_cols"] if row.get(c)).strip()
         city = (str(row.get(cfg["city_col"]) or "")).strip().title() or None
+        # name-match datasets lack a stable id -> dedupe by name+street across inspection rows
+        rid = (str(row.get(cfg["id_col"]) or "").strip() if cfg.get("id_col") else "") \
+            or f"{name}|{street[:40]}"
         zipc = (str(row.get(cfg.get("zip_col")) or "")).strip()
         addr_full = ", ".join(p for p in [street, city, cfg["state"], zipc] if p) or None
         lat, lng = _f(row.get(cfg.get("lat_col"))), _f(row.get(cfg.get("lng_col")))
         if lat == 0 and lng == 0:  # some portals use 0,0 for "unknown"
             lat = lng = None
+        cuisine = "South Asian"
+        if cfg.get("cuisine_col"):
+            cuisine = (str(row.get(cfg["cuisine_col"]) or "")).strip() or "South Asian"
         return {
             "source_name": f"socrata_{self.key.split('_')[0]}",
             "source_url": f"https://{cfg['domain']}/resource/{cfg['dataset']}.json",
@@ -111,7 +151,7 @@ class SocrataScraper:
             "lat": lat, "lng": lng,
             "phone": (str(row.get(cfg.get("phone_col")) or "")).strip() or None,
             "email": None, "website": None, "menu_url": None, "hours_json": None,
-            "cuisine_type": (str(row.get(cfg["cuisine_col"]) or "")).strip() or "South Asian",
+            "cuisine_type": cuisine,
             "dietary_tags": [],
             "extra_tags": [],
         }
