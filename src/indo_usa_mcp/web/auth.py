@@ -8,13 +8,17 @@ no table).
 from __future__ import annotations
 
 import base64
+import hashlib
 import hmac
+import os
+import random
 import time
 from hashlib import sha256
 
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
+from .. import db
 from ..config import settings
 
 
@@ -124,3 +128,125 @@ def google_exchange(code: str) -> str | None:
     except Exception:
         return None
     return None
+
+
+# ------------------------------------------------------ password accounts (business owners)
+_PBKDF2_ROUNDS = 200_000
+
+
+def hash_password(pw: str) -> str:
+    salt = os.urandom(16)
+    dk = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt, _PBKDF2_ROUNDS)
+    enc = lambda b: base64.urlsafe_b64encode(b).decode().rstrip("=")  # noqa: E731
+    return f"pbkdf2_sha256${_PBKDF2_ROUNDS}${enc(salt)}${enc(dk)}"
+
+
+def verify_password(pw: str, stored: str) -> bool:
+    try:
+        _algo, rounds, salt_b64, hash_b64 = stored.split("$")
+        dec = lambda s: base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))  # noqa: E731
+        dk = hashlib.pbkdf2_hmac("sha256", pw.encode(), dec(salt_b64), int(rounds))
+        return hmac.compare_digest(dk, dec(hash_b64))
+    except Exception:
+        return False
+
+
+def get_user(email: str) -> dict | None:
+    try:
+        return db.query_one("SELECT * FROM users WHERE email = %s", [(email or "").strip().lower()])
+    except Exception:
+        return None
+
+
+def create_user(email: str, password: str) -> dict:
+    """Create an unverified account (or return existing). Records Terms acceptance time."""
+    email = (email or "").strip().lower()
+    existing = get_user(email)
+    if existing:
+        return {"ok": False, "reason": "exists", "verified": bool(existing.get("email_verified"))}
+    db.execute("INSERT INTO users (email, password_hash, terms_accepted_at) VALUES (%s, %s, now()) "
+               "ON CONFLICT (email) DO NOTHING", [email, hash_password(password)])
+    return {"ok": True}
+
+
+def set_verified(email: str) -> None:
+    db.execute("UPDATE users SET email_verified = TRUE, verified_at = now() WHERE email = %s",
+               [(email or "").strip().lower()])
+
+
+def set_password(email: str, password: str) -> None:
+    db.execute("UPDATE users SET password_hash = %s WHERE email = %s",
+               [hash_password(password), (email or "").strip().lower()])
+
+
+def check_login(email: str, password: str) -> dict | None:
+    """Return the user row on a correct password, else None. Caller checks email_verified."""
+    u = get_user(email)
+    if u and u.get("password_hash") and verify_password(password or "", u["password_hash"]):
+        try:
+            db.execute("UPDATE users SET last_login_at = now() WHERE email = %s", [u["email"]])
+        except Exception:
+            pass
+        return u
+    return None
+
+
+# --------------------------------------------------- purpose-scoped action tokens (verify / reset)
+def make_action_token(email: str, purpose: str, ttl_minutes: int = 1440) -> str:
+    """Signed, expiring token bound to a purpose ('verify' | 'reset') so one can't be used as another."""
+    raw = f"{purpose}|{(email or '').strip().lower()}|{int(time.time()) + ttl_minutes * 60}"
+    body = base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
+    return f"{body}.{_sign(raw)}"
+
+
+def verify_action_token(token: str, purpose: str) -> str | None:
+    try:
+        body, sig = token.split(".", 1)
+        raw = base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)).decode()
+        pp, email, exp = raw.split("|")
+    except Exception:
+        return None
+    if not hmac.compare_digest(sig, _sign(raw)) or pp != purpose or int(exp) < int(time.time()):
+        return None
+    return email
+
+
+# ----------------------------------------------------------------------------- captcha
+def make_captcha() -> dict:
+    """A free, self-contained signed math challenge (no external service, no account)."""
+    a, b = random.randint(1, 9), random.randint(1, 9)
+    raw = f"{a + b}|{int(time.time()) + 600}"
+    token = base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=") + "." + _sign(raw)
+    return {"question": f"What is {a} + {b}?", "token": token}
+
+
+def _verify_math_captcha(token: str, answer: str) -> bool:
+    try:
+        body, sig = (token or "").split(".", 1)
+        raw = base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)).decode()
+        expected, exp = raw.split("|")
+    except Exception:
+        return False
+    if not hmac.compare_digest(sig, _sign(raw)) or int(exp) < int(time.time()):
+        return False
+    try:
+        return int(str(answer).strip()) == int(expected)
+    except (ValueError, TypeError):
+        return False
+
+
+def verify_captcha(form) -> bool:
+    """Validate the captcha from a submitted form. Cloudflare Turnstile if configured, else math."""
+    if settings.turnstile_enabled:
+        token = (form.get("cf-turnstile-response") or "").strip()
+        if not token:
+            return False
+        try:
+            import httpx
+            r = httpx.post("https://challenges.cloudflare.com/turnstile/v0/siteverify",
+                           data={"secret": settings.turnstile_secret_key, "response": token},
+                           timeout=10.0)
+            return bool(r.json().get("success"))
+        except Exception:
+            return False
+    return _verify_math_captcha(form.get("captcha_token") or "", form.get("captcha") or "")

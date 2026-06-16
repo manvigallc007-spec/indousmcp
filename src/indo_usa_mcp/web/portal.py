@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import re
 import secrets
 
 from starlette.requests import Request
@@ -12,9 +13,43 @@ from starlette.routing import Route
 from .. import analytics, db, payments, verticals
 from ..config import settings
 from ..pipeline import outreach
-from .auth import (google_auth_url, google_exchange, make_magic_token, portal_email,
-                   verify_magic_token)
+from .auth import (check_login, create_user, get_user, google_auth_url, google_exchange,
+                   make_action_token, make_captcha, portal_email, set_password, set_verified,
+                   verify_action_token, verify_captcha, verify_magic_token)
 from .common import _page, esc
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _valid_email(email: str) -> bool:
+    return bool(_EMAIL_RE.match((email or "").strip()))
+
+
+def _captcha_field() -> str:
+    """Captcha form fields: Cloudflare Turnstile widget if configured, else a signed math challenge."""
+    if settings.turnstile_enabled:
+        return (f"<div class='cf-turnstile' data-sitekey='{esc(settings.turnstile_site_key)}'></div>"
+                "<script src='https://challenges.cloudflare.com/turnstile/v0/api.js' async defer></script>")
+    c = make_captcha()
+    return (f"<label>{esc(c['question'])}</label>"
+            "<input name='captcha' inputmode='numeric' autocomplete='off' required>"
+            f"<input type='hidden' name='captcha_token' value='{esc(c['token'])}'>")
+
+
+def _send_or_show(email: str, purpose: str, subject: str, intro: str) -> str:
+    """Email a verify/reset link; in dev (no SMTP) return an inline link to show on the page."""
+    ttl = 1440 if purpose == "verify" else 60
+    path = "/portal/verify" if purpose == "verify" else "/portal/reset"
+    link = f"{settings.public_web_url.rstrip('/')}{path}?t={make_action_token(email, purpose, ttl)}"
+    if settings.email_enabled:
+        try:
+            outreach.send_email(email, f"{settings.platform_name}: {subject}",
+                                f"{intro}\n\n{link}\n\nThis link expires soon. "
+                                "If you didn't request it, you can ignore this email.")
+        except Exception:
+            pass
+        return ""
+    return f"<p class='muted'>Dev mode (no SMTP): <a href='{esc(link)}'>{esc(subject)} link</a></p>"
 
 
 def _owned(email: str) -> list[dict]:
@@ -60,35 +95,160 @@ def _engage_html() -> str:
 
 def login_get(request: Request) -> HTMLResponse:
     google = _GBTN if settings.google_oauth_enabled else ""
-    return _page("Register or sign in your business",
-                 "<h2>Register or sign in your business</h2>"
-                 "<p class='muted'>Sign in to add your business and keep its details up to date — "
-                 "it's free. New here? Just sign in, then add your listing.</p>"
+    return _page("Sign in",
+                 "<h2>Sign in</h2>"
+                 "<p class='muted'>Sign in to add and manage your business listing.</p>"
                  + google +
                  "<form method='post' action='/portal/login'>"
-                 "<label>Email</label><input name='email' type='email' autofocus>"
-                 "<button type='submit'>Email me a sign-in link</button></form>"
-                 "<p class='muted' style='margin-top:14px'>Prefer to just add a listing without an "
-                 "account? <a href='/submit'>Add your business →</a></p>")
+                 "<label>Email</label><input name='email' type='email' autofocus required>"
+                 "<label>Password</label><input name='password' type='password' required>"
+                 "<button type='submit'>Sign in</button></form>"
+                 "<p class='muted' style='margin-top:12px'>New here? "
+                 "<a href='/portal/register'>Create an account</a> · "
+                 "<a href='/portal/forgot'>Forgot password?</a></p>")
 
 
 async def login_post(request: Request) -> HTMLResponse:
-    email = ((await request.form()).get("email") or "").strip().lower()
-    sent = "<h2 class='ok'>Check your email</h2><p>If you manage any listings, a sign-in " \
-           "link is on its way. It expires in %d minutes.</p>" % settings.magic_link_ttl_minutes
-    if email and _owned(email):
-        token = make_magic_token(email)
-        link = f"{settings.public_web_url.rstrip('/')}/portal/auth?t={token}"
-        if settings.email_enabled:
-            try:
-                outreach.send_email(email, f"Sign in to {settings.platform_name}",
-                                    f"Click to sign in (expires soon):\n{link}")
-            except Exception:
-                pass
-        else:
-            # Dev convenience when SMTP isn't configured: show the link directly.
-            sent += f"<p class='muted'>Dev mode (no SMTP): <a href='{esc(link)}'>sign-in link</a></p>"
-    return _page("Check your email", sent)
+    form = await request.form()
+    email = (form.get("email") or "").strip().lower()
+    u = check_login(email, form.get("password") or "")
+    if not u:
+        return _page("Sign-in failed", "<h2 class='err'>Email or password is incorrect</h2>"
+                     "<p><a href='/portal/login'>Try again</a> · "
+                     "<a href='/portal/forgot'>Forgot password?</a></p>", status=401)
+    if not u.get("email_verified"):
+        note = _send_or_show(email, "verify", "Verify your email",
+                             "Please verify your email to finish signing in:")
+        return _page("Verify your email", "<h2>Please verify your email first</h2>"
+                     f"<p>We've sent a verification link to <b>{esc(email)}</b>. Click it, then sign "
+                     "in.</p>" + note)
+    request.session["owner_email"] = email
+    return RedirectResponse("/portal", status_code=303)
+
+
+def register_get(request: Request) -> HTMLResponse:
+    if portal_email(request):
+        return RedirectResponse("/portal", status_code=303)
+    google = _GBTN if settings.google_oauth_enabled else ""
+    return _page("Register your business",
+                 "<h2>Register your business</h2>"
+                 "<p class='muted'>Create a free account to add and manage your business — found by "
+                 "people and AI across the USA.</p>"
+                 + google +
+                 "<form method='post' action='/portal/register'>"
+                 "<label>Email</label><input name='email' type='email' required autofocus>"
+                 "<label>Password (min 8 characters)</label>"
+                 "<input name='password' type='password' minlength='8' required>"
+                 "<label>Confirm password</label>"
+                 "<input name='password2' type='password' minlength='8' required>"
+                 + _captcha_field() +
+                 "<label style='font-weight:400;display:flex;gap:8px;align-items:flex-start;margin:6px 0 14px'>"
+                 "<input type='checkbox' name='accept' value='1' required style='width:auto;margin-top:4px'>"
+                 "<span>I agree to the <a href='/terms' target='_blank'>Terms</a> &amp; "
+                 "<a href='/privacy' target='_blank'>Privacy Policy</a>.</span></label>"
+                 "<button type='submit'>Create account</button></form>"
+                 "<p class='muted' style='margin-top:12px'>Already have an account? "
+                 "<a href='/portal/login'>Sign in</a></p>")
+
+
+async def register_post(request: Request) -> HTMLResponse:
+    form = await request.form()
+    email = (form.get("email") or "").strip().lower()
+    pw, pw2 = form.get("password") or "", form.get("password2") or ""
+    err = None
+    if not _valid_email(email):
+        err = "Please enter a valid email address."
+    elif len(pw) < 8:
+        err = "Password must be at least 8 characters."
+    elif pw != pw2:
+        err = "The passwords don't match."
+    elif not form.get("accept"):
+        err = "Please accept the Terms and Privacy Policy to continue."
+    elif not verify_captcha(form):
+        err = "The captcha answer was incorrect — please try again."
+    if err:
+        return _page("Registration", "<h2 class='err'>Couldn't create your account</h2>"
+                     f"<p>{esc(err)}</p><p><a href='/portal/register'>&#8592; Back to registration</a></p>",
+                     status=400)
+    if not create_user(email, pw).get("ok"):
+        return _page("Account exists", "<h2>You already have an account</h2>"
+                     f"<p>{esc(email)} is already registered. <a href='/portal/login'>Sign in</a> or "
+                     "<a href='/portal/forgot'>reset your password</a>.</p>")
+    note = _send_or_show(email, "verify", "Verify your email",
+                         f"Welcome to {settings.platform_name}! Confirm your email to activate your account:")
+    return _page("Check your email", "<h2 class='ok'>Almost there — check your email</h2>"
+                 f"<p>We sent a verification link to <b>{esc(email)}</b>. Click it to activate your "
+                 "account, then sign in.</p>" + note)
+
+
+def verify_email(request: Request) -> HTMLResponse:
+    email = verify_action_token(request.query_params.get("t", ""), "verify")
+    if not email:
+        return _page("Link expired", "<h2 class='err'>Invalid or expired verification link</h2>"
+                     "<p><a href='/portal/login'>Sign in</a> to get a new one, or "
+                     "<a href='/portal/register'>register</a>.</p>", status=401)
+    set_verified(email)
+    request.session["owner_email"] = email                 # using the emailed link proves ownership
+    return RedirectResponse("/portal", status_code=303)
+
+
+def forgot_get(request: Request) -> HTMLResponse:
+    return _page("Reset your password",
+                 "<h2>Reset your password</h2>"
+                 "<p class='muted'>Enter your account email and we'll send a reset link.</p>"
+                 "<form method='post' action='/portal/forgot'>"
+                 "<label>Email</label><input name='email' type='email' required autofocus>"
+                 + _captcha_field() +
+                 "<button type='submit'>Send reset link</button></form>"
+                 "<p class='muted' style='margin-top:12px'><a href='/portal/login'>Back to sign in</a></p>")
+
+
+async def forgot_post(request: Request) -> HTMLResponse:
+    form = await request.form()
+    email = (form.get("email") or "").strip().lower()
+    if not verify_captcha(form):
+        return _page("Reset", "<h2 class='err'>The captcha answer was incorrect</h2>"
+                     "<p><a href='/portal/forgot'>Try again</a></p>", status=400)
+    note = ""
+    if _valid_email(email) and get_user(email):
+        note = _send_or_show(email, "reset", "Reset your password",
+                             "We received a request to reset your password. Click to choose a new one:")
+    return _page("Check your email", "<h2 class='ok'>Check your email</h2>"
+                 f"<p>If an account exists for <b>{esc(email)}</b>, a password-reset link is on its "
+                 "way. It expires soon.</p>" + note)
+
+
+def reset_get(request: Request) -> HTMLResponse:
+    token = request.query_params.get("t", "")
+    if not verify_action_token(token, "reset"):
+        return _page("Link expired", "<h2 class='err'>Invalid or expired reset link</h2>"
+                     "<p><a href='/portal/forgot'>Request a new one</a></p>", status=401)
+    return _page("Choose a new password",
+                 "<h2>Choose a new password</h2>"
+                 "<form method='post' action='/portal/reset'>"
+                 f"<input type='hidden' name='t' value='{esc(token)}'>"
+                 "<label>New password (min 8 characters)</label>"
+                 "<input name='password' type='password' minlength='8' required autofocus>"
+                 "<label>Confirm password</label>"
+                 "<input name='password2' type='password' minlength='8' required>"
+                 "<button type='submit'>Set new password</button></form>")
+
+
+async def reset_post(request: Request) -> HTMLResponse:
+    form = await request.form()
+    email = verify_action_token(form.get("t") or "", "reset")
+    if not email:
+        return _page("Link expired", "<h2 class='err'>Invalid or expired reset link</h2>"
+                     "<p><a href='/portal/forgot'>Request a new one</a></p>", status=401)
+    pw, pw2 = form.get("password") or "", form.get("password2") or ""
+    if len(pw) < 8 or pw != pw2:
+        return _page("Reset", "<h2 class='err'>Passwords must match and be at least 8 characters</h2>"
+                     "<p>Please go back and try again.</p>", status=400)
+    set_password(email, pw)
+    set_verified(email)
+    request.session["owner_email"] = email
+    return _page("Password updated", "<h2 class='ok'>&#10003; Password updated</h2>"
+                 "<p>You're signed in. <a href='/portal'>Go to your dashboard &#8594;</a></p>")
 
 
 def auth(request: Request) -> HTMLResponse:
@@ -221,6 +381,13 @@ def logout(request: Request) -> RedirectResponse:
 routes = [
     Route("/portal/login", login_get, methods=["GET"]),
     Route("/portal/login", login_post, methods=["POST"]),
+    Route("/portal/register", register_get, methods=["GET"]),
+    Route("/portal/register", register_post, methods=["POST"]),
+    Route("/portal/verify", verify_email, methods=["GET"]),
+    Route("/portal/forgot", forgot_get, methods=["GET"]),
+    Route("/portal/forgot", forgot_post, methods=["POST"]),
+    Route("/portal/reset", reset_get, methods=["GET"]),
+    Route("/portal/reset", reset_post, methods=["POST"]),
     Route("/portal/auth", auth, methods=["GET"]),
     Route("/portal/google", google_login, methods=["GET"]),
     Route("/portal/google/callback", google_callback, methods=["GET"]),

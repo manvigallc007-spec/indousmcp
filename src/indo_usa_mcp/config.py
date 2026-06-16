@@ -129,6 +129,16 @@ class Settings(BaseSettings):
     @property
     def google_oauth_enabled(self) -> bool:
         return bool(self.google_oauth_client_id and self.google_oauth_client_secret)
+
+    # Captcha for the business-registration form. By default a free, self-contained signed math
+    # challenge is used (no account, no external call). Optionally set Cloudflare Turnstile keys
+    # (free at dash.cloudflare.com -> Turnstile) for a stronger widget; blank = use the math captcha.
+    turnstile_site_key: str = ""
+    turnstile_secret_key: str = ""
+
+    @property
+    def turnstile_enabled(self) -> bool:
+        return bool(self.turnstile_site_key and self.turnstile_secret_key)
     # Public base URL of the web app (for Stripe redirect URLs), e.g. https://yourdomain.com
     public_web_url: str = "http://localhost:8080"
 
