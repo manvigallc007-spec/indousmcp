@@ -372,6 +372,17 @@ def test_lang_note():
     assert assistant._lang_note({}) is None
 
 
+def test_knowledge_vs_listing_intent():
+    kq = assistant._is_knowledge_question
+    for q in ("tell me about diwali", "how is pongal celebrated", "what is dosa",
+              "explain navratri", "how to apply for a green card", "what documents for h1b"):
+        assert kq(q, {}) is True, q                          # explain -> free-form knowledge answer
+    for q in ("dosa near me", "immigration lawyer in dallas", "restaurants in edison",
+              "best biryani", "where can i get sweets", "hindu temple near me"):
+        assert kq(q, {}) is False, q                         # find-a-place -> listing search
+    assert kq("what is the best", {"vertical": "restaurants"}) is False  # a chip forces listings
+
+
 def test_grounded_reply_carries_language_instruction(no_db, monkeypatch):
     monkeypatch.setattr(settings, "llm_provider", "llm")
     monkeypatch.setattr(settings, "llm_base_url", "http://x")

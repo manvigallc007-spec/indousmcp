@@ -57,6 +57,39 @@ _SYSTEM_DISCOVERY = (
     "know so we can add it to the directory. Be warm and curious, vary your wording — never invent "
     "or name specific businesses.")
 
+_SYSTEM_KB = (
+    "You are Dost (Hindi/Urdu for “friend”), a warm, knowledgeable guide to Indian & South-Asian "
+    "life in the USA — culture, festivals, food, religion and temples, plus practical topics like "
+    "visas, taxes and settling in. Answer the user's question conversationally and helpfully in "
+    "2-5 sentences, primarily using the KNOWLEDGE provided below; you may add widely-known general "
+    "context. Do NOT invent specific businesses, names, prices or phone numbers, and don't give "
+    "definitive legal/tax/medical advice — point them to a professional for specifics. If the "
+    "knowledge doesn't cover it, briefly share what you do know and say so honestly. Warm, clear, "
+    "never preachy.")
+
+# Free-form knowledge intent: a question that wants an EXPLANATION, not a place to visit. We only
+# treat it as knowledge when no category chip is set, no location is named, and there's no
+# find-a-place cue — so "what is dosa" answers in prose while "dosa near me" still lists places.
+_Q_START = re.compile(
+    r"^\s*(what|what's|how|why|when|which|who|tell me|explain|describe|is it|are there|"
+    r"do i|can i|should i)\b", re.I)
+_KNOWLEDGE_PHRASES = ("celebrat", "significance", "history of", "meaning of", "tradition",
+                      "how to apply", "documents for", "documents do i need", "difference between",
+                      "what is", "what are", "how is", "how do", "how does", "tell me about",
+                      "explain")
+_PLACE_CUES = ("near me", "nearby", "open now", "find ", "show me", "list ", "recommend",
+               "closest", "around me", "directions")
+
+
+def _is_knowledge_question(query: str, filters: dict | None) -> bool:
+    t = (query or "").lower().strip()
+    if not t or (filters or {}).get("vertical"):
+        return False
+    if _extract_location(query) != (None, None) or any(c in t for c in _PLACE_CUES):
+        return False
+    return bool(_Q_START.match(t)) or any(p in t for p in _KNOWLEDGE_PHRASES)
+
+
 _TOOLS = [{
     "type": "function",
     "function": {
@@ -506,6 +539,39 @@ def _discovery_reply(query: str, messages: list[dict], geo: dict | None, filters
             "contribute": {"vertical": vertical, "city": city, "state": state}}
 
 
+def _knowledge_reply(query: str, messages: list[dict], geo: dict | None, filters: dict | None) -> dict:
+    """Free-form answer to a knowledge question — retrieve from the per-vertical knowledge base and
+    answer in prose (with the LLM if available). Falls back to the free web sources when the KB has
+    nothing yet, so this works even before any content is seeded."""
+    from . import knowledge
+    vertical = (filters or {}).get("vertical") or _guess_vertical(query)
+    try:
+        hits = knowledge.search(query, vertical=vertical, limit=6) if vertical else []
+        if not hits:
+            hits = knowledge.search(query, vertical=None, limit=6)
+    except Exception:                                       # KB/DB unavailable -> degrade to web
+        hits = []
+    if not hits:
+        return _web_fallback(query, geo, filters)          # nothing curated yet -> free web knowledge
+    context = "\n\n".join(f"[{h.get('title') or h.get('source_type') or 'note'}] {h.get('text', '')}"
+                          for h in hits)[:4000]
+    if llm_active():
+        try:
+            convo = [{"role": "system", "content": _SYSTEM_KB}]
+            note = _lang_note(filters)
+            if note:
+                convo.append({"role": "system", "content": note})
+            convo.append({"role": "user", "content": f"Question: {query}\n\nKNOWLEDGE:\n{context}"})
+            ans = (_chat(convo, use_tools=False).get("content") or "").strip()
+            if ans:
+                return {"reply": ans, "cards": [], "provider": "knowledge"}
+        except Exception:
+            pass
+    top = hits[0]
+    tail = f"\n\n— {top['title']}" if top.get("title") else ""
+    return {"reply": (top.get("text") or "")[:800] + tail, "cards": [], "provider": "knowledge"}
+
+
 def _web_fallback(query: str, geo: dict | None, filters: dict | None) -> dict:
     """Relevant question the directory can't answer → answer from free web sources (labelled as
     general info, never as a verified listing) + suggest adding it to the directory.
@@ -669,6 +735,11 @@ def reply(messages: list[dict], geo: dict | None = None, filters: dict | None = 
         return {"reply": "Which city or area should I look in? For example: “Edison, NJ”, "
                 "“Jersey City”, or “Bay Area”.", "cards": [], "provider": "clarify"}
     query = _search_query(messages)
+    # Free-form knowledge question (explain/what/how, no place named) -> answer in prose from the
+    # knowledge base (then the free web), instead of forcing listing cards. This is what makes Dost
+    # conversational ("how is Pongal celebrated?") rather than a search box.
+    if query and is_indian_american_topic(query) and _is_knowledge_question(query, filters):
+        return _knowledge_reply(query, messages, geo, filters)
     if llm_active():
         try:
             engine = _llm_reply if settings.effective_llm_use_tools else _grounded_reply
