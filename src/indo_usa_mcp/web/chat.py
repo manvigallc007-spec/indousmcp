@@ -207,7 +207,7 @@ a{color:var(--brand);text-decoration:none}
 </style></head><body>
 <header class="topbar">
  <a class="brand" href="/"><img class="brandlogo" src="/logo" alt="__PLAT__"><span><b>__ANAME__</b><i>__AMEAN__</i></span></a>
- <nav class="topnav"><a href="/about">About</a><a href="/browse">Browse</a><a href="/submit">For business</a></nav>
+ <nav class="topnav"><a href="/about">About</a><a href="/browse">Browse</a><a href="/portal/login">For business</a></nav>
  <div class="actions">
   <select id="lang" class="langsel" onchange="setLang(this.value)" aria-label="Language">
    <option value="en">English</option><option value="hi">हिंदी</option><option value="te">తెలుగు</option>

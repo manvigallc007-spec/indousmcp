@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import secrets
 
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse
@@ -11,7 +12,8 @@ from starlette.routing import Route
 from .. import analytics, db, payments, verticals
 from ..config import settings
 from ..pipeline import outreach
-from .auth import make_magic_token, portal_email, verify_magic_token
+from .auth import (google_auth_url, google_exchange, make_magic_token, portal_email,
+                   verify_magic_token)
 from .common import _page, esc
 
 
@@ -33,14 +35,24 @@ def _owned(email: str) -> list[dict]:
     return list(owned.values())
 
 
+_GBTN = ("<a href='/portal/google' style='display:block;text-align:center;background:#fff;"
+         "border:1px solid #dadce0;border-radius:8px;padding:11px;font-weight:600;color:#3c4043;"
+         "text-decoration:none;margin-bottom:12px'>Sign in with Google</a>"
+         "<p class='muted' style='text-align:center;margin:4px 0 12px'>— or —</p>")
+
+
 def login_get(request: Request) -> HTMLResponse:
-    return _page("Owner sign in",
-                 "<h2>Manage your listing</h2>"
-                 "<p class='muted'>Enter your email and we'll send you a secure sign-in link "
-                 "— no password needed.</p>"
+    google = _GBTN if settings.google_oauth_enabled else ""
+    return _page("Register or sign in your business",
+                 "<h2>Register or sign in your business</h2>"
+                 "<p class='muted'>Sign in to add your business and keep its details up to date — "
+                 "it's free. New here? Just sign in, then add your listing.</p>"
+                 + google +
                  "<form method='post' action='/portal/login'>"
                  "<label>Email</label><input name='email' type='email' autofocus>"
-                 "<button type='submit'>Email me a link</button></form>")
+                 "<button type='submit'>Email me a sign-in link</button></form>"
+                 "<p class='muted' style='margin-top:14px'>Prefer to just add a listing without an "
+                 "account? <a href='/submit'>Add your business →</a></p>")
 
 
 async def login_post(request: Request) -> HTMLResponse:
@@ -71,14 +83,44 @@ def auth(request: Request) -> HTMLResponse:
     return RedirectResponse("/portal", status_code=303)
 
 
+def google_login(request: Request) -> HTMLResponse:
+    if not settings.google_oauth_enabled:
+        return RedirectResponse("/portal/login", status_code=303)
+    state = secrets.token_urlsafe(24)
+    request.session["oauth_state"] = state           # CSRF: verified on callback
+    return RedirectResponse(google_auth_url(state), status_code=303)
+
+
+def google_callback(request: Request) -> HTMLResponse:
+    qs = request.query_params
+    saved = request.session.pop("oauth_state", None)
+    if not settings.google_oauth_enabled or qs.get("error"):
+        return RedirectResponse("/portal/login", status_code=303)
+    if not qs.get("state") or qs.get("state") != saved:
+        return _page("Sign-in error", "<h2 class='err'>Couldn't verify the sign-in</h2>"
+                     "<p><a href='/portal/login'>Try again</a></p>", status=400)
+    email = google_exchange(qs.get("code") or "")
+    if not email:
+        return _page("Sign-in error", "<h2 class='err'>Google sign-in failed</h2>"
+                     "<p><a href='/portal/login'>Try again</a></p>", status=401)
+    request.session["owner_email"] = email
+    return RedirectResponse("/portal", status_code=303)
+
+
 def dashboard(request: Request) -> HTMLResponse:
     email = portal_email(request)
     if not email:
         return RedirectResponse("/portal/login", status_code=303)
     listings = _owned(email)
     if not listings:
-        return _page("No listings", f"<h2>No listings for {esc(email)}</h2>"
-                     "<p class='muted'>Claim a listing first, or contact us.</p>")
+        return _page("Add your business", f"<h2>Welcome, {esc(email)}! 🙏</h2>"
+                     "<p class='muted'>You're signed in. You don't have any listings yet — add your "
+                     "business and it'll appear here once approved.</p>"
+                     "<p><a href='/submit' style='display:inline-block;background:#e8772e;color:#fff;"
+                     "border-radius:9px;padding:11px 20px;font-weight:600;text-decoration:none'>"
+                     "➕ Add your business</a></p>"
+                     "<p class='muted' style='margin-top:14px'>Already listed? Claim it from its page "
+                     "to link it to your account. · <a href='/portal/logout'>Sign out</a></p>")
     rows = ""
     for x in listings:
         status = ("<span class='ok'>★ featured</span>" if x["is_featured"]
@@ -162,6 +204,8 @@ routes = [
     Route("/portal/login", login_get, methods=["GET"]),
     Route("/portal/login", login_post, methods=["POST"]),
     Route("/portal/auth", auth, methods=["GET"]),
+    Route("/portal/google", google_login, methods=["GET"]),
+    Route("/portal/google/callback", google_callback, methods=["GET"]),
     Route("/portal", dashboard, methods=["GET"]),
     Route("/portal/edit/{vertical}/{id:int}", edit_get, methods=["GET"]),
     Route("/portal/edit/{vertical}/{id:int}", edit_post, methods=["POST"]),

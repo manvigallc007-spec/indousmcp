@@ -110,6 +110,15 @@ class Settings(BaseSettings):
     session_https_only: bool = False
     report_email: str = ""                       # daily report recipient (defaults to contact)
     magic_link_ttl_minutes: int = 30
+    # Google sign-in for the business-owner portal (optional; magic-link still works without it).
+    # Create an OAuth 2.0 Web client at console.cloud.google.com -> APIs & Services -> Credentials.
+    # Authorized redirect URI = <PUBLIC_WEB_URL>/portal/google/callback. Secrets via env only.
+    google_oauth_client_id: str = ""
+    google_oauth_client_secret: str = ""
+
+    @property
+    def google_oauth_enabled(self) -> bool:
+        return bool(self.google_oauth_client_id and self.google_oauth_client_secret)
     # Public base URL of the web app (for Stripe redirect URLs), e.g. https://yourdomain.com
     public_web_url: str = "http://localhost:8080"
 

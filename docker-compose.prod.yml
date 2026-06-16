@@ -108,6 +108,10 @@ services:
       # Admin dashboard + owner portal sessions (set these to enable /admin).
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # Google sign-in for the business-owner portal (optional). Redirect URI in Google must be
+      # <PUBLIC_WEB_URL>/portal/google/callback. Magic-link login still works without these.
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
       SECRET_KEY: ${SECRET_KEY:-dev-insecure-change-me}
       REPORT_EMAIL: ${REPORT_EMAIL:-}
       # SMTP (shared with outreach) — also used for the daily report + magic-links.
