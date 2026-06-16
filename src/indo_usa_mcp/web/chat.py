@@ -350,7 +350,8 @@ async function startMic(){
  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
  if(!window.isSecureContext){fillBot(addBot(),'🎤 Voice needs a secure (https) connection — you can still type.',[]);return;}
  if(!SR||isIOS()){fillBot(addBot(),keyboardMicTip(),[]);return;}   // unsupported / iPhone -> keyboard mic
- if((await micPermState())==='denied'){fillBot(addBot(),micError('not-allowed'),[]);return;}
+ // Request the mic FIRST, directly in the click — this is what pops the browser's permission
+ // prompt (the 🔒 / mic icon). Don't await anything before it or the gesture can be lost (Safari).
  if(!(await ensureMic())){fillBot(addBot(),micError('not-allowed'),[]);return;}
  let r;try{r=new SR();}catch(e){return;}
  r.lang=LOCALE[lang]||'en-US';r.interimResults=false;r.maxAlternatives=1;
@@ -392,6 +393,7 @@ function speak(text){
   if(!('speechSynthesis' in window)){if(convoMode)convoListen();return;}
   try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang=LOCALE[lang]||'en-US';
     const v=pickVoice(u.lang);if(v)u.voice=v;
+    u.rate=(lang==='en')?1:0.93;u.pitch=1;   // a touch slower for clearer Hindi/Telugu narration
     u.onstart=function(){if(convoMode)convoStatus('speaking');};
     u.onend=function(){if(convoMode)convoListen();};            // after Dost speaks, listen again
     speechSynthesis.speak(u);
@@ -409,7 +411,7 @@ async function startConvo(){
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!window.isSecureContext){fillBot(addBot(),'🎙️ Voice needs a secure (https) connection.',[]);return;}
   if(!SR||isIOS()){fillBot(addBot(),keyboardMicTip(),[]);return;}   // unsupported / iPhone -> keyboard mic
-  if((await micPermState())==='denied'){fillBot(addBot(),micError('not-allowed'),[]);return;}
+  // Request the mic FIRST, in the click gesture, so the browser's permission prompt actually pops.
   if(!(await ensureMic())){fillBot(addBot(),micError('not-allowed'),[]);return;}
   convoMode=true;speakOn=true;localStorage.setItem('dost_speak','1');
   var cb=document.getElementById('convo');if(cb){cb.classList.add('on');var vl=cb.querySelector('.vlabel');if(vl)vl.textContent=T().voiceStop;}

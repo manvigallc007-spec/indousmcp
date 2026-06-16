@@ -218,7 +218,10 @@ def _lang_note(filters: dict | None) -> str | None:
         return None
     return (f"LANGUAGE: Reply ENTIRELY in {name}, in its native script, using warm, natural, "
             f"everyday {name} the way a friendly local actually speaks — not stiff, not overly "
-            f"formal, and NOT a word-for-word translation of English. Short, clear sentences that "
+            f"formal, and NOT a word-for-word translation of English. Use the COLLOQUIAL, spoken "
+            f"register (everyday conversational Hindustani for Hindi, everyday spoken Telugu for "
+            f"Telugu); mixing in common English words people normally use is natural and welcome, and "
+            f"AVOID heavy literary/Sanskritized or bureaucratic wording. Short, clear sentences that "
             f"sound good when read aloud. Keep proper nouns (business names, cities) in their usual "
             f"spelling, and you may keep common English words people normally use (e.g. "
             f"'restaurant', 'temple', 'open'). The user may type or speak in {name} or a romanized "
