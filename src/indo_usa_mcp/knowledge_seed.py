@@ -251,6 +251,92 @@ ARTICLES: list[dict[str, Any]] = [
              "Hindustani, Bharatanatyam, Kathak), and temple youth programs. Festivals, trips to "
              "India, cooking together, and kids' books in Indian languages all help. Look under the "
              "education and community categories, and ask Dost for classes in your area."},
+
+    # --- food & cuisine (the diaspora's most-asked topic) ---
+    {"slug": "biryani-guide", "title": "Biryani: styles & where to find it", "vertical": None,
+     "text": "Biryani is a fragrant layered rice-and-meat (or vegetable) dish and one of the "
+             "most-ordered Indian dishes in the US. Regional styles differ: Hyderabadi 'dum' biryani "
+             "(spicy, slow-cooked, often with a boiled egg), Lucknowi/Awadhi (milder, aromatic), "
+             "Kolkata (with potato and a subtle sweetness), Ambur and Dindigul (Tamil Nadu styles), "
+             "and Sindhi. Vegetable, paneer, and egg biryanis are common vegetarian options, and "
+             "most Indian restaurants and caterers across the US make it — many also cater it for "
+             "parties. Ask about the spice level and whether it's cooked to order."},
+    {"slug": "regional-indian-cuisines", "title": "Regional Indian cuisines, explained", "vertical": None,
+     "text": "Indian food isn't one cuisine — it varies sharply by region. North Indian "
+             "(Punjabi/Mughlai) features wheat breads (roti, naan), rich gravies, paneer, dal "
+             "makhani, and tandoori dishes. South Indian (Tamil, Andhra, Karnataka, Kerala) centers "
+             "on rice, dosa, idli, sambar, rasam, and coconut. West (Gujarati, Maharashtrian) leans "
+             "vegetarian — thali, dhokla, pav bhaji; East (Bengali) is known for fish, mustard, and "
+             "sweets. US Indian restaurants often specialize by region, so the 'best' place depends "
+             "on what you're craving."},
+    {"slug": "south-indian-food", "title": "South Indian food (dosa, idli & more)", "vertical": None,
+     "text": "South Indian food, popular across the US, is largely rice- and lentil-based and heavily "
+             "vegetarian. Staples include dosa (a crisp fermented crepe, plain or masala), idli "
+             "(steamed cakes), vada, uttapam, and pongal — usually served with sambar (lentil-"
+             "vegetable stew) and coconut chutney. Andhra and Telangana food is spicier (and the "
+             "home of Hyderabadi biryani), while Kerala adds coconut and seafood. Filter coffee is "
+             "the classic accompaniment, and many South Indian restaurants in the US are 'pure veg'."},
+    {"slug": "north-indian-food", "title": "North Indian food (curries, naan, tandoor)", "vertical": None,
+     "text": "North Indian cuisine — the style most Americans meet first — features wheat breads "
+             "(roti, naan, paratha), creamy curries, and tandoor-grilled dishes. Favorites include "
+             "butter chicken, chicken tikka masala, dal makhani, chana masala, palak/saag paneer, "
+             "biryani, and tandoori kebabs. Punjabi and Mughlai influences make it rich and often "
+             "mild-to-medium spiced — you can request the heat level. Vegetarians are well served "
+             "with paneer and legume dishes."},
+    {"slug": "street-food-chaat", "title": "Indian street food & chaat", "vertical": None,
+     "text": "Chaat is India's beloved street food — tangy, crunchy, spicy snacks — and many US "
+             "Indian restaurants and chaat houses serve it. Common items: pani puri / golgappa "
+             "(crisp shells with spiced water), bhel puri, sev puri, dahi puri, aloo tikki chaat, "
+             "pav bhaji, vada pav, and dabeli. It's mostly vegetarian and great for sharing; if "
+             "you're new to it, start with pani puri or bhel."},
+    {"slug": "thali-explained", "title": "What is a thali?", "vertical": None,
+     "text": "A thali is a round platter holding several small bowls (katoris) so you can taste many "
+             "dishes in one meal — typically dal, a vegetable or two, rice, roti, yogurt, pickle, "
+             "papad, and a sweet. Regional thalis vary (Gujarati thalis are sweet-leaning and often "
+             "all-you-can-eat; South Indian 'meals' are served on a banana leaf). It's a filling, "
+             "good-value way to sample a region's home cooking — many US restaurants offer veg and "
+             "non-veg thalis."},
+    {"slug": "indian-catering", "title": "Indian catering for events", "vertical": "restaurants",
+     "text": "For weddings, birthdays, pujas, Garba nights, and office parties, Indian catering is "
+             "widely available across the US — many restaurants cater, plus dedicated Indian "
+             "caterers and tiffin/meal services. When booking, confirm: cuisine/region and menu "
+             "(veg/Jain/halal options), per-person price and minimums, delivery vs setup vs full "
+             "service, lead time, and whether they provide chafing dishes and serving staff. Popular "
+             "party dishes include biryani, chaat, tandoori platters, chole-bhature, dosa stations, "
+             "and a sweets counter. Book early for festival and wedding season."},
+    {"slug": "tiffin-services", "title": "Tiffin & home-style meal services", "vertical": "restaurants",
+     "text": "A tiffin service delivers fresh, home-style Indian meals — usually dal, sabzi "
+             "(vegetable), roti, and rice — on a daily or weekly plan. They're popular with students, "
+             "bachelors, busy families, and new arrivals in US metros, offering an affordable "
+             "alternative to cooking or eating out, often with veg, Jain, and regional (Gujarati, "
+             "South Indian) options. Many also do party catering. Ask about delivery area, plan "
+             "length, and customization."},
+    {"slug": "indian-sweets-mithai", "title": "Indian sweets (mithai)", "vertical": None,
+     "text": "Indian sweets (mithai) are central to festivals, weddings, and celebrations. Common "
+             "ones: ladoo, barfi, gulab jamun, jalebi, rasgulla and rasmalai (Bengali), kaju katli "
+             "(cashew), soan papdi, halwa, and peda. Sweet shops (halwai) and Indian grocers across "
+             "the US stock them and make festival boxes for Diwali, Raksha Bandhan, and weddings. "
+             "Most are vegetarian; eggless and sugar-free options are increasingly available."},
+    {"slug": "chai-and-coffee", "title": "Chai & South Indian filter coffee", "vertical": None,
+     "text": "Chai — black tea simmered with milk, sugar, and spices (cardamom, ginger, cinnamon) — "
+             "is the everyday Indian drink, and 'masala chai' is on most US Indian menus and at chai "
+             "cafes. In the south, strong filter coffee (decoction with milk) is the classic. 'Chai "
+             "tea' is redundant (chai means tea); adrak (ginger) chai and cutting chai (a small "
+             "strong serving) are popular variations."},
+    {"slug": "indian-grocery-staples", "title": "Stocking an Indian kitchen in the US", "vertical": "groceries",
+     "text": "Stocking an Indian kitchen in the US starts with atta (whole-wheat flour for roti), "
+             "basmati rice, lentils (toor/moong/chana dal), and spices — turmeric, cumin, coriander, "
+             "garam masala, red chili, mustard seeds. Add ghee, paneer, yogurt, onions/garlic/ginger, "
+             "and frozen items (naan, parathas, samosas, peas). Indian grocers (Patel Brothers and "
+             "many local desi stores) and online retailers carry everything, including regional "
+             "brands and fresh produce like curry leaves, methi, and okra."},
+    {"slug": "restaurant-types", "title": "Types of Indian restaurants in the US", "vertical": "restaurants",
+     "text": "US Indian restaurants come in many styles: a 'dhaba' (rustic North Indian roadside "
+             "style), 'udupi'/'pure veg' South Indian spots, fine-dining, all-you-can-eat lunch "
+             "buffets, fast-casual and food trucks, chaat houses, sweet shops (halwai), and "
+             "caterers/tiffin services. 'Pure veg' means no meat is cooked; halal meat is available "
+             "at many. If you have dietary needs (Jain, vegan, gluten-free, nut allergy), call "
+             "ahead — most kitchens can accommodate common Indian-diet requests."},
 ]
 
 

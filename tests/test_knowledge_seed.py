@@ -7,7 +7,7 @@ import indo_usa_mcp.knowledge_seed as KS
 def test_articles_well_formed_and_unique():
     slugs = [a["slug"] for a in KS.ARTICLES]
     assert len(slugs) == len(set(slugs))                 # no duplicate slugs
-    assert len(KS.ARTICLES) >= 33                        # 15 original + 18 new
+    assert len(KS.ARTICLES) >= 45                        # 15 + 18 + 12 food/diaspora
     for a in KS.ARTICLES:
         assert a["slug"] and a["title"] and a["text"]
         assert "vertical" in a                           # may be None, but key must exist
@@ -18,7 +18,8 @@ def test_key_new_topics_present():
     slugs = {a["slug"] for a in KS.ARTICLES}
     for s in ("h4-ead", "us-citizenship", "visa-stamping-india", "building-credit", "us-banking",
               "health-insurance", "retirement-401k", "fbar-foreign-accounts", "durga-puja",
-              "gurpurab", "indian-wedding", "raising-kids-heritage"):
+              "gurpurab", "indian-wedding", "raising-kids-heritage",
+              "biryani-guide", "regional-indian-cuisines", "indian-catering", "tiffin-services"):
         assert s in slugs, s
 
 

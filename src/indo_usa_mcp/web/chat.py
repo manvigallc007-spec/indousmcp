@@ -34,6 +34,8 @@ def _rate_ok(ip: str) -> bool:
 
 
 _SUGGESTIONS = [
+    "Biryani near me",
+    "Indian catering for a party",
     "Vegetarian South Indian near me",
     "Sweets shop for Diwali in Edison NJ",
     "Hindu temple in the Bay Area",

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 # canonical tag -> substrings that imply it (matched against name + description + cuisine).
 _TAG_KEYWORDS: dict[str, tuple[str, ...]] = {
-    "biryani": ("biryani", "biriyani"),
+    "biryani": ("biryani", "biriyani", "briyani", "dum biryani", "kacchi", "hyderabadi", "ambur"),
     "dosa": ("dosa",),
     "idli": ("idli",),
     "chaat": ("chaat", "chat house", "golgappa", "pani puri"),
@@ -23,7 +23,8 @@ _TAG_KEYWORDS: dict[str, tuple[str, ...]] = {
     "paneer": ("paneer",),
     "biriyani": (),  # alias collapsed above
     "buffet": ("buffet",),
-    "catering": ("catering", "caterer"),
+    "catering": ("catering", "caterer", "cater", "party order", "bulk order"),
+    "tiffin": ("tiffin", "dabba", "meal service", "lunch box", "meal plan"),
     "indo-chinese": ("indo chinese", "indo-chinese", "hakka", "manchurian", "schezwan"),
     "vegan": ("vegan",),
     "vegetarian": ("vegetarian", "pure veg", "shakahari"),
