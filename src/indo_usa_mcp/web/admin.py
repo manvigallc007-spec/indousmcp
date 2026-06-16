@@ -825,11 +825,121 @@ async def submissions_action(request: Request) -> HTMLResponse:
     return RedirectResponse("/admin/submissions", status_code=303)
 
 
+def _ago(ts) -> str:
+    import datetime
+    if not ts:
+        return "—"
+    try:
+        delta = datetime.datetime.now(datetime.timezone.utc) - ts
+        if delta.days >= 1:
+            return f"{delta.days}d ago"
+        h = delta.seconds // 3600
+        return f"{h}h ago" if h else f"{max(1, delta.seconds // 60)}m ago"
+    except Exception:
+        return str(ts)[:16]
+
+
+def dashboard_page(request: Request) -> HTMLResponse:
+    """#7: a live data dashboard — per-category freshness, the latest updated listings, KB status."""
+    if (r := require_admin(request)):
+        return r
+    fresh, recent = "", []
+    for v, cfg in verticals.VERTICALS.items():
+        t = cfg["table"]
+        try:
+            agg = db.query_one(
+                f"SELECT count(*) FILTER (WHERE deleted_at IS NULL AND is_active) AS active, "
+                f"count(*) FILTER (WHERE created_at > now() - interval '7 days') AS new7, "
+                f"max(updated_at) AS last FROM {t}")
+        except Exception:
+            continue
+        fresh += (f"<tr><td><a href='/admin/data/{v}'>{esc(cfg['label'])}</a></td>"
+                  f"<td>{agg['active']}</td><td>{('+' + str(agg['new7'])) if agg['new7'] else '—'}</td>"
+                  f"<td class='muted'>{_ago(agg['last'])}</td></tr>")
+        try:
+            for r in db.query(f"SELECT name, city, state, updated_at, source_name FROM {t} "
+                              f"WHERE deleted_at IS NULL ORDER BY updated_at DESC LIMIT 6"):
+                recent.append({"vertical": v, **r})
+        except Exception:
+            pass
+    recent = sorted((r for r in recent if r.get("updated_at")),
+                    key=lambda r: r["updated_at"], reverse=True)[:25]
+    rrows = "".join(
+        f"<tr><td>{esc(r.get('name'))}</td><td>{esc(r['vertical'])}</td>"
+        f"<td class='muted'>{esc(r.get('city'))}, {esc(r.get('state'))}</td>"
+        f"<td class='muted'>{esc(r.get('source_name'))}</td>"
+        f"<td class='muted'>{_ago(r.get('updated_at'))}</td></tr>" for r in recent)
+    try:
+        from .. import knowledge
+        kb = knowledge.stats()
+        kbline = (f"<div class='cards'><div class='kpi'><b>{kb['documents']}</b><span>KB documents</span></div>"
+                  f"<div class='kpi'><b>{kb['chunks']}</b><span>KB chunks</span></div>"
+                  f"<div class='kpi'><b>{kb['embedded_chunks']}</b><span>embedded</span></div></div>")
+    except Exception:
+        kbline = ""
+    body = ("<p class='muted'>Live data freshness and the latest updates across the directory.</p>"
+            "<h3>By category</h3>"
+            f"<table><tr><th>Category</th><th>Active</th><th>New (7d)</th><th>Last updated</th></tr>{fresh}</table>"
+            "<h3>Latest updated listings</h3>"
+            + (f"<table><tr><th>Name</th><th>Category</th><th>Location</th><th>Source</th><th>Updated</th></tr>{rrows}</table>"
+               if rrows else "<p class='muted'>No recent updates.</p>")
+            + "<h3>Knowledge base (Dost's RAG)</h3>"
+            + (kbline or "<p class='muted'>Empty — run <code>kb-seed</code> / <code>kb-index</code>.</p>"))
+    return admin_page("Dashboard", body, active="Dashboard")
+
+
+def moderation_page(request: Request) -> HTMLResponse:
+    """#5: review listings flagged as not-India-from-India and remove them (reversible)."""
+    if (r := require_admin(request)):
+        return r
+    flagged = verticals.flagged_non_india()
+    rows = "".join(
+        f"<tr><td><a href='/admin/data/{x['vertical']}/{x['id']}'>{esc(x['name'])}</a></td>"
+        f"<td>{esc(x['vertical'])}</td><td class='muted'>{esc(x.get('city'))}, {esc(x.get('state'))}</td>"
+        f"<td><form method='post' action='/admin/moderation' class='inline'>"
+        f"<input type='hidden' name='vertical' value='{x['vertical']}'>"
+        f"<input type='hidden' name='id' value='{x['id']}'>"
+        f"<button class='btn' name='op' value='remove'>Remove</button></form></td></tr>"
+        for x in flagged)
+    bulk = (f"<form method='post' action='/admin/moderation' class='inline'>"
+            f"<input type='hidden' name='op' value='remove_all'>"
+            f"<button class='btn gray'>Remove all {len(flagged)} flagged</button></form>"
+            if flagged else "")
+    body = ("<p class='muted'>Listings whose name suggests they are NOT India-from-India "
+            "(Native American / West Indian / brand homonyms). Review and remove anything that "
+            "doesn't represent India or Indians — removal is reversible. You can also remove any "
+            "listing from its <a href='/admin/data/restaurants'>Data</a> page.</p>" + bulk
+            + (f"<table><tr><th>Name</th><th>Category</th><th>Location</th><th></th></tr>{rows}</table>"
+               if flagged else "<p class='muted'>Nothing flagged \U0001f389 — the scraping guardrails are holding.</p>"))
+    return admin_page("Moderation", body, active="Moderation")
+
+
+async def moderation_action(request: Request) -> HTMLResponse:
+    if (r := require_admin(request)):
+        return r
+    form = await request.form()
+    op = form.get("op")
+    if op == "remove_all":
+        verticals.purge_excluded(dry_run=False)
+    elif op == "remove":
+        v = form.get("vertical")
+        try:
+            rid = int(form.get("id"))
+        except (TypeError, ValueError):
+            rid = None
+        if v in verticals.VERTICALS and rid:
+            verticals.set_deleted(v, rid, True)
+    return RedirectResponse("/admin/moderation", status_code=303)
+
+
 routes = [
     Route("/admin/login", login_get, methods=["GET"]),
     Route("/admin/login", login_post, methods=["POST"]),
     Route("/admin/logout", logout, methods=["GET"]),
     Route("/admin", overview, methods=["GET"]),
+    Route("/admin/dashboard", dashboard_page, methods=["GET"]),
+    Route("/admin/moderation", moderation_page, methods=["GET"]),
+    Route("/admin/moderation", moderation_action, methods=["POST"]),
     Route("/admin/data/{vertical}", data_list, methods=["GET"]),
     Route("/admin/data/{vertical}/new", data_new, methods=["GET"]),
     Route("/admin/data/{vertical}/new", data_create, methods=["POST"]),

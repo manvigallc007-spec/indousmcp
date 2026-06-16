@@ -240,6 +240,28 @@ def backfill_coords(limit: int = 200) -> dict[str, Any]:
     return out
 
 
+def flagged_non_india(limit_per: int = 40) -> list[dict]:
+    """Active listings whose NAME signals a NON-India-from-India 'Indian' — Native American / West
+    Indian / brand homonyms (osm.is_excluded_name) — surfaced for one-click admin moderation."""
+    from . import osm
+    out: list[dict] = []
+    for v in VERTICALS:
+        try:
+            rows = db.query(f"SELECT id, name, city, state FROM {_table(v)} "
+                            f"WHERE deleted_at IS NULL AND is_active ORDER BY id DESC LIMIT 3000")
+        except Exception:
+            continue
+        n = 0
+        for r in rows:
+            if osm.is_excluded_name(r["name"]):
+                out.append({"vertical": v, "id": r["id"], "name": r["name"],
+                            "city": r.get("city"), "state": r.get("state")})
+                n += 1
+                if n >= limit_per:
+                    break
+    return out
+
+
 def purge_excluded(dry_run: bool = True) -> dict[str, Any]:
     """Find (and, unless dry_run, soft-delete) already-stored listings whose name signals a
     NON-India-diaspora 'Indian' — Native American / West Indian / brand homonyms (see
