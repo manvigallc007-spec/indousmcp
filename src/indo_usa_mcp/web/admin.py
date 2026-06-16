@@ -102,11 +102,11 @@ def _agent_health_table() -> str:
         r = by_agent.get(name)
         if r:
             cls = "ok" if r["status"] == "success" else ("err" if r["status"] == "error" else "warn")
-            rows += (f"<tr><td>{name}</td><td class='{cls}'>{r['status']}</td>"
+            rows += (f"<tr><td><a href='/admin/agents/{name}'>{esc(name)}</a></td><td class='{cls}'>{r['status']}</td>"
                      f"<td class='muted'>{esc(r['started_at'])}</td>"
                      f"<td class='muted'>{r['duration_ms'] or ''} ms</td></tr>")
         else:
-            rows += f"<tr><td>{name}</td><td class='muted'>never run</td><td></td><td></td></tr>"
+            rows += f"<tr><td><a href='/admin/agents/{name}'>{esc(name)}</a></td><td class='muted'>never run</td><td></td><td></td></tr>"
     return f"<table><tr><th>Agent</th><th>Last status</th><th>When</th><th>Duration</th></tr>{rows}</table>"
 
 
@@ -606,6 +606,33 @@ async def agents_action(request: Request) -> HTMLResponse:
     return RedirectResponse("/admin/agents", status_code=303)
 
 
+def agent_detail(request: Request) -> HTMLResponse:
+    """Drill into one agent: what it does + its recent runs and any error messages."""
+    if (r := require_admin(request)):
+        return r
+    name = request.path_params["name"]
+    if name not in AGENTS:
+        return admin_page("Agent", "<p class='err'>Unknown agent.</p>", active="Agents", status=404)
+    agent = AGENTS[name]
+    runs = db.query("SELECT status, started_at, duration_ms, error, result FROM agent_runs "
+                    "WHERE agent = %s ORDER BY started_at DESC LIMIT 30", (name,))
+    rows = "".join(
+        f"<tr><td class='muted'>{esc(str(r['started_at'])[:19])}</td>"
+        f"<td class='{'ok' if r['status'] == 'success' else 'err'}'>{esc(r['status'])}</td>"
+        f"<td>{r['duration_ms'] or ''} ms</td>"
+        f"<td class='err'>{esc((r['error'] or '')[:240])}</td>"
+        f"<td class='muted'>{esc(str(r['result'] or '')[:200])}</td></tr>" for r in runs)
+    runbtn = ("<form method='post' action='/admin/agents' class='inline'>"
+              f"<input type='hidden' name='agent' value='{esc(name)}'>"
+              "<button>Run now</button></form>")
+    body = (f"<p class='muted'>{esc(agent.description)} · runs {esc(_every(agent.default_interval_s))}</p>"
+            f"<p>{runbtn} &nbsp; <a href='/admin/agents'>&#8249; all agents</a></p>"
+            "<h3>Recent runs</h3><table><tr><th>When (UTC)</th><th>Status</th><th>Duration</th>"
+            f"<th>Error</th><th>Result</th></tr>"
+            f"{rows or '<tr><td colspan=5 class=muted>No runs recorded yet.</td></tr>'}</table>")
+    return admin_page(f"Agent · {name}", body, active="Agents")
+
+
 # ---------------------------------------------------------------------- payments
 def payments_page(request: Request) -> HTMLResponse:
     if (r := require_admin(request)):
@@ -1020,8 +1047,9 @@ def messages_page(request: Request) -> HTMLResponse:
         return r
     flash = {"sent": "<p class='ok'>&#10003; Reply sent.</p>",
              "smtp": "<p class='err'>Saved, but SMTP isn't configured — set SMTP_* to actually send.</p>",
-             "empty": "<p class='err'>Add a reply before sending.</p>"}.get(
-                 request.query_params.get("flash"), "")
+             "empty": "<p class='err'>Add a reply before sending.</p>",
+             "reopened": "<p class='ok'>Re-opened for a follow-up — edit the reply below and re-send.</p>",
+             }.get(request.query_params.get("flash"), "")
     show = request.query_params.get("show", "needs")
     if show not in ("needs", "replied", "auto", "all"):
         show = "needs"
@@ -1052,13 +1080,19 @@ def messages_page(request: Request) -> HTMLResponse:
     else:
         rep = []
     if rep:
-        rows = "".join(
-            f"<tr><td>{esc(str(m.get('reply_sent_at') or '')[:16])}</td>"
-            f"<td>{esc(m.get('email'))}</td><td>{esc(m.get('subject') or '')}</td>"
-            f"<td>{'&#129302; auto' if m.get('status') == 'auto_replied' else '&#9995; you'}</td></tr>"
-            for m in rep)
+        def _rrow(m: dict) -> str:
+            by = "&#129302; auto" if m.get("status") == "auto_replied" else "&#9995; you"
+            act = ("<form method='post' action='/admin/messages' class='inline'>"
+                   f"<input type='hidden' name='id' value='{m['id']}'>"
+                   "<button class='btn gray' name='action' value='followup'>Follow up</button></form>")
+            return (f"<tr><td>{esc(str(m.get('reply_sent_at') or '')[:16])}</td>"
+                    f"<td>{esc(m.get('email'))}</td><td>{esc(m.get('subject') or '')}</td>"
+                    f"<td>{by}</td><td>{act}</td></tr>")
+        rows = "".join(_rrow(m) for m in rep)
         body += ("<h3>Replied <span class='muted'>(your reference copy)</span></h3>"
-                 f"<table><tr><th>When</th><th>To</th><th>Subject</th><th>By</th></tr>{rows}</table>")
+                 "<p class='muted'>Auto-reply look wrong? “Follow up” re-opens it so you can correct "
+                 "and re-send.</p>"
+                 f"<table><tr><th>When</th><th>To</th><th>Subject</th><th>By</th><th></th></tr>{rows}</table>")
     return admin_page("Messages", body, active="Messages")
 
 
@@ -1096,6 +1130,9 @@ async def messages_action(request: Request) -> HTMLResponse:
     elif action == "draft":
         new_draft = inbox.compose_draft(m)
         inbox.set_draft(mid, new_draft or draft or "")
+    elif action == "followup":                            # an auto-reply was wrong -> re-open it
+        inbox.set_status(mid, "drafted")
+        flash = "reopened"
     elif action == "close":
         inbox.set_status(mid, "closed")
     return RedirectResponse(f"/admin/messages?flash={flash}" if flash else "/admin/messages",
@@ -1205,6 +1242,7 @@ routes = [
     Route("/admin/submissions", submissions_action, methods=["POST"]),
     Route("/admin/agents", agents_page, methods=["GET"]),
     Route("/admin/agents", agents_action, methods=["POST"]),
+    Route("/admin/agents/{name}", agent_detail, methods=["GET"]),
     Route("/admin/traffic", traffic_page, methods=["GET"]),
     Route("/admin/misses", misses_page, methods=["GET"]),
     Route("/admin/recommendations", recommendations_page, methods=["GET"]),
