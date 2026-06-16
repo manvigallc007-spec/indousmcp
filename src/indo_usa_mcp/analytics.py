@@ -141,6 +141,26 @@ def top_misses(days: int = 30, limit: int = 25) -> list[dict]:
         "GROUP BY 1, 2, 3 ORDER BY n DESC, last_seen DESC LIMIT %s", (limit,))
 
 
+# ------------------------------------------------------------- first-party pageviews (human traffic)
+def log_pageview(path: str) -> None:
+    """Count a public HTML pageview (server-side -> not blocked by ad-blockers). Daily aggregate."""
+    db.execute(
+        "INSERT INTO pageviews (path, day, count) VALUES (%s, current_date, 1) "
+        "ON CONFLICT (path, day) DO UPDATE SET count = pageviews.count + 1", ((path or "/")[:200],))
+
+
+def pageview_summary(days: int = 30) -> dict[str, Any]:
+    win = f"day > current_date - {int(days)}"
+    return {
+        "total": _scalar(f"SELECT COALESCE(sum(count), 0) FROM pageviews WHERE {win}"),
+        "today": _scalar("SELECT COALESCE(sum(count), 0) FROM pageviews WHERE day = current_date"),
+        "by_day": db.query(f"SELECT day, sum(count) AS n FROM pageviews WHERE {win} "
+                           f"GROUP BY day ORDER BY day DESC LIMIT 14"),
+        "top_paths": db.query(f"SELECT path, sum(count) AS n FROM pageviews WHERE {win} "
+                              f"GROUP BY path ORDER BY n DESC LIMIT 15"),
+    }
+
+
 def recent_calls(limit: int = 50) -> list[dict]:
     return db.query(
         "SELECT tool, client, args, result_count, created_at FROM tool_log "

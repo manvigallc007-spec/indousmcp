@@ -665,7 +665,21 @@ def traffic_page(request: Request) -> HTMLResponse:
         f"<tr><td class='muted'>{esc(c['created_at'])}</td><td>{esc(c['tool'])}</td>"
         f"<td>{esc(c['client'] or '(unknown)')}</td><td>{esc(c['args'])}</td>"
         f"<td>{c['result_count'] if c['result_count'] is not None else ''}</td></tr>" for c in recent)
-    body = (f"<div class='cards'>{cards}</div>"
+    pv = analytics.pageview_summary(days=30)
+    pv_top = "".join(f"<tr><td>{esc(p['path'])}</td><td>{p['n']}</td></tr>" for p in pv["top_paths"])
+    pv_day = "".join(f"<tr><td class='muted'>{p['day']}</td><td>{p['n']}</td></tr>" for p in pv["by_day"])
+    pv_section = (
+        "<h3>Site pageviews <span class='muted'>(first-party — counts even when GA is blocked)</span></h3>"
+        f"<div class='cards'><div class='kpi act'><b>{pv['total']}</b><span>pageviews (30d)</span></div>"
+        f"<div class='kpi act'><b>{pv['today']}</b><span>today</span></div></div>"
+        "<div style='display:flex;gap:28px;flex-wrap:wrap'>"
+        "<div><b>Top pages (30d)</b><table><tr><th>Page</th><th>Views</th></tr>"
+        f"{pv_top or '<tr><td colspan=2 class=muted>No views yet.</td></tr>'}</table></div>"
+        f"<div><b>By day</b><table><tr><th>Day</th><th>Views</th></tr>{pv_day}</table></div></div>")
+
+    body = (pv_section
+            + "<h3 style='margin-top:30px'>Agent traffic (MCP tools)</h3>"
+            f"<div class='cards'>{cards}</div>"
             "<p class='muted'>Every AI-agent call to an MCP tool is logged here. "
             "Client/agent names appear when the agent identifies itself.</p>"
             f"<h3>By tool (30d)</h3><table><tr><th>Tool</th><th>Calls</th><th></th>"

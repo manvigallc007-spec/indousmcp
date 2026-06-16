@@ -8,6 +8,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from ..config import settings
 from . import admin, api, chat, errors, landing, pages, portal, public
+from .pageviews import PageviewMiddleware
 from .security import SecurityHeadersMiddleware
 
 routes = [*public.routes, *chat.routes, *landing.routes, *admin.routes, *portal.routes,
@@ -15,6 +16,7 @@ routes = [*public.routes, *chat.routes, *landing.routes, *admin.routes, *portal.
 
 middleware = [
     Middleware(SecurityHeadersMiddleware),
+    Middleware(PageviewMiddleware),
     # SameSite=lax blocks the session cookie on cross-site POSTs (CSRF mitigation for authed
     # admin/portal actions); set SESSION_HTTPS_ONLY=true once served over HTTPS.
     Middleware(SessionMiddleware, secret_key=settings.secret_key,
