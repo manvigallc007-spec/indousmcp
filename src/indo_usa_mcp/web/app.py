@@ -7,11 +7,11 @@ from starlette.middleware import Middleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from ..config import settings
-from . import admin, api, chat, landing, pages, portal, public
+from . import admin, api, chat, errors, landing, pages, portal, public
 from .security import SecurityHeadersMiddleware
 
 routes = [*public.routes, *chat.routes, *landing.routes, *admin.routes, *portal.routes,
-          *api.routes, *pages.routes]
+          *api.routes, *pages.routes, *errors.routes]
 
 middleware = [
     Middleware(SecurityHeadersMiddleware),
@@ -21,7 +21,8 @@ middleware = [
                https_only=settings.session_https_only, same_site="lax"),
 ]
 
-app = Starlette(routes=routes, middleware=middleware)
+app = Starlette(routes=routes, middleware=middleware,
+                exception_handlers={404: errors.not_found, 500: errors.server_error})
 
 
 def main() -> None:
