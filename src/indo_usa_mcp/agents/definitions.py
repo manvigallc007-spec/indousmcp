@@ -631,6 +631,19 @@ class KnowledgeIndexerAgent(Agent):
         return out
 
 
+class DiasporaIntelligenceAgent(Agent):
+    name = "intelligence"
+    description = ("Continuously develops Dost's knowledge about Indians from India in the USA: "
+                  "gathers diaspora intelligence from the free web, learns from what users ask, "
+                  "promotes web answers into the vector knowledge base, and suppresses non-India "
+                  "listings. Vectorized, owned, free.")
+    default_interval_s = 86400  # daily
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from .. import intelligence
+        return intelligence.run(**params)
+
+
 class ReportingAgent(Agent):
     name = "reporting"
     description = "Computes the daily health & growth report and emails it."
@@ -739,6 +752,7 @@ ALL_AGENTS = [
     LifecycleAgent(),
     LearningAgent(),
     KnowledgeIndexerAgent(),
+    DiasporaIntelligenceAgent(),
     ReportingAgent(),
     MonitoringAgent(),
 ]

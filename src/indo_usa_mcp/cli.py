@@ -112,6 +112,12 @@ def cmd_kb_seed(_: argparse.Namespace) -> None:
     _print(knowledge_seed.seed())
 
 
+def cmd_intelligence(_: argparse.Namespace) -> None:
+    from . import intelligence
+    print("Running the diaspora-intelligence cycle (free web -> compose -> vector knowledge base)...")
+    _print(intelligence.run())
+
+
 def cmd_approvals(args: argparse.Namespace) -> None:
     status = "" if args.all else "WHERE status = 'pending'"
     rows = db.query(
@@ -514,6 +520,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("kb-stats", help="Knowledge base stats").set_defaults(func=cmd_kb_stats)
     sub.add_parser("kb-seed", help="Seed curated culture/immigration/tax knowledge articles"
                    ).set_defaults(func=cmd_kb_seed)
+    sub.add_parser("intelligence", help="Run one diaspora-intelligence cycle (gather/learn/promote/curate)"
+                   ).set_defaults(func=cmd_intelligence)
 
     ap = sub.add_parser("approvals", help="List approval-queue items")
     ap.add_argument("--all", action="store_true", help="Include resolved items")
