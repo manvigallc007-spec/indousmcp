@@ -22,12 +22,24 @@ _LLM_PRESETS: dict[str, dict] = {
 }
 
 
-# Default SELECT for the caterbid import — aliases caterbid's columns to our field names. Override
-# via CATERBID_QUERY if caterbid's schema differs. Expected aliases: source_id, name, address_full,
-# city, state, phone, email, website, cuisine_type, lat, lng.
-_CATERBID_DEFAULT_QUERY = (
-    "SELECT id AS source_id, name, address AS address_full, city, state, phone, email, "
-    "website, cuisine AS cuisine_type, latitude AS lat, longitude AS lng FROM restaurants")
+# Default SELECT for the caterbid import — maps the caterbid "Caterer" table (Prisma schema, so
+# identifiers are CamelCase + quoted) to our restaurant fields. cuisines is a JSONB array, flattened
+# to a comma list. Only active caterers. Override via CATERBID_QUERY if needed; expected aliases:
+# source_id, name, address_full, city, state, phone, email, website, cuisine_type, lat, lng.
+_CATERBID_DEFAULT_QUERY = """
+SELECT id AS source_id,
+       "businessName" AS name,
+       NULLIF(concat_ws(', ', "streetAddress", city, state), '') AS address_full,
+       city, state,
+       COALESCE(NULLIF(phone, ''), "importedPhone") AS phone,
+       email, website,
+       CASE WHEN jsonb_typeof("cuisines") = 'array'
+            THEN (SELECT string_agg(elem, ', ') FROM jsonb_array_elements_text("cuisines") AS elem)
+            ELSE NULL END AS cuisine_type,
+       lat, lng
+FROM "Caterer"
+WHERE active = true
+""".strip()
 
 
 class Settings(BaseSettings):
