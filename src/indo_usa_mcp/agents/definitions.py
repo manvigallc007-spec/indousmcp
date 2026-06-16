@@ -704,40 +704,73 @@ class MonitoringAgent(Agent):
     description = "Detects anomalies (backlogs, scraper failures, stale data) -> alerts."
     default_interval_s = 1800
 
-    def run(self, **params: Any) -> dict[str, Any]:
-        alerts: list[dict[str, Any]] = []
+    # Kinds this agent owns: it raises them when a condition is true and auto-resolves them when the
+    # condition clears, so the open-alerts list always reflects what ACTUALLY needs a human now.
+    MANAGED = {"raw_backlog", "approval_backlog", "stale_data", "agent_failure",
+               "messages_waiting", "smtp_unconfigured", "submissions_pending", "feedback_pending"}
 
+    def run(self, **params: Any) -> dict[str, Any]:
+        from ..config import settings
+        cand: list[dict[str, Any]] = []
+
+        # --- ingestion / data health ---
         backlog = _scalar("SELECT count(*) FROM restaurant_raw WHERE NOT processed")
         if backlog > params.get("backlog_threshold", 500):
-            alerts.append(_alert("warning", "raw_backlog", f"{backlog} unprocessed raw rows"))
-
-        pending = _scalar("SELECT count(*) FROM approval_queue WHERE status='pending'")
-        if pending > params.get("approval_threshold", 100):
-            alerts.append(_alert("warning", "approval_backlog", f"{pending} pending approvals"))
-
-        # Scraper runs in the last day that errored or returned nothing.
-        bad = db.query(
-            "SELECT agent, status, result, error FROM agent_runs "
-            "WHERE agent = 'scraper' AND started_at > now() - interval '1 day' "
-            "AND (status = 'error' OR result IS NULL) ORDER BY started_at DESC LIMIT 5"
-        )
-        if bad:
-            alerts.append(_alert("critical", "scraper_failure", f"{len(bad)} bad scraper run(s)"))
-
-        # Data going stale: nothing re-seen in 30 days.
-        stale = _scalar(
-            "SELECT count(*) FROM restaurants WHERE deleted_at IS NULL "
-            "AND last_seen_at < now() - interval '30 days'"
-        )
+            cand.append(_alert("warning", "raw_backlog", f"{backlog} unprocessed raw rows"))
+        stale = _scalar("SELECT count(*) FROM restaurants WHERE deleted_at IS NULL "
+                        "AND last_seen_at < now() - interval '30 days'")
         if stale > params.get("stale_threshold", 1000):
-            alerts.append(_alert("info", "stale_data", f"{stale} listings not re-seen in 30d"))
+            cand.append(_alert("info", "stale_data", f"{stale} listings not re-seen in 30d"))
 
-        for a in alerts:
-            db.execute(
-                "INSERT INTO agent_alerts (severity, kind, message, details) VALUES (%s,%s,%s,%s)",
-                (a["severity"], a["kind"], a["message"], None),
-            )
-        return {"alerts_raised": len(alerts), "alerts": alerts}
+        # --- HUMAN ATTENTION (escalations: things only a person can clear) ---
+        msgs = _scalar("SELECT count(*) FROM contact_messages WHERE status IN ('new','drafted')")
+        if msgs:
+            cand.append(_alert("warning", "messages_waiting",
+                               f"{msgs} contact message(s) need a reply — Admin → Messages"))
+            if not settings.email_enabled:
+                cand.append(_alert("critical", "smtp_unconfigured",
+                                   "Contact replies can't be sent — SMTP isn't configured (set SMTP_* in .env)"))
+        subs = _scalar("SELECT count(*) FROM submissions WHERE status='pending'")
+        if subs:
+            cand.append(_alert("info", "submissions_pending",
+                               f"{subs} business submission(s) awaiting review — Admin → Submissions"))
+        appr = _scalar("SELECT count(*) FROM approval_queue WHERE status='pending'")
+        if appr > params.get("approval_threshold", 50):
+            cand.append(_alert("warning", "approval_backlog",
+                               f"{appr} listings pending approval — Admin → Approvals"))
+        fb = _scalar("SELECT count(*) FROM feedback WHERE status='pending'")
+        if fb:
+            cand.append(_alert("info", "feedback_pending",
+                               f"{fb} correction(s) awaiting review — Admin → Feedback"))
+
+        # --- any agent failing repeatedly in the last 24h ---
+        failing = db.query("SELECT agent, count(*) AS n FROM agent_runs WHERE status = 'error' "
+                           "AND started_at > now() - interval '1 day' GROUP BY agent ORDER BY n DESC")
+        if failing:
+            names = ", ".join(f"{f['agent']}({f['n']})" for f in failing[:6])
+            cand.append(_alert("critical", "agent_failure",
+                               f"Agent failures in 24h: {names} — Admin → Agents"))
+
+        # Reconcile: refresh/raise current issues, auto-resolve managed ones that cleared.
+        current = {a["kind"]: a for a in cand}
+        open_kinds: set[str] = set()
+        resolved = 0
+        for r in db.query("SELECT id, kind FROM agent_alerts WHERE NOT resolved"):
+            if r["kind"] in self.MANAGED and r["kind"] not in current:
+                db.execute("UPDATE agent_alerts SET resolved = true WHERE id = %s", (r["id"],))
+                resolved += 1
+            else:
+                open_kinds.add(r["kind"])
+        raised = 0
+        for kind, a in current.items():
+            if kind in open_kinds:        # keep one open alert per kind, but refresh its text/severity
+                db.execute("UPDATE agent_alerts SET message = %s, severity = %s "
+                           "WHERE kind = %s AND NOT resolved", (a["message"], a["severity"], kind))
+            else:
+                db.execute("INSERT INTO agent_alerts (severity, kind, message, details) "
+                           "VALUES (%s,%s,%s,%s)", (a["severity"], a["kind"], a["message"], None))
+                raised += 1
+        return {"checked": len(cand), "alerts_raised": raised, "alerts_auto_resolved": resolved}
 
 
 # ------------------------------------------------------------------------- helpers

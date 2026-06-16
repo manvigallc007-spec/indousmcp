@@ -1034,11 +1034,83 @@ async def messages_action(request: Request) -> HTMLResponse:
                             status_code=303)
 
 
+# ------------------------------------------------------------------ operations (agentic overview)
+def _every(secs: int) -> str:
+    if secs % 86400 == 0:
+        d = secs // 86400
+        return {1: "daily", 7: "weekly", 30: "monthly", 90: "quarterly"}.get(d, f"every {d} days")
+    if secs % 3600 == 0:
+        h = secs // 3600
+        return "hourly" if h == 1 else f"every {h}h"
+    if secs % 60 == 0:
+        return f"every {secs // 60} min"
+    return f"every {secs}s"
+
+
+def ops_page(request: Request) -> HTMLResponse:
+    """What the agents run autonomously, what's escalated to you, and what only you can do."""
+    if (r := require_admin(request)):
+        return r
+    # 1) Open escalations (critical first) — agents raise these only when a human is needed.
+    alerts = db.query("SELECT id, severity, kind, message FROM agent_alerts WHERE NOT resolved "
+                      "ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END, "
+                      "created_at DESC")
+    if alerts:
+        arows = "".join(
+            f"<tr><td class=\"{'err' if a['severity']=='critical' else ('warn' if a['severity']=='warning' else 'muted')}\">"
+            f"{esc(a['severity'])}</td><td>{esc(a['message'])}</td>"
+            f"<td><form method='post' action='/admin/agents' class='inline'>"
+            f"<input type='hidden' name='resolve' value='{a['id']}'>"
+            f"<button class='btn gray'>Resolve</button></form></td></tr>" for a in alerts)
+        alerts_html = (f"<table><tr><th>Severity</th><th>What needs attention</th><th></th></tr>"
+                       f"{arows}</table>")
+    else:
+        alerts_html = ("<p class='ok'>&#10003; Nothing needs your attention right now — the agents "
+                       "are handling it.</p>")
+
+    # 2) Your queues — the only recurring manual work (live counts).
+    msgs = _scalar("SELECT count(*) FROM contact_messages WHERE status IN ('new','drafted')")
+    appr = _scalar("SELECT count(*) FROM approval_queue WHERE status='pending'")
+    subs = _scalar("SELECT count(*) FROM submissions WHERE status='pending'")
+    fb = _scalar("SELECT count(*) FROM feedback WHERE status='pending'")
+
+    def q(n: int, label: str, href: str) -> str:
+        return f"<a class='kpi act' href='{href}'><b>{n}</b><span>{esc(label)}</span></a>"
+    queues = (q(msgs, "Reply to messages", "/admin/messages") + q(appr, "Review approvals", "/admin/approvals")
+              + q(subs, "Review submissions", "/admin/submissions") + q(fb, "Review corrections", "/admin/feedback"))
+
+    # 3) Agent roster — what each agent does continuously (self-documenting from the registry).
+    last = {r["agent"]: r for r in db.query(
+        "SELECT DISTINCT ON (agent) agent, status, started_at FROM agent_runs "
+        "ORDER BY agent, started_at DESC")}
+    rrows = ""
+    for name, agent in AGENTS.items():
+        r = last.get(name)
+        when = (f"<span class='{'ok' if r['status']=='success' else 'err'}'>{esc(r['status'])}</span> "
+                f"<span class='muted'>{esc(str(r['started_at'])[:16])}</span>") if r else \
+               "<span class='muted'>not yet run</span>"
+        rrows += (f"<tr><td><b>{esc(name)}</b></td><td>{esc(agent.description)}</td>"
+                  f"<td class='muted'>{esc(_every(agent.default_interval_s))}</td><td>{when}</td></tr>")
+    roster = (f"<table><tr><th>Agent</th><th>What it does (continuously)</th><th>Runs</th>"
+              f"<th>Last run</th></tr>{rrows}</table>")
+
+    note = ("<p class='muted'>The agents run on their own schedule — they discover, scrape, clean, "
+            "enrich, geo-locate, rank, index knowledge, learn from searches, draft message replies, "
+            "and watch for problems — and they <b>escalate to you</b> only when a human is required "
+            "(top). Your recurring job is just the queues above; everything else is automatic. "
+            "Drafts and submissions are <b>never published or sent</b> without your approval.</p>")
+    body = (f"<h3>&#128680; Needs your attention</h3>{alerts_html}"
+            f"<h3>Your queues</h3><div class='cards'>{queues}</div>"
+            f"<h3>What the agents do ({len(AGENTS)} agents)</h3>{note}{roster}")
+    return admin_page("Operations", body, active="Operations")
+
+
 routes = [
     Route("/admin/login", login_get, methods=["GET"]),
     Route("/admin/login", login_post, methods=["POST"]),
     Route("/admin/logout", logout, methods=["GET"]),
     Route("/admin", overview, methods=["GET"]),
+    Route("/admin/ops", ops_page, methods=["GET"]),
     Route("/admin/dashboard", dashboard_page, methods=["GET"]),
     Route("/admin/moderation", moderation_page, methods=["GET"]),
     Route("/admin/moderation", moderation_action, methods=["POST"]),

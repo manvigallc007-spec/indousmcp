@@ -80,7 +80,8 @@ def _page(title: str, body: str, status: int = 200) -> HTMLResponse:
 
 
 _ADMIN_NAV = [
-    ("Overview", "/admin"), ("Dashboard", "/admin/dashboard"), ("Data", "/admin/data/restaurants"),
+    ("Overview", "/admin"), ("Operations", "/admin/ops"), ("Dashboard", "/admin/dashboard"),
+    ("Data", "/admin/data/restaurants"),
     ("Geography", "/admin/geo/restaurants"), ("Quality", "/admin/quality/restaurants"),
     ("Moderation", "/admin/moderation"), ("Messages", "/admin/messages"),
     ("Approvals", "/admin/approvals"), ("Feedback", "/admin/feedback"),
