@@ -37,7 +37,7 @@ _RUN_ORDER = [
     "realestate_scraper", "realestate_cleaner",
     "finance_scraper", "finance_cleaner",
     "event_feed_discovery", "event_scraper", "event_cleaner",
-    "web_enrichment", "link_check", "recommendation", "lifecycle", "learning",
+    "web_enrichment", "link_check", "recommendation", "lifecycle", "learning", "knowledge_indexer",
     "discovery", "outreach", "reporting", "monitoring", "submission",
 ]
 

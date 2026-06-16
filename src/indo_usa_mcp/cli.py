@@ -106,6 +106,12 @@ def cmd_kb_stats(_: argparse.Namespace) -> None:
     _print(knowledge.stats())
 
 
+def cmd_kb_seed(_: argparse.Namespace) -> None:
+    from . import knowledge_seed
+    print("Seeding curated culture/immigration/tax knowledge ...")
+    _print(knowledge_seed.seed())
+
+
 def cmd_approvals(args: argparse.Namespace) -> None:
     status = "" if args.all else "WHERE status = 'pending'"
     rows = db.query(
@@ -506,6 +512,8 @@ def build_parser() -> argparse.ArgumentParser:
     kbs.add_argument("--limit", type=int, default=6)
     kbs.set_defaults(func=cmd_kb_search)
     sub.add_parser("kb-stats", help="Knowledge base stats").set_defaults(func=cmd_kb_stats)
+    sub.add_parser("kb-seed", help="Seed curated culture/immigration/tax knowledge articles"
+                   ).set_defaults(func=cmd_kb_seed)
 
     ap = sub.add_parser("approvals", help="List approval-queue items")
     ap.add_argument("--all", action="store_true", help="Include resolved items")

@@ -618,6 +618,19 @@ class LearningAgent(Agent):
                               max_rows=params.get("max_rows", 5000))
 
 
+class KnowledgeIndexerAgent(Agent):
+    name = "knowledge_indexer"
+    description = ("Keeps the RAG knowledge base fresh: seeds curated culture/immigration articles "
+                  "and (re)indexes active listings. Idempotent (re-embeds only what changed).")
+    default_interval_s = 604800  # weekly
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from .. import knowledge, knowledge_seed
+        out: dict[str, Any] = {"articles": knowledge_seed.seed()}
+        out["listings"] = knowledge.index_all_listings(limit_per=params.get("limit_per"))
+        return out
+
+
 class ReportingAgent(Agent):
     name = "reporting"
     description = "Computes the daily health & growth report and emails it."
@@ -725,6 +738,7 @@ ALL_AGENTS = [
     RecommendationAgent(),
     LifecycleAgent(),
     LearningAgent(),
+    KnowledgeIndexerAgent(),
     ReportingAgent(),
     MonitoringAgent(),
 ]
