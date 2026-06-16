@@ -65,16 +65,16 @@ _CAT_BLURB = {"restaurants": "Dosa, biryani, thali & more", "temples": "Hindu ·
 _CHAT_HTML = """<!doctype html><html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>__PLAT__ — __ANAME__: __ATAG__</title>
+<title>__PLAT__ — __PTAG__</title>
 <meta name="description" content="__OGDESC__">
 <meta name="keywords" content="__KEYWORDS__">
-<meta property="og:title" content="__PLAT__ — __ANAME__: __ATAG__">
+<meta property="og:title" content="__PLAT__ — __PTAG__">
 <meta property="og:description" content="__OGDESC__">
 <meta property="og:type" content="website">
 <meta property="og:url" content="__OGURL__">
 <meta property="og:image" content="__OGIMG__">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="__PLAT__ — __ANAME__: __ATAG__">
+<meta name="twitter:title" content="__PLAT__ — __PTAG__">
 <meta name="twitter:description" content="__OGDESC__">
 <meta name="twitter:image" content="__OGIMG__">
 <link rel="canonical" href="__OGURL__">
@@ -94,10 +94,11 @@ a{color:var(--brand);text-decoration:none}
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;
  background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
 .brand{display:flex;align-items:center;gap:11px;color:var(--ink)}
-.brand .logo{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;
- background:linear-gradient(135deg,#ffd9a0,#ffb56b);font-size:20px}
-.brand .brandlogo{height:38px;width:auto;max-width:180px;border-radius:9px;display:block}
-.brand b{font-size:16px;line-height:1.15;display:block;font-weight:700}.brand i{font-style:normal;font-size:12.5px;color:var(--muted)}
+.brand .logo{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;
+ background:linear-gradient(135deg,#ffd9a0,#ffb56b);font-size:24px}
+.brand .brandlogo{height:46px;width:auto;max-width:200px;border-radius:10px;display:block}
+.brand b{font-size:18px;line-height:1.15;display:block;font-weight:800;letter-spacing:-.01em}
+.brand i{font-style:normal;font-size:12.5px;color:var(--muted)}
 .actions{display:flex;align-items:center;gap:10px}
 .newchat{background:#fff;border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:8px 13px;
  font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:.15s}
@@ -136,6 +137,8 @@ a{color:var(--brand);text-decoration:none}
  place-items:center;font-size:38px;background:linear-gradient(135deg,#ffd9a0,#ffb56b);box-shadow:0 10px 30px #e8772e2e}
 .welcome h1{font-size:30px;line-height:1.2;margin:0 0 10px;letter-spacing:-.01em}
 .welcome p{color:var(--muted);font-size:17px;margin:0 0 22px;line-height:1.55}
+.disclaimer-note{background:#fff8ee;border:1px solid #f1dcc0;border-radius:12px;color:#7a5a2e !important;
+ font-size:13.5px !important;line-height:1.5;padding:10px 14px;margin:0 auto 20px !important;max-width:560px}
 .chips{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
 .chip{background:#fff;border:1px solid var(--line);color:#344054;border-radius:999px;padding:10px 16px;
  font-size:14px;cursor:pointer;transition:.15s}.chip:hover{border-color:var(--brand);color:var(--brand)}
@@ -208,7 +211,7 @@ a{color:var(--brand);text-decoration:none}
  #mic{display:none}.voicebtn{padding:0 14px}}
 </style></head><body>
 <header class="topbar">
- <a class="brand" href="/"><img class="brandlogo" src="/logo" alt="__PLAT__"><span><b>__ANAME__</b><i>__AMEAN__</i></span></a>
+ <a class="brand" href="/"><img class="brandlogo" src="/logo" alt="__PLAT__"><span><b>__PLAT__</b><i>__PTAG__</i></span></a>
  <nav class="topnav"><a href="/about">About</a><a href="/browse">Browse</a><a href="/for-business">For business</a></nav>
  <div class="actions">
   <select id="lang" class="langsel" onchange="setLang(this.value)" aria-label="Language">
@@ -226,22 +229,13 @@ a{color:var(--brand);text-decoration:none}
   <p class="heroSub">Think of me as your desi friend for finding Indian America — restaurants,
    sweets, temples, events, classes, salons, doctors, jewelry and more across the USA. Tell me what
    you're looking for and roughly where, and I'll find the closest ones.</p>
-  <div class="trustrow">
-   <span class="tpill">🆓 Free to use</span><span class="tpill">📍 All 50 states</span>
-   <span class="tpill">🤖 AI + human search</span><span class="tpill">🗂️ 15 categories</span>
-  </div>
+  <p class="disclaimer-note">ℹ️ Information only — please <b>verify directly with the business</b>
+   before you rely on it. Not legal, tax, or medical advice; details may be out of date.</p>
   <div class="chips">__CHIPS__</div>
   <button class="voicecta" onclick="startConvo()">🎙️ <span class="voicebtn-t">Talk to Dost</span></button>
   <p class="voicetip">Hands-free voice — speak in English, हिंदी or తెలుగు</p>
   <a class="browsecat" href="/browse">🗂️ <span class="browselink-t">Browse by category</span></a>
-  <p class="browselink" style="margin-top:4px"><a href="/about">ℹ️ <span>What is __PLAT__? · List your business</span> →</a></p>
-  <p class="welcome-contrib">New here? Help the community grow — add a place you love and others
-   will find it too:</p>
-  <div class="chips">
-   <button class="chip contribchip" onclick="openContribute('restaurants','')">➕ A restaurant I love</button>
-   <button class="chip contribchip" onclick="openContribute('groceries','')">➕ My go-to grocery</button>
-   <button class="chip contribchip" onclick="openContribute('temples','')">➕ My temple</button>
-  </div>
+  <p class="browselink" style="margin-top:4px"><a href="/for-business">🏪 <span>List your business free</span></a> · <a href="/about">About __PLAT__</a></p>
   <footer class="homefoot">
    <p class="disclaim">ℹ️ <b>__PLAT__</b> is a free informational directory for the Indian-from-India
     community in the USA. Information is provided “as is” for general purposes only and is <b>not
@@ -271,7 +265,7 @@ a{color:var(--brand);text-decoration:none}
    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
   </button>
  </div>
- <div class="hint">__ANAME__ searches a live directory · Enter to send · Shift+Enter for a new line</div>
+ <div class="hint">__ANAME__ searches a live directory · <b>info only — verify independently</b> · Enter to send</div>
 </form>
 <script>
 const ICON=__ICONS__, COLOR=__COLORS__;
@@ -561,17 +555,17 @@ def chat_page(request: Request) -> HTMLResponse:
     og_url = base + "/"          # the chatbot is the homepage now
     og_img = f"{base}/og-image.svg"
     aname_raw = settings.assistant_name
-    og_desc = (f"{aname_raw} ({settings.assistant_meaning}) is your friendly guide to Indian "
-               f"America — find Indian restaurants, sweets, temples, doctors, events, classes, "
-               f"salons and jewelry near you across the USA.")
-    # JSON-LD so Google indexes the chatbot as a named app, with a search box pointing at /chat.
+    og_desc = (f"{settings.platform_name} — your guide to Indian America. Find Indian restaurants, "
+               f"sweets, temples, doctors, events, classes, salons and jewelry near you across the "
+               f"USA, or ask {aname_raw}, our friendly assistant, by text or voice.")
+    # JSON-LD so Google indexes the app under its real brand, with a search box pointing at /chat.
     jsonld = json.dumps([
-        {"@context": "https://schema.org", "@type": "WebApplication", "name": aname_raw,
-         "alternateName": f"{aname_raw} — {settings.platform_name}", "url": og_url,
+        {"@context": "https://schema.org", "@type": "WebApplication", "name": settings.platform_name,
+         "alternateName": f"{settings.platform_name} — Indian America directory", "url": og_url,
          "applicationCategory": "TravelApplication", "operatingSystem": "Web",
          "description": og_desc,
          "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}},
-        {"@context": "https://schema.org", "@type": "WebSite", "name": aname_raw, "url": og_url,
+        {"@context": "https://schema.org", "@type": "WebSite", "name": settings.platform_name, "url": og_url,
          "potentialAction": {"@type": "SearchAction",
                              "target": f"{og_url}?q={{search_term_string}}",
                              "query-input": "required name=search_term_string"}},
@@ -579,6 +573,7 @@ def chat_page(request: Request) -> HTMLResponse:
     repl = {
         "__PLAT__": plat, "__ANAME__": aname, "__MODE__": html.escape(mode),
         "__ATAG__": html.escape(settings.assistant_tagline),
+        "__PTAG__": html.escape(settings.platform_tagline),
         "__AMEAN__": html.escape(settings.assistant_meaning),
         "__CHIPS__": chips, "__OGURL__": html.escape(og_url),
         "__OGIMG__": html.escape(og_img), "__OGDESC__": html.escape(og_desc),

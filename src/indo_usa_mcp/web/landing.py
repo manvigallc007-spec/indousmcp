@@ -127,7 +127,7 @@ def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200)
  nav.crumbs{{font-size:13px;margin-bottom:14px}}
 {CATEGORY_CSS}
 </style></head><body>
-<header><a href="/">{plat}</a> &nbsp;·&nbsp; <a href="/browse">Browse</a> &nbsp;·&nbsp; <a href="/chat">Ask the assistant</a></header>
+<header><a href="/" style="display:inline-flex;align-items:center;gap:9px"><img src="/logo" alt="{plat}" style="height:34px;width:auto;max-width:160px;border-radius:8px">{plat}</a> &nbsp;·&nbsp; <a href="/browse">Browse</a> &nbsp;·&nbsp; <a href="/chat">Ask {settings.assistant_name}</a></header>
 <main>{body}</main></body></html>"""
     return HTMLResponse(doc, status_code=status)
 

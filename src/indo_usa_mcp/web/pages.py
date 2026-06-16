@@ -50,6 +50,9 @@ def footer_html() -> str:
     return (
         "<footer>"
         f"<div class='flinks'>{links}</div>"
+        "<p class='attr'><b>Information only.</b> Listings are gathered from public sources, may be "
+        "incomplete or out of date, and are <b>not legal, tax, immigration, or medical advice</b> — "
+        "please verify directly with the business before relying on anything here.</p>"
         "<p class='attr'>Listing data from <a href='https://www.openstreetmap.org/copyright' "
         "rel='nofollow'>OpenStreetMap</a> contributors (ODbL) and Wikidata (CC0), enriched by "
         "automated agents and business owners. Names &amp; trademarks belong to their owners.</p>"

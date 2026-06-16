@@ -43,8 +43,12 @@ def _page(title: str, body: str, status: int = 200) -> HTMLResponse:
  button{{background:{_BRAND};color:#fff;border:0;padding:12px 20px;border-radius:9px;
    font-size:15px;cursor:pointer}}
  a{{color:{_BRAND}}} .muted{{color:#666;font-size:14px}} .ok{{color:#137333}} .err{{color:#c5221f}}
-</style></head><body><div class="card">{body}</div>
-<p class="muted" style="text-align:center;margin-top:20px">{html.escape(settings.platform_name)}</p>
+</style></head><body>
+<a href="/" style="display:flex;align-items:center;gap:10px;text-decoration:none;margin-bottom:18px">
+ <img src="/logo" alt="{html.escape(settings.platform_name)}" style="height:42px;width:auto;max-width:180px;border-radius:10px">
+ <b style="color:#1a1a1a;font-size:18px">{html.escape(settings.platform_name)}</b></a>
+<div class="card">{body}</div>
+<p class="muted" style="text-align:center;margin-top:20px"><a href="/">&#8592; Back to {html.escape(settings.platform_name)}</a></p>
 </body></html>"""
     return HTMLResponse(doc, status_code=status)
 
@@ -93,8 +97,9 @@ def admin_page(title: str, body: str, active: str = "", status: int = 200) -> HT
  form.inline{{display:inline}}
  .bar{{background:{_BRAND};height:10px;border-radius:5px;display:inline-block}}
 </style></head><body>
-<header><div><b style="font-size:18px">{html.escape(settings.platform_name)}</b>
- <span class="muted"> admin</span></div>
+<header><div><a href="/" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none">
+ <img src="/logo" alt="{html.escape(settings.platform_name)}" style="height:34px;width:auto;max-width:150px;border-radius:8px">
+ <b style="font-size:18px;color:#1a1a1a">{html.escape(settings.platform_name)}</b></a><span class="muted"> admin</span></div>
  <nav>{nav} <a href='/admin/logout'>Logout</a></nav></header>
 <h2>{html.escape(title)}</h2>{body}</body></html>"""
     return HTMLResponse(doc, status_code=status)
