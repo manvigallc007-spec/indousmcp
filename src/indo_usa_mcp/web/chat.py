@@ -141,6 +141,9 @@ a{color:var(--brand);text-decoration:none}
  color:#fff;border:0;border-radius:999px;padding:14px 28px;font-size:17px;font-weight:600;cursor:pointer;
  box-shadow:0 8px 22px #0f9b8e38;transition:.15s}.voicecta:hover{background:var(--accent-d);transform:translateY(-1px)}
 .voicetip{color:var(--muted);font-size:14px;margin:8px 0 0}
+.browsecat{margin:16px auto 0;display:inline-flex;align-items:center;gap:8px;background:#fff;border:1.5px solid var(--brand);
+ color:var(--brand);border-radius:999px;padding:11px 24px;font-size:15px;font-weight:600;cursor:pointer;transition:.15s}
+.browsecat:hover{background:var(--brand);color:#fff;text-decoration:none}
 .browselink{margin:18px 0 0;font-size:15px}.browselink a{color:var(--accent);font-weight:600}
 .welcome-contrib{margin-top:26px;color:var(--muted);font-size:15px}
 .topnav{display:flex;gap:18px;font-size:14px}.topnav a{color:var(--ink);font-weight:500}
@@ -214,7 +217,6 @@ a{color:var(--brand);text-decoration:none}
   <span class="status"><span class="dot"></span>__MODE__</span>
  </div>
 </header>
-<div class="filterbar"><button class="fchip loc" onclick="useLocation()">📍 Near me</button>__FCHIPS__</div>
 <main id="log"><div class="wrap" id="thread">
  <section id="welcome" class="welcome">
   <div class="hero-avatar">🪷</div>
@@ -229,7 +231,7 @@ a{color:var(--brand);text-decoration:none}
   <div class="chips">__CHIPS__</div>
   <button class="voicecta" onclick="startConvo()">🎙️ <span class="voicebtn-t">Talk to Dost</span></button>
   <p class="voicetip">Hands-free voice — speak in English, हिंदी or తెలుగు</p>
-  <p class="browselink"><a href="/browse">🗂️ <span class="browselink-t">Browse the full directory by city</span> →</a></p>
+  <a class="browsecat" href="/browse">🗂️ <span class="browselink-t">Browse by category</span></a>
   <p class="browselink" style="margin-top:4px"><a href="/about">ℹ️ <span>What is __PLAT__? · List your business</span> →</a></p>
   <p class="welcome-contrib">New here? Help the community grow — add a place you love and others
    will find it too:</p>
@@ -290,7 +292,7 @@ const I18N={
   nearme:"Near me",opennow:"Open now",newchat:"New chat",mic:"Speak",spk:"Read answers aloud",
   voiceBtn:"Talk to Dost",voiceTip:"Hands-free voice — speak in English, हिंदी or తెలుగు",
   voiceLabel:"Voice",voiceStop:"Stop",
-  browse:"Browse the full directory by city"},
+  browse:"Browse by category"},
  hi:{hero:"नमस्ते! मैं दोस्त हूँ — यानी आपका “मित्र”।",
   heroSub:"बताइए आप क्या ढूँढ़ रहे हैं और किस शहर में — मैं आपके सबसे नज़दीकी जगहें खोज दूँगा।",
   contribLine:"नए हैं? अपनी पसंदीदा जगह जोड़ें ताकि और लोग भी उसे पा सकें:",
@@ -300,7 +302,7 @@ const I18N={
   nearme:"मेरे पास",opennow:"अभी खुला",newchat:"नई चैट",mic:"बोलें",spk:"जवाब सुनाएँ",
   voiceBtn:"दोस्त से बात करें",voiceTip:"हैंड्स-फ़्री आवाज़ — अंग्रेज़ी, हिंदी या तेलुगु में बोलें",
   voiceLabel:"आवाज़",voiceStop:"रोकें",
-  browse:"शहर के अनुसार पूरी डायरेक्टरी देखें"},
+  browse:"श्रेणी के अनुसार ब्राउज़ करें"},
  te:{hero:"నమస్తే! నేను దోస్త్ — అంటే మీ “స్నేహితుడు”.",
   heroSub:"మీరు ఏమి వెతుకుతున్నారో, ఏ నగరంలోనో చెప్పండి — దగ్గర్లోని వాటిని నేను చూపిస్తాను.",
   contribLine:"కొత్తగా వచ్చారా? మీకు నచ్చిన ప్రదేశాన్ని జోడించండి, ఇతరులూ కనుగొంటారు:",
@@ -310,7 +312,7 @@ const I18N={
   nearme:"నా దగ్గర",opennow:"ఇప్పుడు తెరిచి ఉంది",newchat:"కొత్త చాట్",mic:"మాట్లాడండి",spk:"సమాధానాలు చదవండి",
   voiceBtn:"దోస్త్‌తో మాట్లాడండి",voiceTip:"హ్యాండ్స్-ఫ్రీ వాయిస్ — ఇంగ్లీష్, హిందీ లేదా తెలుగులో మాట్లాడండి",
   voiceLabel:"వాయిస్",voiceStop:"ఆపు",
-  browse:"నగరం వారీగా పూర్తి డైరెక్టరీ చూడండి"}
+  browse:"వర్గం వారీగా బ్రౌజ్ చేయండి"}
 };
 function T(){return I18N[lang]||I18N.en;}
 function setLang(v){lang=I18N[v]?v:'en';localStorage.setItem('dost_lang',lang);applyLang();}
@@ -553,12 +555,6 @@ def chat_page(request: Request) -> HTMLResponse:
     mode = "live assistant" if assistant.llm_active() else "smart search"
     chips = "".join(f"<button class='chip' onclick=\"ask(this.textContent)\">{html.escape(s)}</button>"
                     for s in _SUGGESTIONS)
-    # Category filter chips (All + every vertical) + an Open-now toggle.
-    fchips = "<button class='fchip on' data-v='' onclick='setVertical(this)'>All</button>"
-    fchips += "".join(
-        f"<button class='fchip' data-v='{k}' onclick='setVertical(this)'>{html.escape(cfg['label'])}</button>"
-        for k, cfg in verticals.VERTICALS.items())
-    fchips += "<button class='fchip open' onclick='toggleOpen(this)'>● Open now</button>"
     base = settings.public_web_url.rstrip("/")
     og_url = base + "/"          # the chatbot is the homepage now
     og_img = f"{base}/og-image.svg"
@@ -582,7 +578,7 @@ def chat_page(request: Request) -> HTMLResponse:
         "__PLAT__": plat, "__ANAME__": aname, "__MODE__": html.escape(mode),
         "__ATAG__": html.escape(settings.assistant_tagline),
         "__AMEAN__": html.escape(settings.assistant_meaning),
-        "__FCHIPS__": fchips, "__CHIPS__": chips, "__OGURL__": html.escape(og_url),
+        "__CHIPS__": chips, "__OGURL__": html.escape(og_url),
         "__OGIMG__": html.escape(og_img), "__OGDESC__": html.escape(og_desc),
         "__JSONLD__": jsonld,
         "__ICONS__": json.dumps(_CAT_ICON, ensure_ascii=False),
