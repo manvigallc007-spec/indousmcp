@@ -319,8 +319,8 @@ def events_page(request: Request) -> HTMLResponse:
 def sitemap(request: Request) -> Response:
     base = _base()
     urls = [f"{base}/", f"{base}/browse", f"{base}/explore", f"{base}/events", f"{base}/insights",
-            f"{base}/submit", f"{base}/about", f"{base}/privacy", f"{base}/terms",
-            f"{base}/contact", f"{base}/faq"]
+            f"{base}/for-business", f"{base}/submit", f"{base}/about", f"{base}/privacy",
+            f"{base}/terms", f"{base}/contact", f"{base}/faq"]
     urls += [f"{base}/browse/{v}" for v in verticals.VERTICALS]
     # All (vertical × city) pages that actually have active listings.
     for v in verticals.VERTICALS:
@@ -471,10 +471,68 @@ def llms_txt(request: Request) -> Response:
     return Response(txt, media_type="text/plain")
 
 
+def for_business(request: Request) -> HTMLResponse:
+    """Marketing page: what Namaste America is + why list your business (agents/Google/people/Dost)."""
+    plat = settings.platform_name
+    title = f"List your business on {plat}"
+    desc = (f"List your Indian-owned business free on {plat} — found by AI assistants and agents "
+            "(MCP), Google, AI answer engines, and people across the USA.")
+
+    def card(icon: str, head: str, text: str) -> str:
+        return (f"<div style='flex:1 1 220px;background:#fff;border:1px solid #ececec;border-radius:14px;"
+                f"padding:16px 18px'><div style='font-size:26px'>{icon}</div>"
+                f"<b style='display:block;margin:6px 0 4px'>{head}</b>"
+                f"<span class='muted' style='font-size:14px'>{text}</span></div>")
+
+    cards = "".join([
+        card("🤖", "AI assistants &amp; agents", "We're a Model Context Protocol (MCP) server — AI "
+             "agents read your listing as structured data, not scraped guesses."),
+        card("🔎", "Google &amp; AI answers", "Crawlable pages with schema.org markup so Google and AI "
+             "answer engines (ChatGPT, Perplexity, Gemini) can surface and cite you."),
+        card("🧑‍🤝‍🧑", "People browsing", "Families looking for Indian restaurants, temples, grocers, "
+             "salons, doctors and more across the USA."),
+        card("💬", "Dost, our assistant", "Our voice/text guide recommends real listings — yours can "
+             "be one of them."),
+    ])
+    cta = ("<div style='display:flex;flex-wrap:wrap;gap:12px;margin:18px 0'>"
+           "<a href='/portal/login' style='background:#c1440e;color:#fff;padding:12px 22px;"
+           "border-radius:10px;font-weight:600;display:inline-block'>Register your business →</a>"
+           "<a href='/submit' style='background:#0f9b8e;color:#fff;padding:12px 22px;border-radius:10px;"
+           "font-weight:600;display:inline-block'>Add a listing now</a></div>")
+    ncats = len(verticals.VERTICALS)
+    body = (
+        f"<h1>{html.escape(title)}</h1>"
+        f"<p class='lead'>{html.escape(plat)} is the agent-first directory for Indians from India in "
+        "the USA. List once and become discoverable everywhere people — and AI — look. It's free.</p>"
+        f"{cta}"
+        "<h2 style='margin-top:26px'>Where you get found</h2>"
+        f"<div style='display:flex;flex-wrap:wrap;gap:12px'>{cards}</div>"
+        "<h2 style='margin-top:26px'>Why list with us</h2>"
+        "<ul style='line-height:1.8'>"
+        "<li><b>Free.</b> A standard listing costs nothing.</li>"
+        "<li><b>You stay in control.</b> Claim your listing and edit details anytime from your "
+        "portal — sign in with email or Google.</li>"
+        "<li><b>Always fresh.</b> Autonomous agents keep public details current, so your listing "
+        "doesn't go stale.</li>"
+        f"<li><b>Across all {ncats} categories</b> — restaurants, grocers, temples, salons, doctors, "
+        "legal, education and more.</li></ul>"
+        "<h2 style='margin-top:26px'>How it works</h2>"
+        "<ol style='line-height:1.8'>"
+        "<li><b>Register or add your business</b> — it takes a minute.</li>"
+        "<li><b>We verify and publish</b> it to the directory, the MCP tools, and the public API.</li>"
+        "<li><b>You get discovered</b> by agents, search engines, and people — update anytime.</li>"
+        "</ol>"
+        f"{cta}"
+        f"<p class='muted' style='margin-top:18px'>{html.escape(plat)} is an informational directory. "
+        "Listing is free; we never sell your personal data.</p>")
+    return _page(title, desc, body)
+
+
 routes = [
     Route("/browse", browse_root, methods=["GET"]),
     Route("/events", events_page, methods=["GET"]),
     Route("/insights", insights, methods=["GET"]),
+    Route("/for-business", for_business, methods=["GET"]),
     Route("/browse/{vertical}", browse_vertical, methods=["GET"]),
     Route("/browse/{vertical}/{state}", browse_state, methods=["GET"]),
     Route("/browse/{vertical}/{state}/{city}", browse_city, methods=["GET"]),

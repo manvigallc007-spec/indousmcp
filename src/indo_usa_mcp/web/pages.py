@@ -40,7 +40,7 @@ def _org_jsonld() -> str:
 
 # Footer links shown on every content page (and reusable elsewhere).
 FOOTER_LINKS = [("Home", "/"), ("Ask " + settings.assistant_name, "/chat"), ("Browse", "/browse"),
-                ("Insights", "/insights"), ("Add a listing", "/submit"), ("About", "/about"),
+                ("Insights", "/insights"), ("List your business", "/for-business"), ("About", "/about"),
                 ("Privacy", "/privacy"), ("Terms", "/terms"), ("Contact", "/contact"), ("FAQ", "/faq")]
 
 

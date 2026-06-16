@@ -209,7 +209,7 @@ a{color:var(--brand);text-decoration:none}
 </style></head><body>
 <header class="topbar">
  <a class="brand" href="/"><img class="brandlogo" src="/logo" alt="__PLAT__"><span><b>__ANAME__</b><i>__AMEAN__</i></span></a>
- <nav class="topnav"><a href="/about">About</a><a href="/browse">Browse</a><a href="/portal/login">For business</a></nav>
+ <nav class="topnav"><a href="/about">About</a><a href="/browse">Browse</a><a href="/for-business">For business</a></nav>
  <div class="actions">
   <select id="lang" class="langsel" onchange="setLang(this.value)" aria-label="Language">
    <option value="en">English</option><option value="hi">हिंदी</option><option value="te">తెలుగు</option>
@@ -248,7 +248,7 @@ a{color:var(--brand);text-decoration:none}
     legal, tax, immigration, medical, or professional advice</b> — always verify details with the
     business or a qualified professional. Listings may be incomplete or out of date.</p>
    <nav class="footnav">
-    <a href="/about">About us</a> · <a href="/submit">List your business</a> ·
+    <a href="/about">About us</a> · <a href="/for-business">List your business</a> ·
     <a href="/insights">Insights</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> ·
     <a href="/contact">Contact</a> · <a href="/faq">FAQ</a>
    </nav>
