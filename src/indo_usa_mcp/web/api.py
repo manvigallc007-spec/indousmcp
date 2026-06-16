@@ -203,9 +203,8 @@ def ai_plugin(request: Request) -> JSONResponse:
         "api": {"type": "openapi", "url": f"{base}/openapi.json"},
         "logo_url": f"{base}/icon.svg",
         "legal_info_url": f"{base}/terms",
+        "contact_url": f"{base}/contact",      # a form, not an email address
     }
-    if settings.outreach_contact_email:
-        man["contact_email"] = settings.outreach_contact_email
     return JSONResponse(man)
 
 

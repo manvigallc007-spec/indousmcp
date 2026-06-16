@@ -22,4 +22,5 @@ def test_terms_has_key_sections():
 
 
 def test_contact_invites_data_requests():
-    assert "Request data" in c.get("/contact").text
+    t = c.get("/contact").text
+    assert "<form" in t and "data you'd like us to add" in t and "mailto:" not in t

@@ -631,6 +631,25 @@ class KnowledgeIndexerAgent(Agent):
         return out
 
 
+class ContactReplyAgent(Agent):
+    name = "contact_reply"
+    description = ("Drafts a reply to each new contact-form message with the free LLM, for a human "
+                  "to review/edit and approve in Admin -> Messages. Never sends anything itself.")
+    default_interval_s = 3600  # hourly
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from .. import inbox
+        drafted = skipped = 0
+        for m in inbox.pending_for_draft(limit=params.get("limit", 20)):
+            draft = inbox.compose_draft(m)
+            if draft:
+                inbox.set_draft(m["id"], draft)
+                drafted += 1
+            else:
+                skipped += 1                                   # LLM off -> admin will write it
+        return {"drafted": drafted, "skipped_no_llm": skipped}
+
+
 class DemographicsAgent(Agent):
     name = "demographics"
     description = ("Refreshes the free U.S. Census picture of Indians-from-India in the USA — "
@@ -778,6 +797,7 @@ ALL_AGENTS = [
     KnowledgeIndexerAgent(),
     DemographicsAgent(),
     H1BAgent(),
+    ContactReplyAgent(),
     DiasporaIntelligenceAgent(),
     ReportingAgent(),
     MonitoringAgent(),

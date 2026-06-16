@@ -451,7 +451,7 @@ def _optout_apply(request: Request) -> HTMLResponse:
         return _page("Unsubscribe",
                      "<h2 class='err'>Invalid unsubscribe link</h2>"
                      "<p class='muted'>This link isn't recognized. If you keep getting emails, "
-                     f"reply to {html.escape(settings.outreach_contact_email)} and we'll remove you.</p>",
+                     "tell us via the <a href='/contact'>contact form</a> and we'll remove you.</p>",
                      status=400)
     compliance.suppress(contact, reason="optout", channel="email")
     return _page("Unsubscribed",

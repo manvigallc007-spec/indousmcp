@@ -14,26 +14,15 @@ from .. import analytics, db, payments, verticals
 from ..config import settings
 from ..pipeline import outreach
 from .auth import (check_login, create_user, get_user, google_auth_url, google_exchange,
-                   make_action_token, make_captcha, portal_email, set_password, set_verified,
+                   make_action_token, portal_email, set_password, set_verified,
                    verify_action_token, verify_captcha, verify_magic_token)
-from .common import _page, esc
+from .common import _page, captcha_field, esc
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def _valid_email(email: str) -> bool:
     return bool(_EMAIL_RE.match((email or "").strip()))
-
-
-def _captcha_field() -> str:
-    """Captcha form fields: Cloudflare Turnstile widget if configured, else a signed math challenge."""
-    if settings.turnstile_enabled:
-        return (f"<div class='cf-turnstile' data-sitekey='{esc(settings.turnstile_site_key)}'></div>"
-                "<script src='https://challenges.cloudflare.com/turnstile/v0/api.js' async defer></script>")
-    c = make_captcha()
-    return (f"<label>{esc(c['question'])}</label>"
-            "<input name='captcha' inputmode='numeric' autocomplete='off' required>"
-            f"<input type='hidden' name='captcha_token' value='{esc(c['token'])}'>")
 
 
 def _send_or_show(email: str, purpose: str, subject: str, intro: str) -> str:
@@ -141,7 +130,7 @@ def register_get(request: Request) -> HTMLResponse:
                  "<input name='password' type='password' minlength='8' required>"
                  "<label>Confirm password</label>"
                  "<input name='password2' type='password' minlength='8' required>"
-                 + _captcha_field() +
+                 + captcha_field() +
                  "<label style='font-weight:400;display:flex;gap:8px;align-items:flex-start;margin:6px 0 14px'>"
                  "<input type='checkbox' name='accept' value='1' required style='width:auto;margin-top:4px'>"
                  "<span>I agree to the <a href='/terms' target='_blank'>Terms</a> &amp; "
@@ -198,7 +187,7 @@ def forgot_get(request: Request) -> HTMLResponse:
                  "<p class='muted'>Enter your account email and we'll send a reset link.</p>"
                  "<form method='post' action='/portal/forgot'>"
                  "<label>Email</label><input name='email' type='email' required autofocus>"
-                 + _captcha_field() +
+                 + captcha_field() +
                  "<button type='submit'>Send reset link</button></form>"
                  "<p class='muted' style='margin-top:12px'><a href='/portal/login'>Back to sign in</a></p>")
 

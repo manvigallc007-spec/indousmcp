@@ -8,11 +8,12 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Route
 
-from .. import analytics, db, payments, quality, recommendations, reporting, submissions, verticals
+from .. import (analytics, db, inbox, payments, quality, recommendations, reporting, submissions,
+                verticals)
 from ..agents import AGENTS, run_agent
 from ..events import pipeline as events
 from ..config import settings
-from ..pipeline import ingest
+from ..pipeline import ingest, outreach
 from .auth import admin_enabled, login_admin, logout_admin, require_admin
 from .common import _page, admin_page, esc
 
@@ -932,6 +933,94 @@ async def moderation_action(request: Request) -> HTMLResponse:
     return RedirectResponse("/admin/moderation", status_code=303)
 
 
+# ------------------------------------------------------------------ contact messages (inbox)
+def _msg_card(m: dict) -> str:
+    when = str(m.get("created_at") or "")[:16]
+    head = (f"<b>{esc(m.get('subject') or '(no subject)')}</b> "
+            f"<span class='muted'>— {esc(m.get('name') or 'Anonymous')} &lt;{esc(m.get('email'))}&gt;"
+            f" · {esc(when)} · {esc(m.get('status'))}</span>")
+    bodytxt = esc(m.get("body") or "").replace("\n", "<br>")
+    draft = esc(m.get("draft_reply") or "")
+    return (
+        "<div class='card' style='margin:12px 0'>" + head +
+        f"<p style='white-space:pre-wrap;margin:8px 0;color:#333'>{bodytxt}</p>"
+        "<form method='post' action='/admin/messages' style='margin:0'>"
+        f"<input type='hidden' name='id' value='{m['id']}'>"
+        "<label class='muted'>Reply (AI-drafted — review &amp; edit before sending):</label>"
+        f"<textarea name='draft' rows='5' style='width:100%;padding:10px;border:1px solid #ccc;"
+        f"border-radius:8px;font:inherit;font-size:14px'>{draft}</textarea>"
+        "<div style='margin-top:8px;display:flex;gap:8px;flex-wrap:wrap'>"
+        "<button name='action' value='send'>Approve &amp; send</button>"
+        "<button name='action' value='save' class='btn gray'>Save draft</button>"
+        "<button name='action' value='draft' class='btn gray'>AI redraft</button>"
+        "<button name='action' value='close' class='btn gray'>Close</button>"
+        "</div></form></div>")
+
+
+def messages_page(request: Request) -> HTMLResponse:
+    if (r := require_admin(request)):
+        return r
+    flash = {"sent": "<p class='ok'>&#10003; Reply sent.</p>",
+             "smtp": "<p class='err'>Saved, but SMTP isn't configured — set SMTP_* to actually send.</p>",
+             "empty": "<p class='err'>Add a reply before sending.</p>"}.get(
+                 request.query_params.get("flash"), "")
+    new, drafted = inbox.list_messages("new"), inbox.list_messages("drafted")
+    replied = inbox.list_messages("replied")[:10]
+    pending = drafted + new                       # needs action: drafted first, then undrafted
+    body = flash + ("<p class='muted'>Visitor messages from the contact form. An agent drafts a "
+                    "reply; you review, edit, and approve before anything is sent.</p>")
+    if not pending and not replied:
+        body += "<p class='muted'>No messages yet.</p>"
+    if pending:
+        body += f"<h3>Needs a reply ({len(pending)})</h3>" + "".join(_msg_card(m) for m in pending)
+    if replied:
+        rows = "".join(f"<tr><td>{esc(str(m.get('reply_sent_at') or '')[:16])}</td>"
+                       f"<td>{esc(m.get('email'))}</td><td>{esc(m.get('subject') or '')}</td></tr>"
+                       for m in replied)
+        body += f"<h3>Recently replied</h3><table><tr><th>When</th><th>To</th><th>Subject</th></tr>{rows}</table>"
+    return admin_page("Messages", body, active="Messages")
+
+
+async def messages_action(request: Request) -> HTMLResponse:
+    if (r := require_admin(request)):
+        return r
+    form = await request.form()
+    try:
+        mid = int(form.get("id"))
+    except (TypeError, ValueError):
+        return RedirectResponse("/admin/messages", status_code=303)
+    action = form.get("action")
+    draft = (form.get("draft") or "").strip()
+    m = inbox.get_message(mid)
+    if not m:
+        return RedirectResponse("/admin/messages", status_code=303)
+    flash = ""
+    if action == "send":
+        if not draft:
+            flash = "empty"
+        else:
+            inbox.set_draft(mid, draft)
+            sent = False
+            try:
+                sent = outreach.send_email(m["email"], f"Re: {m.get('subject') or 'your message'}", draft)
+            except Exception:
+                sent = False
+            if sent:
+                inbox.mark_replied(mid)
+                flash = "sent"
+            else:
+                flash = "smtp"
+    elif action == "save":
+        inbox.set_draft(mid, draft)
+    elif action == "draft":
+        new_draft = inbox.compose_draft(m)
+        inbox.set_draft(mid, new_draft or draft or "")
+    elif action == "close":
+        inbox.set_status(mid, "closed")
+    return RedirectResponse(f"/admin/messages?flash={flash}" if flash else "/admin/messages",
+                            status_code=303)
+
+
 routes = [
     Route("/admin/login", login_get, methods=["GET"]),
     Route("/admin/login", login_post, methods=["POST"]),
@@ -940,6 +1029,8 @@ routes = [
     Route("/admin/dashboard", dashboard_page, methods=["GET"]),
     Route("/admin/moderation", moderation_page, methods=["GET"]),
     Route("/admin/moderation", moderation_action, methods=["POST"]),
+    Route("/admin/messages", messages_page, methods=["GET"]),
+    Route("/admin/messages", messages_action, methods=["POST"]),
     Route("/admin/data/{vertical}", data_list, methods=["GET"]),
     Route("/admin/data/{vertical}/new", data_new, methods=["GET"]),
     Route("/admin/data/{vertical}/new", data_create, methods=["POST"]),

@@ -15,6 +15,19 @@ def esc(value) -> str:
     return html.escape(str(value)) if value not in (None, "") else ""
 
 
+def captcha_field() -> str:
+    """Captcha form fields: Cloudflare Turnstile widget if configured, else a signed math challenge.
+    Shared by the registration form and the public contact form."""
+    from .auth import make_captcha
+    if settings.turnstile_enabled:
+        return (f"<div class='cf-turnstile' data-sitekey='{esc(settings.turnstile_site_key)}'></div>"
+                "<script src='https://challenges.cloudflare.com/turnstile/v0/api.js' async defer></script>")
+    c = make_captcha()
+    return (f"<label>{esc(c['question'])}</label>"
+            "<input name='captcha' inputmode='numeric' autocomplete='off' required>"
+            f"<input type='hidden' name='captcha_token' value='{esc(c['token'])}'>")
+
+
 def analytics_tag() -> str:
     """Google Analytics (GA4) gtag snippet for the <head>, or '' when GOOGLE_ANALYTICS_ID is unset.
     The measurement ID is public (it's visible in page source), so it's plain config, not a secret."""
@@ -69,7 +82,7 @@ def _page(title: str, body: str, status: int = 200) -> HTMLResponse:
 _ADMIN_NAV = [
     ("Overview", "/admin"), ("Dashboard", "/admin/dashboard"), ("Data", "/admin/data/restaurants"),
     ("Geography", "/admin/geo/restaurants"), ("Quality", "/admin/quality/restaurants"),
-    ("Moderation", "/admin/moderation"),
+    ("Moderation", "/admin/moderation"), ("Messages", "/admin/messages"),
     ("Approvals", "/admin/approvals"), ("Feedback", "/admin/feedback"),
     ("Submissions", "/admin/submissions"),
     ("Events", "/admin/events"), ("Claims", "/admin/claims"), ("Agents", "/admin/agents"),

@@ -14,7 +14,10 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse
 from starlette.routing import Route
 
+from .. import inbox
 from ..config import settings
+from .auth import verify_captcha
+from .common import captcha_field
 
 # SEO keywords (Google) — Namaste America is the app brand; Dost is the assistant.
 _KEYWORDS = ("Namaste America, Indian America, Indian-American directory, Indian restaurants near me, "
@@ -57,8 +60,7 @@ def footer_html() -> str:
         "rel='nofollow'>OpenStreetMap</a> contributors (ODbL) and Wikidata (CC0), enriched by "
         "automated agents and business owners. Names &amp; trademarks belong to their owners.</p>"
         f"<p class='attr'>© {html.escape(settings.platform_name)} · "
-        f"<a href='mailto:{html.escape(settings.outreach_contact_email)}'>"
-        f"{html.escape(settings.outreach_contact_email)}</a></p></footer>")
+        f"<a href='/contact'>Contact</a></p></footer>")
 
 
 def _doc(path: str, title: str, desc: str, body: str, status: int = 200) -> HTMLResponse:
@@ -89,6 +91,7 @@ header.top .logo{{width:34px;height:34px;border-radius:10px;display:grid;place-i
 header.top b{{font-size:16px}} a{{color:var(--brand);text-decoration:none}} a:hover{{text-decoration:underline}}
 h1{{font-size:26px;margin:26px 0 6px}} h2{{font-size:18px;margin:24px 0 6px}}
 .lead{{color:var(--muted);font-size:16px}} ul{{padding-left:20px}} li{{margin:4px 0}}
+.ok{{color:#137333}} .err{{color:#c5221f}}
 .cta{{display:inline-block;background:var(--brand);color:#fff;border-radius:10px;padding:10px 16px;
  font-weight:600;margin-top:8px}} .cta:hover{{text-decoration:none}}
 footer{{margin-top:40px;border-top:1px solid var(--line);padding-top:18px;font-size:13px;color:var(--muted)}}
@@ -173,7 +176,6 @@ def about(request: Request) -> HTMLResponse:
 
 
 def privacy(request: Request) -> HTMLResponse:
-    email = html.escape(settings.outreach_contact_email)
     plat = html.escape(settings.platform_name)
     body = f"""<h1>Privacy Policy</h1>
 <p class="lead">Last updated: June 2026. {plat} (“we”, “us”) respects your privacy and collects as
@@ -242,14 +244,13 @@ def privacy(request: Request) -> HTMLResponse:
 <p>We may update this policy; material changes are reflected by the “last updated” date above.</p>
 
 <h2>10. Contact</h2>
-<p>Questions or removal requests: <a href="mailto:{email}">{email}</a>.</p>"""
+<p>Questions or removal requests: please use our <a href="/contact">contact form</a>.</p>"""
     return _doc("/privacy", "Privacy Policy",
                 "How we handle location, logging, cookies, analytics, accounts, and business "
                 "outreach — minimal data, no selling, easy opt-out.", body)
 
 
 def terms(request: Request) -> HTMLResponse:
-    email = html.escape(settings.outreach_contact_email)
     plat = html.escape(settings.platform_name)
     body = f"""<h1>Terms of Use</h1>
 <p class="lead">Last updated: June 2026. By using {plat} you agree to these terms — please read them.</p>
@@ -312,7 +313,7 @@ def terms(request: Request) -> HTMLResponse:
  date reflects the latest version.</p>
 
 <h2>10. Contact</h2>
-<p>Questions: <a href="mailto:{email}">{email}</a>.</p>
+<p>Questions: please use our <a href="/contact">contact form</a>.</p>
 <p class="lead" style="font-size:13px;margin-top:18px">This is a general template provided for
  convenience, not legal advice; have a lawyer review it before relying on it.</p>"""
     return _doc("/terms", "Terms of Use",
@@ -320,22 +321,61 @@ def terms(request: Request) -> HTMLResponse:
                 "accounts & submissions, acceptable use, IP, and liability.", body)
 
 
+_CONTACT_CSS = """<style>
+.cform label{display:block;font-weight:600;font-size:14px;margin:12px 0 4px;color:#3a4654}
+.cform input,.cform textarea{width:100%;padding:11px 12px;border:1.5px solid #e3ddd3;border-radius:11px;
+ font:inherit;font-size:15px;background:#fff}
+.cform input:focus,.cform textarea:focus{outline:0;border-color:var(--brand);box-shadow:0 0 0 4px #e8772e22}
+.cform .hp{position:absolute;left:-9999px}
+.cform button{margin-top:16px;background:var(--brand);color:#fff;border:0;padding:13px 24px;border-radius:11px;
+ font-size:15px;font-weight:600;cursor:pointer}.cform button:hover{filter:brightness(1.05)}
+</style>"""
+
+
 def contact(request: Request) -> HTMLResponse:
-    email = html.escape(settings.outreach_contact_email)
-    body = f"""<h1>Contact</h1>
-<p class="lead">We'd love to hear from you — questions, ideas, and requests all welcome.</p>
-<ul>
-<li><b>Ask {html.escape(settings.assistant_name)}:</b> the fastest way to find a place or get an
- answer is the <a href="/chat">chat</a>.</li>
-<li><b>Add or fix a listing:</b> <a href="/submit">submit a business</a>, or claim an existing one
- from its page.</li>
-<li><b>Request data we don't have yet:</b> looking for a category, city, or type of listing that's
- missing? Email us at <a href="mailto:{email}?subject=Data%20request">{email}</a> and we'll work on
- adding it — your requests directly shape what we cover next.</li>
-<li><b>Corrections, removals, partnerships, feedback:</b> <a href="mailto:{email}">{email}</a>.</li>
-</ul>"""
+    a = html.escape(settings.assistant_name)
+    body = _CONTACT_CSS + f"""<h1>Contact us</h1>
+<p class="lead">Questions, ideas, corrections, or data you'd like us to add — send us a message and
+ we'll get back to you. (Fastest help: just <a href="/chat">ask {a}</a> or
+ <a href="/submit">add a business</a>.)</p>
+<form class="cform" method="post" action="/contact" autocomplete="on">
+ <input class="hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+ <label>Your name</label><input name="name" maxlength="120">
+ <label>Your email <span style="font-weight:400;color:#6b7280">(so we can reply)</span></label>
+ <input name="email" type="email" required maxlength="200">
+ <label>Subject</label><input name="subject" maxlength="200">
+ <label>Message</label><textarea name="body" rows="6" required maxlength="5000"></textarea>
+ {captcha_field()}
+ <button type="submit">Send message</button>
+</form>"""
     return _doc("/contact", "Contact",
-                "Get in touch — add or fix a listing, email us, or ask the assistant.", body)
+                "Send us a message — questions, corrections, partnerships, or data requests.", body)
+
+
+async def contact_post(request: Request) -> HTMLResponse:
+    form = await request.form()
+    if (form.get("website") or "").strip():            # honeypot: bots fill it -> silently accept
+        return _doc("/contact", "Thanks", "Your message has been received.",
+                    "<h1>Thanks!</h1><p>Your message has been received.</p>")
+    email = (form.get("email") or "").strip()
+    msg = (form.get("body") or "").strip()
+    if not email or "@" not in email or not msg:
+        return _doc("/contact", "Contact", "Please add your email and a message.",
+                    "<h1 class='err'>Please add your email and a message</h1>"
+                    "<p><a href='/contact'>&#8592; Back to the form</a></p>", status=400)
+    if not verify_captcha(form):
+        return _doc("/contact", "Contact", "The captcha answer was incorrect.",
+                    "<h1 class='err'>The captcha answer was incorrect</h1>"
+                    "<p><a href='/contact'>&#8592; Try again</a></p>", status=400)
+    ip = request.client.host if request.client else None
+    try:
+        inbox.create_message(form.get("name") or "", email, form.get("subject") or "", msg, ip)
+    except Exception:
+        pass
+    return _doc("/contact", "Message sent", "Thanks — your message was received.",
+                "<h1 class='ok'>&#10003; Thanks — message received</h1>"
+                "<p>We've got your message and will reply to your email soon. Meanwhile, you can "
+                "<a href='/chat'>ask " + html.escape(settings.assistant_name) + "</a> anything.</p>")
 
 
 def faq(request: Request) -> HTMLResponse:
@@ -367,5 +407,6 @@ routes = [
     Route("/privacy", privacy, methods=["GET"]),
     Route("/terms", terms, methods=["GET"]),
     Route("/contact", contact, methods=["GET"]),
+    Route("/contact", contact_post, methods=["POST"]),
     Route("/faq", faq, methods=["GET"]),
 ]

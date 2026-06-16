@@ -38,7 +38,7 @@ _RUN_ORDER = [
     "finance_scraper", "finance_cleaner",
     "event_feed_discovery", "event_scraper", "event_cleaner",
     "web_enrichment", "link_check", "recommendation", "lifecycle", "learning", "knowledge_indexer",
-    "demographics", "h1b", "intelligence",
+    "demographics", "h1b", "intelligence", "contact_reply",
     "discovery", "outreach", "reporting", "monitoring", "submission",
 ]
 
