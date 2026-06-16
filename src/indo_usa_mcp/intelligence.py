@@ -62,12 +62,24 @@ TOPICS: list[str] = [
 ]
 
 _SYSTEM_INTEL = (
-    "You build a knowledge base about Indians FROM INDIA living in the USA — immigrants from India "
-    "and people of Indian origin who are US citizens. Topics: their history, communities, culture, "
-    "festivals, food, religion, and practical life (immigration, taxes, settling in). Using ONLY the "
-    "reference material, write a concise, factual, neutral note of 3-6 sentences on the given topic. "
-    "Do NOT invent businesses, names, prices, or statistics not in the references. If the references "
-    "are NOT about this audience/topic, reply with exactly: NOT_RELEVANT")
+    "You build a knowledge base STRICTLY about Indians FROM INDIA living in the USA — immigrants "
+    "from India and people of Indian origin who are US citizens or residents — and their life in "
+    "AMERICA: their communities, culture and festivals AS OBSERVED IN THE US, food, religion, and "
+    "practical topics (US immigration, US taxes, settling in the USA). Using ONLY the reference "
+    "material, write a concise, factual, neutral note of 3-6 sentences, FRAMED for the US-based "
+    "community (mention the US/America/the diaspora). Do NOT write a general article about India the "
+    "country, Indian geography/politics, tourism in India, or people living IN India. If the "
+    "references are only about India (not the US-based Indian community), reply with exactly: "
+    "NOT_RELEVANT. Never invent businesses, names, prices, or statistics not in the references.")
+
+# A stored note must reference the US-based community (not be a generic India-country article).
+_USA_SIGNALS = ("united states", "u.s.", "u.s ", " us ", "usa", "america", "american", "diaspora",
+                "immigrant", "nri", "indian-american", "indian american", "in the us")
+
+
+def _is_usa_relevant(text: str) -> bool:
+    t = f" {(text or '').lower()} "
+    return any(s in t for s in _USA_SIGNALS)
 
 
 def _slug(s: str) -> str:
@@ -108,7 +120,9 @@ def learn(topic: str, *, source_ref: str, title: str,
         if require_relevance and not assistant.is_indian_american_topic(f"{topic} {top.get('text','')}"):
             return False
         note = (top.get("text") or "").strip()
-    if not note:
+    # The collected DATA must be about the US-based community — reject generic India-country text
+    # (about India the country or people living in India) even when the topic was US-scoped.
+    if not note or not _is_usa_relevant(note):
         return False
     res = knowledge.upsert_document(source_type="learned", source_ref=source_ref, title=title,
                                     content=note, vertical=vertical)
@@ -164,8 +178,8 @@ def promote_learned_answers(limit: int = 10) -> int:
     done = 0
     for r in rows:
         q, reply = (r.get("query") or "").strip(), (r.get("reply") or "").strip()
-        if not q or not reply:
-            continue
+        if not q or not reply or not _is_usa_relevant(f"{q} {reply}"):
+            continue                       # only promote US-diaspora knowledge, not India-country
         res = knowledge.upsert_document(source_type="learned", source_ref=f"cache:{_slug(q)}",
                                         title=q, content=reply)
         if res.get("ok") and not res.get("unchanged"):
