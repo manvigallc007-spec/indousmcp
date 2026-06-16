@@ -227,6 +227,53 @@ def cmd_irs_import(args: argparse.Namespace) -> None:
     _print(irs.import_eo(limit=args.limit))
 
 
+def cmd_collect(args: argparse.Namespace) -> None:
+    """Scrape EVERY vertical for a metro / state / all metros, run NPPES for the state(s), then
+    process raw -> canonical. Curation (tags/descriptions/embeddings/geo) is a separate step after."""
+    from .agents import AGENTS, run_agent
+    from .pipeline.scrapers.metros import METROS, _METRO_STATE
+
+    if args.metro:
+        if args.metro not in METROS:
+            print(f"Unknown metro '{args.metro}'. Known: {', '.join(sorted(METROS))}")
+            return
+        metros = [args.metro]
+        states = [s] if (s := _METRO_STATE.get(args.metro)) else []
+    elif args.state:
+        st = args.state.upper()
+        metros = sorted(m for m, s in _METRO_STATE.items() if s == st)
+        states = [st]
+        if not metros:
+            print(f"No metros defined for state {st}.")
+            return
+    elif args.all:
+        metros, states = sorted(METROS), []
+        print("WARNING: --all scrapes every vertical across all metros — this is heavy and slow.")
+    else:
+        print("Pass --metro <name>, --state <ST>, or --all.")
+        return
+
+    skip = {"nppes_scraper", "event_scraper", "event_feed_discovery"}
+    scrapers = (["scraper"] if "scraper" in AGENTS else []) \
+        + [n for n in AGENTS if n.endswith("_scraper") and n not in skip]
+    cleaners = (["cleaner"] if "cleaner" in AGENTS else []) \
+        + [n for n in AGENTS if n.endswith("_cleaner")]
+
+    print(f"Scraping {len(scrapers)} verticals x {len(metros)} metro(s): {', '.join(metros)}")
+    for a in scrapers:
+        r = run_agent(a, metros=metros)
+        print(f"  scrape {a:<22} {r['status']}  {r.get('result') or r.get('error', '')}")
+    if states and "nppes_scraper" in AGENTS:
+        print(f"NPPES healthcare providers for {', '.join(states)} ...")
+        r = run_agent("nppes_scraper", states=states)
+        print(f"  scrape nppes_scraper       {r['status']}  {r.get('result') or r.get('error', '')}")
+    print("Processing raw -> canonical ...")
+    for a in cleaners:
+        r = run_agent(a)
+        print(f"  clean  {a:<22} {r['status']}")
+    print("Done. Curate next: enhance-data  ·  backfill-geo  ·  kb-seed  ·  kb-index")
+
+
 def cmd_approval_digest(_: argparse.Namespace) -> None:
     _print(ingest.summarize_approvals())
 
@@ -625,6 +672,14 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Add Indian temples & community orgs from the free IRS nonprofit master file")
     ir.add_argument("--limit", type=int, default=None, help="Max records to add (for a quick sample)")
     ir.set_defaults(func=cmd_irs_import)
+
+    co = sub.add_parser("collect",
+                        help="Scrape ALL verticals for a metro/state/all + NPPES, then process")
+    cog = co.add_mutually_exclusive_group(required=True)
+    cog.add_argument("--metro", help="one metro, e.g. dallas")
+    cog.add_argument("--state", help="all metros in a state, e.g. TX")
+    cog.add_argument("--all", action="store_true", help="every vertical across all metros (heavy)")
+    co.set_defaults(func=cmd_collect)
 
     sub.add_parser("approval-digest", help="Human-readable summary of pending approvals").set_defaults(
         func=cmd_approval_digest
