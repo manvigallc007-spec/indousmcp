@@ -34,8 +34,10 @@ def require_admin(request: Request) -> RedirectResponse | None:
     return RedirectResponse("/admin/login", status_code=303)
 
 
-def login_admin(request: Request, password: str) -> bool:
-    if admin_enabled() and hmac.compare_digest(password, settings.admin_password):
+def login_admin(request: Request, username: str, password: str) -> bool:
+    if (admin_enabled()
+            and hmac.compare_digest((username or "").strip(), settings.admin_username)
+            and hmac.compare_digest(password or "", settings.admin_password)):
         request.session["admin"] = True
         return True
     return False

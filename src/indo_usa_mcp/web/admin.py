@@ -26,7 +26,9 @@ def login_get(request: Request) -> HTMLResponse:
                      "<p class='muted'>Set ADMIN_PASSWORD to enable the dashboard.</p>", status=503)
     return _page("Admin login",
                  "<h2>Admin login</h2><form method='post' action='/admin/login'>"
-                 "<label>Password</label><input name='password' type='password' autofocus>"
+                 "<label>Username</label><input name='username' autofocus autocomplete='username'>"
+                 "<label>Password</label>"
+                 "<input name='password' type='password' autocomplete='current-password'>"
                  "<button type='submit'>Sign in</button></form>")
 
 
@@ -37,11 +39,11 @@ async def login_post(request: Request) -> HTMLResponse:
         return _page("Admin login", "<h2 class='err'>Too many attempts</h2>"
                      "<p class='muted'>Please wait a few minutes and try again.</p>", status=429)
     form = await request.form()
-    if login_admin(request, (form.get("password") or "")):
+    if login_admin(request, form.get("username") or "", form.get("password") or ""):
         clear_attempts(ip)
         return RedirectResponse("/admin", status_code=303)
     record_attempt(ip)
-    return _page("Admin login", "<h2 class='err'>Wrong password</h2>"
+    return _page("Admin login", "<h2 class='err'>Wrong username or password</h2>"
                  "<p><a href='/admin/login'>Try again</a></p>", status=401)
 
 

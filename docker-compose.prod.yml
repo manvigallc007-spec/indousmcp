@@ -103,6 +103,7 @@ services:
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_USE_TOOLS: ${LLM_USE_TOOLS:-false}
       # Admin dashboard + owner portal sessions (set these to enable /admin).
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       SECRET_KEY: ${SECRET_KEY:-dev-insecure-change-me}
       REPORT_EMAIL: ${REPORT_EMAIL:-}

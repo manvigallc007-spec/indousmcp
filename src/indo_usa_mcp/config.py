@@ -91,6 +91,7 @@ class Settings(BaseSettings):
     web_port: int = 8080
 
     # Admin dashboard + sessions/magic-links. Blank admin_password disables /admin.
+    admin_username: str = "admin"
     admin_password: str = ""
     secret_key: str = "dev-insecure-change-me"   # signs session cookies + magic-links
     # Mark session cookies Secure (HTTPS-only). Flip True once the site is served over TLS (Caddy).
