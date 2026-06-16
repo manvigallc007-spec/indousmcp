@@ -87,6 +87,25 @@ def cmd_socrata_import(args: argparse.Namespace) -> None:
     _print(ingest.process_raw())
 
 
+def cmd_kb_index(args: argparse.Namespace) -> None:
+    from . import knowledge
+    if args.vertical:
+        _print(knowledge.index_listings(args.vertical, limit=args.limit))
+    else:
+        print("Indexing all listings into the knowledge base ...")
+        _print(knowledge.index_all_listings(limit_per=args.limit))
+
+
+def cmd_kb_search(args: argparse.Namespace) -> None:
+    from . import knowledge
+    _print(knowledge.search(args.query, vertical=args.vertical, limit=args.limit or 6))
+
+
+def cmd_kb_stats(_: argparse.Namespace) -> None:
+    from . import knowledge
+    _print(knowledge.stats())
+
+
 def cmd_approvals(args: argparse.Namespace) -> None:
     status = "" if args.all else "WHERE status = 'pending'"
     rows = db.query(
@@ -476,6 +495,17 @@ def build_parser() -> argparse.ArgumentParser:
                          help="Import South-Asian restaurants from city open data (Socrata SODA)")
     ssp.add_argument("--source", help="one Socrata source key (default: all). e.g. nyc_restaurants")
     ssp.set_defaults(func=cmd_socrata_import)
+
+    kbi = sub.add_parser("kb-index", help="Index listings into the knowledge base (RAG)")
+    kbi.add_argument("--vertical", help="one vertical (default: all)")
+    kbi.add_argument("--limit", type=int, help="cap rows per vertical")
+    kbi.set_defaults(func=cmd_kb_index)
+    kbs = sub.add_parser("kb-search", help="Search the knowledge base")
+    kbs.add_argument("--query", required=True)
+    kbs.add_argument("--vertical")
+    kbs.add_argument("--limit", type=int, default=6)
+    kbs.set_defaults(func=cmd_kb_search)
+    sub.add_parser("kb-stats", help="Knowledge base stats").set_defaults(func=cmd_kb_stats)
 
     ap = sub.add_parser("approvals", help="List approval-queue items")
     ap.add_argument("--all", action="store_true", help="Include resolved items")
