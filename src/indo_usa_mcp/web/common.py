@@ -92,36 +92,69 @@ _ADMIN_NAV = [
 ]
 
 
+def _nav_badges() -> dict[str, int]:
+    """Cheap counts of items needing attention, shown as red badges in the admin nav."""
+    from .. import db
+    out: dict[str, int] = {}
+    q = {
+        "Messages": "SELECT count(*) FROM contact_messages WHERE status IN ('new','drafted')",
+        "Approvals": "SELECT count(*) FROM approval_queue WHERE status = 'pending'",
+        "Submissions": "SELECT count(*) FROM submissions WHERE status = 'pending'",
+        "Feedback": "SELECT count(*) FROM feedback WHERE status = 'pending'",
+    }
+    for label, sql in q.items():
+        try:
+            row = db.query_one(sql)
+            n = int(list(row.values())[0]) if row else 0
+            if n:
+                out[label] = n
+        except Exception:
+            pass
+    return out
+
+
 def admin_page(title: str, body: str, active: str = "", status: int = 200) -> HTMLResponse:
-    """Wide layout with a nav bar for the admin dashboard."""
+    """Wide layout with a nav bar (+ attention badges) for the admin dashboard."""
+    badges = _nav_badges()
     nav = " ".join(
-        f"<a href='{href}' class='{'on' if label == active else ''}'>{label}</a>"
+        f"<a href='{href}' class='{'on' if label == active else ''}'>{label}"
+        + (f"<span class='badge'>{badges[label]}</span>" if badges.get(label) else "") + "</a>"
         for label, href in _ADMIN_NAV
     )
     doc = f"""<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)} · Admin</title>
 <style>
- body{{font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;max-width:1100px;
-   margin:0 auto;padding:0 16px 60px;color:#1a1a1a;line-height:1.45}}
- header{{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;
-   border-bottom:1px solid #eee;padding:14px 0;margin-bottom:20px}}
- nav a{{margin-right:14px;text-decoration:none;color:#444;font-size:14px}}
- nav a.on{{color:{_BRAND};font-weight:600}}
- h2{{margin:0 0 6px}} h3{{margin:24px 0 8px}}
+ :root{{--brand:#e8772e;--brand-d:#cf6212;--accent:#0f9b8e;--ink:#222b33;--muted:#667085;--line:#ece6dd}}
+ *{{box-sizing:border-box}}
+ body{{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;max-width:1140px;
+   margin:0 auto;padding:0 18px 64px;color:var(--ink);line-height:1.5;background:#faf8f4}}
+ header{{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;
+   background:#fff;border-bottom:1px solid var(--line);padding:12px 18px;margin:0 -18px 22px;
+   position:sticky;top:0;z-index:5}}
+ nav{{display:flex;flex-wrap:wrap;gap:4px}}
+ nav a{{text-decoration:none;color:#475467;font-size:13.5px;padding:6px 10px;border-radius:8px}}
+ nav a:hover{{background:#f3efe9}} nav a.on{{color:#fff;background:var(--brand)}}
+ .badge{{display:inline-block;background:#e5484d;color:#fff;font-size:11px;font-weight:700;
+   border-radius:999px;padding:1px 7px;margin-left:5px;vertical-align:middle}}
+ nav a.on .badge{{background:#fff;color:var(--brand)}}
+ h2{{margin:4px 0 8px;font-size:24px;letter-spacing:-.01em}} h3{{margin:26px 0 10px;font-size:17px}}
  table{{border-collapse:collapse;width:100%;font-size:14px;margin:8px 0}}
- th,td{{text-align:left;padding:8px 10px;border-bottom:1px solid #eee;vertical-align:top}}
- th{{color:#666;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em}}
- .cards{{display:flex;flex-wrap:wrap;gap:12px;margin:12px 0}}
- .kpi{{border:1px solid #e6e6e6;border-radius:12px;padding:14px 18px;min-width:150px}}
- .kpi b{{font-size:24px;display:block}} .kpi span{{color:#666;font-size:13px}}
- a{{color:{_BRAND}}} .muted{{color:#666;font-size:13px}} .ok{{color:#137333}} .err{{color:#c5221f}}
+ th,td{{text-align:left;padding:9px 10px;border-bottom:1px solid #f0ece5;vertical-align:top}}
+ th{{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}}
+ .cards{{display:flex;flex-wrap:wrap;gap:12px;margin:14px 0}}
+ .kpi{{background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px 18px;min-width:160px;
+   box-shadow:0 4px 14px rgba(16,24,40,.05)}}
+ .kpi b{{font-size:26px;display:block;line-height:1.1;color:var(--ink)}} .kpi span{{color:var(--muted);font-size:13px}}
+ .kpi.act{{border-left:4px solid var(--brand)}} a.kpi{{text-decoration:none}} a.kpi:hover{{box-shadow:0 8px 22px rgba(16,24,40,.10)}}
+ a{{color:var(--brand)}} .muted{{color:var(--muted);font-size:13px}} .ok{{color:#137333}} .err{{color:#c5221f}}
  .warn{{color:#b06000}}
- button,.btn{{background:{_BRAND};color:#fff;border:0;padding:7px 12px;border-radius:7px;
-   font-size:13px;cursor:pointer;text-decoration:none;display:inline-block}}
- .btn.gray{{background:#666}} input,select{{padding:8px;border:1px solid #ccc;border-radius:7px;font-size:14px}}
+ button,.btn{{background:var(--brand);color:#fff;border:0;padding:8px 14px;border-radius:9px;
+   font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block;transition:.12s}}
+ button:hover,.btn:hover{{filter:brightness(1.05)}}
+ .btn.gray{{background:#6b7280}} input,select,textarea{{padding:9px;border:1.5px solid #e3ddd3;border-radius:9px;font-size:14px}}
  form.inline{{display:inline}}
- .bar{{background:{_BRAND};height:10px;border-radius:5px;display:inline-block}}
+ .bar{{background:var(--brand);height:10px;border-radius:5px;display:inline-block}}
 </style></head><body>
 <header><div><a href="/" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none">
  <img src="/logo" alt="{html.escape(settings.platform_name)}" style="height:34px;width:auto;max-width:150px;border-radius:8px">

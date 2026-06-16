@@ -57,6 +57,26 @@ def logout(request: Request) -> RedirectResponse:
 def overview(request: Request) -> HTMLResponse:
     if (r := require_admin(request)):
         return r
+    # Action center: linked cards for everything that needs a human, so the work is one click away.
+    msgs = _scalar("SELECT count(*) FROM contact_messages WHERE status IN ('new','drafted')")
+    pend_appr = _scalar("SELECT count(*) FROM approval_queue WHERE status='pending'")
+    pend_sub = _scalar("SELECT count(*) FROM submissions WHERE status='pending'")
+    pend_fb = _scalar("SELECT count(*) FROM feedback WHERE status='pending'")
+    alerts = _scalar("SELECT count(*) FROM agent_alerts WHERE NOT resolved")
+    errs = _scalar("SELECT count(*) FROM agent_runs WHERE status='error' AND started_at > now() - interval '24 hours'")
+
+    def acard(n: int, label: str, href: str, danger: bool = False) -> str:
+        b = f"<b class='{'err' if (danger and n) else ''}'>{n}</b>"
+        return f"<a class='kpi act' href='{href}'>{b}<span>{esc(label)}</span></a>"
+    action = "".join([
+        acard(msgs, "New messages", "/admin/messages"),
+        acard(pend_appr, "Pending approvals", "/admin/approvals"),
+        acard(pend_sub, "New submissions", "/admin/submissions"),
+        acard(pend_fb, "Pending feedback", "/admin/feedback"),
+        acard(alerts, "Open alerts", "/admin/agents", danger=True),
+        acard(errs, "Agent errors (24h)", "/admin/agents", danger=True),
+    ])
+
     cards = []
     for key, cfg in verticals.VERTICALS.items():
         total = verticals.count_records(key)
@@ -64,17 +84,10 @@ def overview(request: Request) -> HTMLResponse:
         claimed = verticals.count_records(key, flt="claimed")
         cards.append(f"<div class='kpi'><b>{total}</b><span>{cfg['label']}</span>"
                      f"<div class='muted'>{feat} featured · {claimed} claimed</div></div>")
-    pend_appr = _scalar("SELECT count(*) FROM approval_queue WHERE status='pending'")
-    pend_fb = _scalar("SELECT count(*) FROM feedback WHERE status='pending'")
-    alerts = _scalar("SELECT count(*) FROM agent_alerts WHERE NOT resolved")
-    errs = _scalar("SELECT count(*) FROM agent_runs WHERE status='error' AND started_at > now() - interval '24 hours'")
-    cards.append(f"<div class='kpi'><b>{pend_appr}</b><span>Pending approvals</span></div>")
-    cards.append(f"<div class='kpi'><b>{pend_fb}</b><span>Pending feedback</span></div>")
-    cards.append(f"<div class='kpi'><b class='{'err' if alerts else ''}'>{alerts}</b><span>Open alerts</span></div>")
-    cards.append(f"<div class='kpi'><b class='{'err' if errs else ''}'>{errs}</b><span>Agent errors (24h)</span></div>")
 
     agents_tbl = _agent_health_table()
-    body = (f"<div class='cards'>{''.join(cards)}</div>"
+    body = (f"<h3>Needs attention</h3><div class='cards'>{action}</div>"
+            f"<h3>Directory</h3><div class='cards'>{''.join(cards)}</div>"
             "<h3>Agent health</h3>" + agents_tbl)
     return admin_page("Overview", body, active="Overview")
 
