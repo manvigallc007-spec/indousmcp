@@ -142,11 +142,12 @@ def _run_search(args: dict, filters: dict | None = None, geo: dict | None = None
     city = filters.get("city") or args.get("city") or None
     state = filters.get("state") or args.get("state") or None
     vertical = filters.get("vertical") or args.get("vertical") or None
-    # A typed category overrides a CONFLICTING chip: with the Temple chip selected, asking for
-    # "restaurants in Dallas" should return restaurants, not temples. (When the message names no
-    # category, the chip still applies — so it stays useful for follow-up questions.)
+    # A typed category SCOPES the search to just that category: "restaurants in Plano" returns only
+    # restaurants — not salons, professionals, etc. — and overrides any chip. When the message names
+    # no category, the chip (or an all-category search) still applies, so chips stay useful for
+    # follow-ups. This is what keeps results to exactly what the user asked for.
     typed_vertical = _guess_vertical(query) if query else None
-    if typed_vertical and vertical and typed_vertical != vertical:
+    if typed_vertical:
         vertical = typed_vertical
     # Honor an explicit chip OR a free-text "open now" in the query itself.
     open_now = bool(filters.get("open_now") or args.get("open_now") or _wants_open_now(query))

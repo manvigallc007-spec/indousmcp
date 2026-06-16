@@ -19,6 +19,11 @@ _FAKE = {"count": 2, "query": "dosa", "results": [
 @pytest.fixture
 def no_db(monkeypatch):
     monkeypatch.setattr(assistant.verticals, "search_all", lambda *a, **k: _FAKE)
+    # A typed category now scopes to that vertical's search_<v>_by_text (item 5), so stub them all.
+    for v, cfg in assistant.verticals.VERTICALS.items():
+        name = f"search_{v}_by_text"
+        if hasattr(cfg["queries"], name):
+            monkeypatch.setattr(cfg["queries"], name, lambda *a, **k: _FAKE)
     monkeypatch.setattr(assistant.analytics, "log_impressions", lambda *a, **k: None)
     monkeypatch.setattr(assistant.analytics, "log_call", lambda *a, **k: None)
 
@@ -38,8 +43,10 @@ def test_returns_up_to_12_cards_for_show_more(monkeypatch):
     monkeypatch.setattr(settings, "llm_provider", "search")
     monkeypatch.setattr(assistant.analytics, "log_impressions", lambda *a, **k: None)
     monkeypatch.setattr(assistant.analytics, "log_call", lambda *a, **k: None)
+    from indo_usa_mcp import queries as r_queries
     many = [{"vertical": "restaurants", "id": i, "name": f"Place {i}"} for i in range(20)]
-    monkeypatch.setattr(assistant.verticals, "search_all",
+    # "biryani" scopes to restaurants -> stub the restaurants search (the scoped path)
+    monkeypatch.setattr(r_queries, "search_restaurants_by_text",
                         lambda *a, **k: {"count": 20, "results": many})
     out = assistant.reply([{"role": "user", "content": "biryani in edison nj"}])
     assert len(out["cards"]) == 12          # capped at 12; UI shows 6 + "show more"
@@ -228,9 +235,12 @@ def test_open_now_filter(monkeypatch):
     monkeypatch.setattr(settings, "llm_provider", "search")
     monkeypatch.setattr(assistant.analytics, "log_impressions", lambda *a, **k: None)
     monkeypatch.setattr(assistant.analytics, "log_call", lambda *a, **k: None)
-    monkeypatch.setattr(assistant.verticals, "search_all", lambda *a, **k: {"count": 2, "results": [
+    from indo_usa_mcp import queries as r_queries
+    data = {"count": 2, "results": [
         {"vertical": "restaurants", "id": 1, "name": "Open Place", "_o": True},
-        {"vertical": "restaurants", "id": 2, "name": "Closed Place", "_o": False}]})
+        {"vertical": "restaurants", "id": 2, "name": "Closed Place", "_o": False}]}
+    monkeypatch.setattr(assistant.verticals, "search_all", lambda *a, **k: data)
+    monkeypatch.setattr(r_queries, "search_restaurants_by_text", lambda *a, **k: data)  # "food" -> restaurants
     monkeypatch.setattr(hours, "annotate",
                         lambda rows: [r.__setitem__("open_now", r.get("_o", False)) for r in rows])
     out = assistant.reply([{"role": "user", "content": "food"}],
@@ -276,11 +286,13 @@ def test_chat_scopes_search_to_extracted_city(monkeypatch):
     monkeypatch.setattr(assistant.analytics, "log_call", lambda *a, **k: None)
     seen = {}
 
-    def fake_search_all(q, **k):
+    def fake_search(q, **k):
         seen["city"], seen["state"] = k.get("city"), k.get("state")
         return {"count": 1, "results": [{"vertical": "restaurants", "name": "Dallas Dhaba",
                                          "city": "Dallas", "state": "TX"}]}
-    monkeypatch.setattr(assistant.verticals, "search_all", fake_search_all)
+    from indo_usa_mcp import queries as r_queries
+    monkeypatch.setattr(assistant.verticals, "search_all", fake_search)
+    monkeypatch.setattr(r_queries, "search_restaurants_by_text", fake_search)  # "restaurants" -> scoped
     out = assistant.reply([{"role": "user", "content": "dallas restaurants"}])
     assert seen["city"] == "Dallas" and seen["state"] == "TX"
     assert out["cards"][0]["name"] == "Dallas Dhaba"
