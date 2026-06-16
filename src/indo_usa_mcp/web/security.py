@@ -11,20 +11,39 @@ import time
 
 from starlette.middleware.base import BaseHTTPMiddleware
 
-# 'unsafe-inline' is required because pages embed inline <style>/<script>; we still lock down the
-# sources scripts/data can come from, framing, and the base URI.
-_CSP = (
-    "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; "
-    "img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; "
-    "script-src 'self' 'unsafe-inline'; connect-src 'self'; form-action 'self'"
-)
+from ..config import settings
+
+
+def _build_csp() -> str:
+    """CSP allows our own inline CSS/JS; external sources are opened ONLY for features we actually
+    use — Google Analytics (when GOOGLE_ANALYTICS_ID is set) and Cloudflare Turnstile (when keys
+    are set). Without those, scripts/connections stay locked to 'self'. Output escaping is still
+    our primary XSS defence."""
+    script = ["'self'", "'unsafe-inline'"]
+    connect = ["'self'"]
+    frame: list[str] = []
+    if settings.google_analytics_id:                       # gtag.js + its data beacons
+        script.append("https://www.googletagmanager.com")
+        connect += ["https://www.google-analytics.com", "https://*.google-analytics.com",
+                    "https://*.analytics.google.com", "https://www.googletagmanager.com"]
+    if settings.turnstile_enabled:                         # captcha widget + its iframe
+        script.append("https://challenges.cloudflare.com")
+        frame.append("https://challenges.cloudflare.com")
+    parts = [
+        "default-src 'self'", "base-uri 'self'", "frame-ancestors 'none'", "object-src 'none'",
+        "img-src 'self' data: https:", "style-src 'self' 'unsafe-inline'",
+        f"script-src {' '.join(script)}", f"connect-src {' '.join(connect)}", "form-action 'self'",
+    ]
+    if frame:
+        parts.append(f"frame-src {' '.join(frame)}")
+    return "; ".join(parts)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         resp = await call_next(request)
         h = resp.headers
-        h.setdefault("Content-Security-Policy", _CSP)
+        h.setdefault("Content-Security-Policy", _build_csp())
         h.setdefault("X-Content-Type-Options", "nosniff")
         h.setdefault("X-Frame-Options", "DENY")
         h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
