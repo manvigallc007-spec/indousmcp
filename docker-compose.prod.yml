@@ -72,6 +72,10 @@ services:
       # Auto-publish obviously-good, complete, clearly-Indian business submissions (ambiguous ones
       # still wait for a human). Set false to require manual approval for every submission.
       AUTO_APPROVE_SUBMISSIONS: ${AUTO_APPROVE_SUBMISSIONS:-true}
+      # Auto-SEND replies to clearly-routine, non-sensitive contact messages (needs SMTP + an LLM;
+      # a copy is stored + emailed to REPORT_EMAIL/OUTREACH_CONTACT_EMAIL). Sensitive topics wait.
+      AUTO_REPLY_ROUTINE: ${AUTO_REPLY_ROUTINE:-true}
+      REPORT_EMAIL: ${REPORT_EMAIL:-}
       # Outreach (OutreachAgent runs here). Auto-send stays OFF until SMTP *and*
       # OUTREACH_POSTAL_ADDRESS are set (CAN-SPAM); otherwise it only drafts.
       SECRET_KEY: ${SECRET_KEY:-dev-insecure-change-me}      # signs one-click opt-out links

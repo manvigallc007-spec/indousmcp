@@ -59,6 +59,67 @@ def pending_for_draft(limit: int = 20) -> list[dict]:
                     "ORDER BY created_at LIMIT %s", [limit])
 
 
+# Topics that must NEVER be auto-answered — always kept for human approval, regardless of the LLM.
+_SENSITIVE = (
+    "lawyer", "attorney", "legal", "lawsuit", "sue ", "sued", "court", "refund", "charge",
+    "billing", "payment", "invoice", "complaint", "scam", "fraud", "privacy", "gdpr", "ccpa",
+    "delete my", "remove my", "take down", "press", "media", "journalist", "reporter",
+    "partner", "partnership", "invest", "sponsor", "acquire", "acquisition", "urgent",
+    "emergency", "police", "subpoena", "defam", "visa", "immigration", "tax", "medical",
+)
+
+
+def is_sensitive(m: dict) -> bool:
+    t = f"{m.get('subject') or ''} {m.get('body') or ''}".lower()
+    return any(tok in t for tok in _SENSITIVE)
+
+
+def draft_and_classify(m: dict) -> dict:
+    """Draft a reply AND judge whether it's routine + safe to send automatically. Sensitive topics
+    are never routine (kept for a human). Returns {'reply': str|None, 'routine': bool}."""
+    if is_sensitive(m):
+        return {"reply": compose_draft(m), "routine": False}
+    from . import assistant
+    from .config import settings
+    if not assistant.llm_active():
+        return {"reply": None, "routine": False}
+    plat = settings.platform_name
+    system = (
+        f"You are the support assistant for {plat}, a free directory & AI guide for Indians from "
+        "India in the USA. Two tasks. (1) CLASSIFY the message: output exactly 'ROUTINE' on the "
+        "first line if it is a simple, low-risk question you can fully and safely answer on your own "
+        "(general info: what the site is, is it free, hours/location, how to add/claim/fix a listing, "
+        "where data comes from, a thank-you), or 'REVIEW' if it needs a human (complaints, refunds/"
+        "payments, legal/tax/immigration/medical advice, removal/privacy/legal requests, "
+        "partnerships/press, or anything sensitive or that you're unsure about). When in doubt, "
+        "say REVIEW. (2) Then a blank line, then a warm, concise reply (<= 120 words). To add or fix "
+        "a business, point them to /portal/register or /submit. Don't give legal/tax/medical advice. "
+        f"Sign off '— The {plat} team'.")
+    user = (f"From: {m.get('name') or 'A visitor'}\nSubject: {m.get('subject') or '(none)'}\n\n"
+            f"{m.get('body') or ''}")
+    txt = assistant.complete_text(system, user)
+    if not txt:
+        return {"reply": None, "routine": False}
+    first, _, rest = txt.partition("\n")
+    routine = first.strip().upper().startswith("ROUTINE")
+    reply = (rest.strip() or txt.strip())
+    return {"reply": reply, "routine": routine}
+
+
+def mark_auto_replied(mid: int, reply: str) -> None:
+    db.execute("UPDATE contact_messages SET draft_reply = %s, status = 'auto_replied', "
+               "reply_sent_at = now() WHERE id = %s", [reply, mid])
+
+
+def recent_replies(limit: int = 12) -> list[dict]:
+    """Recently answered messages (human + auto) — your reference copy of what went out."""
+    try:
+        return db.query("SELECT * FROM contact_messages WHERE status IN ('replied','auto_replied') "
+                        "ORDER BY reply_sent_at DESC NULLS LAST LIMIT %s", [limit])
+    except Exception:
+        return []
+
+
 def compose_draft(m: dict) -> str | None:
     """Draft a reply to a contact message with the free LLM. None if the LLM is off (admin writes
     it manually). The draft is NEVER sent automatically — a human approves it in Admin -> Messages."""

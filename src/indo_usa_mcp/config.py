@@ -123,6 +123,9 @@ class Settings(BaseSettings):
     # Let the SubmissionReviewAgent auto-publish obviously-good, complete, clearly-Indian business
     # submissions (ambiguous ones still wait for a human). Set false to require manual approval for all.
     auto_approve_submissions: bool = True
+    # Let the ContactReplyAgent auto-SEND replies to clearly-routine, non-sensitive messages (a copy
+    # is stored + emailed to you). Needs SMTP + an LLM; sensitive topics always wait for approval.
+    auto_reply_routine: bool = True
     # Google sign-in for the business-owner portal (optional; magic-link still works without it).
     # Create an OAuth 2.0 Web client at console.cloud.google.com -> APIs & Services -> Credentials.
     # Authorized redirect URI = <PUBLIC_WEB_URL>/portal/google/callback. Secrets via env only.

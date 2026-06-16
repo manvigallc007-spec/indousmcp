@@ -978,19 +978,23 @@ def messages_page(request: Request) -> HTMLResponse:
              "empty": "<p class='err'>Add a reply before sending.</p>"}.get(
                  request.query_params.get("flash"), "")
     new, drafted = inbox.list_messages("new"), inbox.list_messages("drafted")
-    replied = inbox.list_messages("replied")[:10]
+    replied = inbox.recent_replies(12)
     pending = drafted + new                       # needs action: drafted first, then undrafted
-    body = flash + ("<p class='muted'>Visitor messages from the contact form. An agent drafts a "
-                    "reply; you review, edit, and approve before anything is sent.</p>")
+    body = flash + ("<p class='muted'>Visitor messages from the contact form. The agent auto-replies "
+                    "to clearly-routine notes (a copy is kept below + emailed to you) and drafts the "
+                    "rest here for your review. Sensitive topics always wait for you.</p>")
     if not pending and not replied:
         body += "<p class='muted'>No messages yet.</p>"
     if pending:
         body += f"<h3>Needs a reply ({len(pending)})</h3>" + "".join(_msg_card(m) for m in pending)
     if replied:
-        rows = "".join(f"<tr><td>{esc(str(m.get('reply_sent_at') or '')[:16])}</td>"
-                       f"<td>{esc(m.get('email'))}</td><td>{esc(m.get('subject') or '')}</td></tr>"
-                       for m in replied)
-        body += f"<h3>Recently replied</h3><table><tr><th>When</th><th>To</th><th>Subject</th></tr>{rows}</table>"
+        rows = "".join(
+            f"<tr><td>{esc(str(m.get('reply_sent_at') or '')[:16])}</td>"
+            f"<td>{esc(m.get('email'))}</td><td>{esc(m.get('subject') or '')}</td>"
+            f"<td>{'&#129302; auto' if m.get('status') == 'auto_replied' else '&#9995; you'}</td></tr>"
+            for m in replied)
+        body += ("<h3>Recently replied <span class='muted'>(your reference copy)</span></h3>"
+                 f"<table><tr><th>When</th><th>To</th><th>Subject</th><th>By</th></tr>{rows}</table>")
     return admin_page("Messages", body, active="Messages")
 
 

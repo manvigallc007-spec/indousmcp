@@ -647,21 +647,50 @@ class SubmissionReviewAgent(Agent):
 
 class ContactReplyAgent(Agent):
     name = "contact_reply"
-    description = ("Drafts a reply to each new contact-form message with the free LLM, for a human "
-                  "to review/edit and approve in Admin -> Messages. Never sends anything itself.")
+    description = ("Reads each new contact message: auto-sends a reply to clearly-routine, "
+                  "non-sensitive ones (with a copy kept + emailed to the admin) and drafts the rest "
+                  "for human approval in Admin -> Messages. Sensitive topics always wait for a human.")
     default_interval_s = 3600  # hourly
 
     def run(self, **params: Any) -> dict[str, Any]:
         from .. import inbox
-        drafted = skipped = 0
+        from ..config import settings
+        from ..pipeline import outreach
+        auto = drafted = skipped = 0
+        base = settings.public_web_url.rstrip("/")
         for m in inbox.pending_for_draft(limit=params.get("limit", 20)):
-            draft = inbox.compose_draft(m)
-            if draft:
-                inbox.set_draft(m["id"], draft)
-                drafted += 1
-            else:
-                skipped += 1                                   # LLM off -> admin will write it
-        return {"drafted": drafted, "skipped_no_llm": skipped}
+            res = inbox.draft_and_classify(m)
+            reply = res.get("reply")
+            if not reply:
+                skipped += 1                                   # LLM off -> admin writes it manually
+                continue
+            can_auto = (settings.auto_reply_routine and res.get("routine")
+                        and settings.email_enabled and (m.get("email") or "").strip())
+            if can_auto:
+                body = (f"{reply}\n\n— This is an automated reply from {settings.platform_name}. "
+                        f"Need more help? Just write to us again at {base}/contact.")
+                sent = False
+                try:
+                    sent = outreach.send_email(
+                        m["email"], f"Re: {m.get('subject') or 'your message'}", body)
+                except Exception:
+                    sent = False
+                if sent:
+                    inbox.mark_auto_replied(m["id"], reply)
+                    auto += 1
+                    copy_to = settings.report_email or settings.outreach_contact_email
+                    if copy_to:                                # keep the admin a copy for reference
+                        try:
+                            outreach.send_email(
+                                copy_to, f"[auto-reply copy] {m.get('subject') or 'contact message'}",
+                                f"An automated reply was sent to {m.get('email')}.\n\n"
+                                f"THEIR MESSAGE:\n{m.get('body')}\n\nOUR REPLY:\n{reply}")
+                        except Exception:
+                            pass
+                    continue
+            inbox.set_draft(m["id"], reply)                    # not routine / couldn't send -> review
+            drafted += 1
+        return {"auto_replied": auto, "drafted_for_review": drafted, "skipped_no_llm": skipped}
 
 
 class DemographicsAgent(Agent):
