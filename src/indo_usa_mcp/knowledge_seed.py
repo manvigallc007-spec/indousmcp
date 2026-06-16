@@ -121,6 +121,136 @@ ARTICLES: list[dict[str, Any]] = [
              "associations (Telugu, Tamil, Gujarati, Bengali, Marathi and more) host festivals and "
              "are a great way to meet people. Use Dost to find these near you, and add ones you love "
              "so others can find them too."},
+
+    # --- more festivals ---
+    {"slug": "janmashtami", "title": "Krishna Janmashtami", "vertical": None,
+     "text": "Krishna Janmashtami (August–September) celebrates the birth of Lord Krishna. Devotees "
+             "often fast until midnight — Krishna's birth hour — sing bhajans, decorate a cradle for "
+             "the infant Krishna, and offer butter and milk sweets he loved. In Maharashtra, 'Dahi "
+             "Handi' teams form human pyramids to break a high pot of curd. US temples, especially "
+             "ISKCON and many mandirs, hold midnight aarti, abhishekam, and cultural programs."},
+    {"slug": "durga-puja", "title": "Durga Puja (Bengali)", "vertical": None,
+     "text": "Durga Puja (September–October) is the grandest festival for Bengalis, honoring goddess "
+             "Durga's victory over the demon Mahishasura. Elaborate idols are installed in decorated "
+             "pandals and worshipped over five days with dhak drumming, dhunuchi dance, Bengali food "
+             "(bhog, khichuri, mishti) and new clothes, ending with immersion (visarjan) and Sindoor "
+             "Khela. Bengali associations across the US host large community Pujas open to everyone."},
+    {"slug": "gurpurab", "title": "Gurpurab (Guru Nanak Jayanti)", "vertical": None,
+     "text": "Gurpurab, usually Guru Nanak Gurpurab in November, marks the birth of Guru Nanak, the "
+             "founder of Sikhism. Observances include an Akhand Path (continuous reading of the Guru "
+             "Granth Sahib), Nagar Kirtan processions, hymn-singing (kirtan), and langar — a free "
+             "community meal served to all. US gurdwaras warmly welcome visitors of every background; "
+             "cover your head, remove your shoes, and you're invited to share in langar."},
+    {"slug": "baisakhi", "title": "Baisakhi / Vaisakhi", "vertical": None,
+     "text": "Baisakhi (around April 13–14) is the Punjabi harvest festival and Sikh new year, and "
+             "marks the founding of the Khalsa in 1699. It's celebrated with energetic Bhangra and "
+             "Gidda dancing, dhol drumming, fairs, and festive food. US gurdwaras and Punjabi "
+             "associations hold Nagar Kirtans, kirtan, and community meals — a colorful, joyful day."},
+    {"slug": "karva-chauth", "title": "Karva Chauth", "vertical": None,
+     "text": "Karva Chauth (October–November) is a day when married women — and increasingly some "
+             "husbands too — fast from sunrise until they sight the moon, praying for their spouse's "
+             "well-being. The day includes henna (mehndi), festive dress, a pre-dawn meal (sargi), "
+             "and breaking the fast after viewing the moon, often through a sieve. It's widely "
+             "observed in North Indian communities across the US, frequently as group gatherings."},
+
+    # --- culture & food ---
+    {"slug": "indian-wedding", "title": "What to expect at an Indian wedding", "vertical": None,
+     "text": "Indian weddings in the US are often multi-day, vibrant celebrations. Common events "
+             "include a mehndi (henna) night, a sangeet (music and dance), a haldi (turmeric) "
+             "ceremony, the wedding itself (e.g. a Hindu ceremony around a sacred fire, or an Anand "
+             "Karaj in a gurdwara), and a reception. Guests wear bright traditional clothes (avoid "
+             "white or black for Hindu ceremonies) and giving cash ('shagun') is customary. Expect "
+             "abundant food, family, dancing — and ceremonies that may run on a relaxed schedule."},
+    {"slug": "vegetarian-jain-dining", "title": "Vegetarian, vegan & Jain dining", "vertical": "restaurants",
+     "text": "Indian food serves vegetarians and vegans well — most US Indian restaurants mark veg "
+             "dishes clearly, and many South Indian and Gujarati places are fully vegetarian ('pure "
+             "veg' means a kitchen with no meat). For Jain food (no onion, garlic, or root "
+             "vegetables), call ahead: many restaurants and caterers can prepare Jain versions, and "
+             "some menus label them. Indian grocers also stock plenty of veg and Jain-friendly "
+             "products. Use Dost's dietary filters to find veg, vegan, and Jain options near you."},
+
+    # --- immigration (general info) ---
+    {"slug": "h4-ead", "title": "H-4 spouses & the H-4 EAD (general info)", "vertical": "legal",
+     "text": "H-4 status is for the spouse and children of an H-1B worker. H-4 spouses cannot work "
+             "automatically, but may apply for an H-4 EAD (work permit) if the H-1B spouse has an "
+             "approved I-140 immigrant petition, or has H-1B time extended beyond six years under "
+             "AC21. With a valid H-4 EAD, the spouse can work for any employer. Children on H-4 "
+             "generally cannot work and may 'age out' at 21." + _DISCLAIMER},
+    {"slug": "us-citizenship", "title": "Becoming a US citizen (naturalization)", "vertical": "legal",
+     "text": "Naturalization is how a green-card holder becomes a US citizen, via Form N-400. Most "
+             "can apply after five years as a permanent resident — or three years if married to and "
+             "living with a US citizen — if they meet continuous-residence, physical-presence, and "
+             "good-moral-character requirements. The process includes biometrics, an interview, and "
+             "English and US civics tests, ending with the Oath of Allegiance. India doesn't allow "
+             "dual citizenship, so new US citizens usually apply for an OCI card." + _DISCLAIMER},
+    {"slug": "visa-stamping-india", "title": "US visa stamping in India (general info)", "vertical": "legal",
+     "text": "Visa 'stamping' is getting the physical visa in your passport at a US consulate, needed "
+             "to re-enter the US after travel — an I-797 approval alone isn't a visa. In India, US "
+             "consulates are in Mumbai, New Delhi, Chennai, Kolkata, and Hyderabad. Many H-1B/H-4 "
+             "renewals qualify for the interview-waiver 'dropbox' if the prior visa is recent; others "
+             "need an in-person interview. Wait times vary, so plan India trips around stamping "
+             "timelines." + _DISCLAIMER},
+
+    # --- settling in: money & ID ---
+    {"slug": "ssn-stateid", "title": "Social Security Number & state ID", "vertical": None,
+     "text": "A Social Security Number (SSN) is issued by the Social Security Administration to people "
+             "authorized to work; you'll need it for jobs, banking, and credit, so apply soon after "
+             "your work authorization is active. For everyday ID and driving, get a state driver's "
+             "license or non-driver state ID at the DMV — requirements vary by state but usually "
+             "include your passport, visa, I-94, and proof of address. Keep your SSN card secure and "
+             "don't carry it around."},
+    {"slug": "building-credit", "title": "Building US credit from scratch", "vertical": "finance",
+     "text": "New immigrants usually arrive with no US credit history, which affects renting, loans, "
+             "and some cards. Build credit with a secured card or a newcomer card (some issuers "
+             "accept applicants without an SSN or prior history), by becoming an authorized user on a "
+             "trusted person's card, and by always paying on time and keeping balances low. A few "
+             "services can import your Indian credit history. Over several months, an on-time record "
+             "builds a solid score." + _DISCLAIMER},
+    {"slug": "us-banking", "title": "Opening a US bank account", "vertical": "finance",
+     "text": "You can usually open a US checking and savings account with your passport, visa, and a "
+             "US address; some banks let you open one before your SSN arrives. A checking account "
+             "with a debit card covers daily spending, while a credit card used responsibly builds "
+             "credit. Watch for monthly fees (often waived with direct deposit or a minimum balance), "
+             "and use the bank's app for transfers, bill pay, and Zelle. Big banks and credit unions "
+             "have branches in most Indian-heavy metros."},
+    {"slug": "health-insurance", "title": "US health insurance basics", "vertical": "finance",
+     "text": "US healthcare is expensive without insurance, so don't go uninsured. Most employees get "
+             "coverage through their employer (with an annual 'open enrollment'); others buy a plan "
+             "on the ACA marketplace or through a broker. Learn the basics — premium (monthly cost), "
+             "deductible (what you pay before coverage kicks in), copay/coinsurance, and in-network "
+             "vs out-of-network providers. People between jobs sometimes buy short-term or visitor "
+             "plans to bridge a gap." + _DISCLAIMER},
+    {"slug": "retirement-401k", "title": "401(k) & IRA retirement basics", "vertical": "finance",
+     "text": "The US has tax-advantaged retirement accounts. A 401(k) is offered by many employers — "
+             "contributions come from your paycheck pre-tax (or Roth/after-tax), and employers often "
+             "'match' part of it, which is essentially free money worth capturing. Individuals can "
+             "also open an IRA (traditional or Roth). Even if you might return to India, employer "
+             "matches and compounding can be valuable; understand vesting and withdrawal rules "
+             "first." + _DISCLAIMER},
+    {"slug": "fbar-foreign-accounts", "title": "Reporting Indian accounts (FBAR/FATCA)", "vertical": "finance",
+     "text": "US tax residents (citizens, green-card holders, and many visa holders) generally must "
+             "report foreign financial accounts. If your non-US accounts — including Indian savings, "
+             "NRE/NRO, fixed deposits, and some investments — together exceed $10,000 at any point in "
+             "the year, you typically must file an FBAR (FinCEN Form 114). Larger holdings may also "
+             "trigger FATCA reporting (Form 8938). Penalties for not filing can be steep, so track "
+             "your Indian accounts and tell your tax preparer." + _DISCLAIMER},
+
+    # --- community ---
+    {"slug": "indian-community-associations", "title": "Finding Indian community & associations",
+     "vertical": None,
+     "text": "Across the US, regional and linguistic associations help Indians stay connected — "
+             "Telugu (TANA/ATA), Tamil sangams, Gujarati Samaj, Bengali associations, Maharashtra "
+             "Mandals, Kannada Koota, Malayalee associations, Punjabi groups, plus pan-Indian and "
+             "alumni (IIT/NIT) networks. They run festivals, cultural programs, language classes, and "
+             "networking, and are a welcoming first step in a new city. Temples and gurdwaras are "
+             "community hubs too. Use Dost to find temples, groups, and events near you."},
+    {"slug": "raising-kids-heritage", "title": "Raising kids with Indian culture", "vertical": None,
+     "text": "Many Indian-American parents want their children to keep the language and culture. "
+             "Options include weekend heritage-language and cultural schools (Telugu, Tamil, Hindi, "
+             "Balvihar, Gujarati or Bengali classes), classical music and dance (Carnatic, "
+             "Hindustani, Bharatanatyam, Kathak), and temple youth programs. Festivals, trips to "
+             "India, cooking together, and kids' books in Indian languages all help. Look under the "
+             "education and community categories, and ask Dost for classes in your area."},
 ]
 
 

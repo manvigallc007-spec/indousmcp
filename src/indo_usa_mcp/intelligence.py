@@ -59,6 +59,17 @@ TOPICS: list[str] = [
     "NRI taxes United States and India",
     "Sending remittances from USA to India",
     "Indian grocery stores and brands in America",
+    "Indian American naturalization and US citizenship",
+    "OCI card for Indian Americans",
+    "H-4 visa spouses working in the United States",
+    "Durga Puja celebrations in the United States",
+    "Janmashtami celebrated in the United States",
+    "Vaisakhi and Sikh community in the United States",
+    "building credit history as a new immigrant in the USA",
+    "health insurance basics for immigrants in the United States",
+    "FBAR foreign account reporting for Indians in the United States",
+    "raising bicultural Indian American children",
+    "Indian American weddings in the United States",
 ]
 
 _SYSTEM_INTEL = (
