@@ -34,15 +34,28 @@ def _page(title: str, body: str, status: int = 200) -> HTMLResponse:
 <title>{html.escape(title)}</title>
 {analytics_tag()}
 <style>
- body{{font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;max-width:560px;
-   margin:48px auto;padding:0 16px;color:#1a1a1a;line-height:1.5}}
- .card{{border:1px solid #e6e6e6;border-radius:14px;padding:28px;box-shadow:0 1px 3px rgba(0,0,0,.04)}}
- h2{{margin:0 0 8px}} label{{font-size:14px;font-weight:600}}
- input{{width:100%;padding:11px;margin:6px 0 16px;border:1px solid #ccc;border-radius:9px;
-   font-size:15px;box-sizing:border-box}}
- button{{background:{_BRAND};color:#fff;border:0;padding:12px 20px;border-radius:9px;
-   font-size:15px;cursor:pointer}}
- a{{color:{_BRAND}}} .muted{{color:#666;font-size:14px}} .ok{{color:#137333}} .err{{color:#c5221f}}
+ :root{{--brand:#e8772e;--brand-d:#cf6212;--accent:#0f9b8e;--ink:#222b33;--muted:#667085;--line:#ece6dd}}
+ *{{box-sizing:border-box}}
+ body{{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;max-width:520px;
+   margin:0 auto;min-height:100vh;padding:38px 18px;color:var(--ink);line-height:1.55;
+   background:linear-gradient(180deg,#fff7ef 0,#faf8f4 260px)}}
+ .card{{background:#fff;border:1px solid var(--line);border-radius:18px;padding:30px 28px;
+   box-shadow:0 14px 44px rgba(16,24,40,.09);border-top:4px solid var(--brand)}}
+ h2{{margin:0 0 8px;font-size:24px;letter-spacing:-.01em}} h3{{margin:20px 0 8px;font-size:18px}}
+ p{{margin:0 0 14px}}
+ label{{display:block;font-size:13.5px;font-weight:600;color:#3a4654;margin-top:6px}}
+ input{{width:100%;padding:12px 13px;margin:6px 0 14px;border:1.5px solid #e3ddd3;border-radius:11px;
+   font-size:15px;background:#fff;transition:.15s}}
+ input:focus{{outline:0;border-color:var(--brand);box-shadow:0 0 0 4px #e8772e22}}
+ button{{background:linear-gradient(135deg,var(--brand),var(--brand-d));color:#fff;border:0;
+   padding:13px 22px;border-radius:11px;font-size:15px;font-weight:600;cursor:pointer;width:100%;
+   transition:.15s;box-shadow:0 6px 16px #e8772e33}}
+ button:hover{{filter:brightness(1.05);transform:translateY(-1px)}}
+ a{{color:var(--brand);text-decoration:none}} a:hover{{text-decoration:underline}}
+ table a{{font-weight:600}}
+ .muted{{color:var(--muted);font-size:14px}} .ok{{color:#137333}} .err{{color:#c5221f}}
+ table{{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0}}
+ td,th{{padding:9px 6px;border-bottom:1px solid #f0ece5;text-align:left}}
 </style></head><body>
 <a href="/" style="display:flex;align-items:center;gap:10px;text-decoration:none;margin-bottom:18px">
  <img src="/logo" alt="{html.escape(settings.platform_name)}" style="height:42px;width:auto;max-width:180px;border-radius:10px">
