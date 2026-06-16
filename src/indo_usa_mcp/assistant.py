@@ -188,11 +188,8 @@ def _run_search(args: dict, filters: dict | None = None, geo: dict | None = None
         rows = [r for r in rows if r.get("open_now")]
         res = {**res, "results": rows, "count": len(rows)}
 
-    try:  # credit human engagement to analytics + per-listing reach (best-effort)
+    try:  # per-listing reach when listings are surfaced (the chat turn itself is logged in web/chat.py)
         analytics.log_impressions("search_all", res)
-        analytics.log_call("chat", {"query": query, "vertical": vertical, "city": city,
-                                    "state": state, "open_now": open_now},
-                           res.get("count"), "web-chat")
     except Exception:
         pass
     return res

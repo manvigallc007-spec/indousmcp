@@ -298,6 +298,18 @@ def test_chat_scopes_search_to_extracted_city(monkeypatch):
     assert out["cards"][0]["name"] == "Dallas Dhaba"
 
 
+def test_chat_api_logs_every_turn(monkeypatch):
+    # Item 8: non-listing turns (here, a clarify) must still be logged so admin Traffic reflects usage.
+    import indo_usa_mcp.analytics as An
+    monkeypatch.setattr(settings, "llm_provider", "search")
+    logged = []
+    monkeypatch.setattr(An, "log_call", lambda tool, *a, **k: logged.append(tool))
+    r = TestClient(app).post("/chat/api",
+                             json={"messages": [{"role": "user", "content": "good restaurant"}]})
+    assert r.status_code == 200 and r.json()["provider"] == "clarify"
+    assert "chat" in logged          # previously a clarify turn logged nothing
+
+
 def test_chat_widens_to_state_when_city_empty(monkeypatch):
     monkeypatch.setattr(settings, "llm_provider", "search")
     monkeypatch.setattr(assistant.analytics, "log_impressions", lambda *a, **k: None)

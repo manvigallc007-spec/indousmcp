@@ -623,6 +623,17 @@ async def chat_api(request: Request) -> JSONResponse:
         if isinstance(m, dict) and isinstance(m.get("content"), str):
             m["content"] = m["content"][:1000]
     result = assistant.reply(messages, geo=geo, filters=filters)
+    # Log EVERY chat turn (search, knowledge, clarify, discovery...) so the admin Traffic page
+    # reflects real usage — not just listing searches. Best-effort; never breaks the response.
+    try:
+        from .. import analytics
+        q = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
+        analytics.log_call("chat", {"query": q[:200], "provider": result.get("provider"),
+                                    "vertical": filters.get("vertical"),
+                                    "city": filters.get("city"), "state": filters.get("state")},
+                           len(result.get("cards") or []), "web-chat")
+    except Exception:
+        pass
     return JSONResponse(result)
 
 
