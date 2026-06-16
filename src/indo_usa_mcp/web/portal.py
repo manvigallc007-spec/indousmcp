@@ -40,6 +40,23 @@ _GBTN = ("<a href='/portal/google' style='display:block;text-align:center;backgr
          "text-decoration:none;margin-bottom:12px'>Sign in with Google</a>"
          "<p class='muted' style='text-align:center;margin:4px 0 12px'>— or —</p>")
 
+_TILE = ("display:inline-block;border:1px solid #e6e6e6;border-radius:12px;padding:12px 16px;"
+         "text-decoration:none;color:#1a1a1a;font-weight:600;background:#fff")
+
+
+def _engage_html() -> str:
+    """Invite owners/visitors to ask, add, or request data (encourages engagement)."""
+    a = esc(settings.assistant_name)
+    return (
+        "<div style='border-top:1px solid #eee;margin-top:22px;padding-top:18px'>"
+        "<h3 style='margin:0 0 4px'>Get the most out of " + esc(settings.platform_name) + "</h3>"
+        "<p class='muted' style='margin:0 0 12px'>Can't find what you need? Ask " + a + ", add it "
+        "yourself, or tell us what you'd like to see — we'll work on adding it.</p>"
+        "<div style='display:flex;flex-wrap:wrap;gap:10px'>"
+        f"<a style='{_TILE}' href='/'>💬 Ask {a} a question</a>"
+        f"<a style='{_TILE}' href='/submit'>➕ Add a business</a>"
+        f"<a style='{_TILE}' href='/contact'>📨 Request data or suggest a category</a></div></div>")
+
 
 def login_get(request: Request) -> HTMLResponse:
     google = _GBTN if settings.google_oauth_enabled else ""
@@ -120,7 +137,8 @@ def dashboard(request: Request) -> HTMLResponse:
                      "border-radius:9px;padding:11px 20px;font-weight:600;text-decoration:none'>"
                      "➕ Add your business</a></p>"
                      "<p class='muted' style='margin-top:14px'>Already listed? Claim it from its page "
-                     "to link it to your account. · <a href='/portal/logout'>Sign out</a></p>")
+                     "to link it to your account. · <a href='/portal/logout'>Sign out</a></p>"
+                     + _engage_html())
     rows = ""
     for x in listings:
         status = ("<span class='ok'>★ featured</span>" if x["is_featured"]
@@ -136,8 +154,8 @@ def dashboard(request: Request) -> HTMLResponse:
                  f"<td>{status}{upgrade}</td></tr>")
     body = (f"<h2>Your listings</h2><p class='muted'>{esc(email)} · "
             f"<a href='/portal/logout'>sign out</a></p>"
-            "<p class='muted'>“Shown” = times an AI assistant surfaced your listing.</p>"
-            f"<table style='width:100%'>{rows}</table>")
+            "<p class='muted'>“Shown” = times an AI assistant or visitor surfaced your listing.</p>"
+            f"<table style='width:100%'>{rows}</table>" + _engage_html())
     return _page("Your listings", body)
 
 

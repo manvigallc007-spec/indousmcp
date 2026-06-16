@@ -174,64 +174,165 @@ def about(request: Request) -> HTMLResponse:
 
 def privacy(request: Request) -> HTMLResponse:
     email = html.escape(settings.outreach_contact_email)
+    plat = html.escape(settings.platform_name)
     body = f"""<h1>Privacy Policy</h1>
-<p class="lead">We keep this simple and collect as little as possible.</p>
-<h2>Location</h2>
+<p class="lead">Last updated: June 2026. {plat} (“we”, “us”) respects your privacy and collects as
+ little as possible. This policy explains what we collect, why, and the choices you have.</p>
+
+<h2>1. Information we collect</h2>
 <ul>
-<li><b>Your device location is optional.</b> If you allow it, your browser shares approximate
- coordinates so we can show the nearest listings. We use them only for that search and don't store
- them with your identity.</li>
-<li>If you don't share device location, we may estimate your <b>approximate area from your IP
- address</b> (city-level only) to still show nearby results, or simply ask which city you mean.</li>
+<li><b>Location (optional).</b> If you allow it, your browser shares approximate coordinates so we
+ can show the nearest listings. We use them only for that search and don't store them with your
+ identity. If you decline, we may estimate your city-level area from your IP address, or simply ask
+ which city you mean.</li>
+<li><b>Usage data.</b> We log aggregate, non-identifying activity — for example which searches
+ return no results — to improve coverage and reliability. This may include your search text and
+ approximate area.</li>
+<li><b>Business accounts.</b> If you register or claim a business, we collect your email address
+ and, if you set one, a password stored only as a salted one-way hash (never in plain text).
+ Listing details you provide are published in the directory.</li>
+<li><b>Cookies.</b> A signed session cookie is used only for admin and business-owner logins. We
+ don't use cookies to track general visitors for advertising.</li>
 </ul>
-<h2>What we log</h2>
+
+<h2>2. Analytics</h2>
+<p>We use <b>Google Analytics 4</b> to understand aggregate site usage (pages viewed, rough
+ geography, device type). It may set its own cookies; Google Analytics 4 does not store full IP
+ addresses. See <a href="https://policies.google.com/privacy" rel="nofollow">Google's Privacy
+ Policy</a>. We don't use Analytics to identify you personally. You can opt out with Google's
+ <a href="https://tools.google.com/dlpage/gaoptout" rel="nofollow">opt-out add-on</a> or by blocking
+ analytics cookies in your browser.</p>
+
+<h2>3. How we use information</h2>
 <ul>
-<li>Aggregate, non-identifying usage — e.g. which searches return no results — to improve coverage.</li>
-<li>A session cookie is used only for admin and business-owner logins, not for general visitors.</li>
-<li>We don't sell personal data or run third-party ad trackers.</li>
+<li>To return relevant, nearby results and answer your questions.</li>
+<li>To maintain and improve the directory (e.g. find gaps in coverage).</li>
+<li>To operate business-owner accounts and verify listing ownership.</li>
+<li>To contact a business about claiming or correcting its listing — every such message has a
+ one-click unsubscribe.</li>
 </ul>
-<h2>Business listings &amp; outreach</h2>
-<p>Listing details come from public sources and owners. If we email a business about claiming its
- listing, every message includes a one-click unsubscribe. To be removed, use that link or email
- <a href="mailto:{email}">{email}</a>.</p>
-<h2>Contact</h2>
+
+<h2>4. Sharing</h2>
+<p>We do <b>not</b> sell your personal data. We share data only with service providers that help us
+ operate (e.g. Google Analytics, our email provider) and where required by law. Public listing
+ information is, by design, publicly visible and available through our search, JSON API, and
+ AI-agent (MCP) interfaces.</p>
+
+<h2>5. Data retention</h2>
+<p>We keep aggregate usage logs for a limited period to analyze trends, and account data for as long
+ as your account is active. You can ask us to delete your account data at any time.</p>
+
+<h2>6. Your choices &amp; rights</h2>
+<ul>
+<li>Decline or revoke location access in your browser at any time.</li>
+<li>Opt out of analytics (see above).</li>
+<li>Businesses can claim, correct, or request removal of a listing for free.</li>
+<li>Request access to or deletion of your account data by emailing us.</li>
+</ul>
+
+<h2>7. Children</h2>
+<p>This service is intended for adults and is not directed to children under 13; we don't knowingly
+ collect personal information from children.</p>
+
+<h2>8. Security</h2>
+<p>We use reasonable measures (HTTPS, hashed passwords, minimal data collection) to protect
+ information, but no method of transmission or storage is 100% secure.</p>
+
+<h2>9. Changes</h2>
+<p>We may update this policy; material changes are reflected by the “last updated” date above.</p>
+
+<h2>10. Contact</h2>
 <p>Questions or removal requests: <a href="mailto:{email}">{email}</a>.</p>"""
     return _doc("/privacy", "Privacy Policy",
-                "How we handle location, logging, cookies, and business outreach — minimal data, "
-                "no selling, easy opt-out.", body)
+                "How we handle location, logging, cookies, analytics, accounts, and business "
+                "outreach — minimal data, no selling, easy opt-out.", body)
 
 
 def terms(request: Request) -> HTMLResponse:
     email = html.escape(settings.outreach_contact_email)
+    plat = html.escape(settings.platform_name)
     body = f"""<h1>Terms of Use</h1>
-<p class="lead">Plain-English terms for using this directory.</p>
+<p class="lead">Last updated: June 2026. By using {plat} you agree to these terms — please read them.</p>
+
+<h2>1. What this is</h2>
+<p>{plat} is a free, informational directory and assistant for the Indian (from India) community in
+ the USA. It helps you discover businesses, temples, events and community resources, and answers
+ general questions.</p>
+
+<h2>2. Information only — not professional advice</h2>
+<p>All content is provided <b>for general information only</b> and <b>“as is”</b>, without
+ warranties of any kind. Listing details are gathered from public sources, automated agents, and
+ submissions, and <b>may be incomplete, inaccurate, or out of date</b>. Nothing here is <b>legal,
+ tax, immigration, financial, or medical advice</b>. <b>Always verify details directly with the
+ business and consult a qualified professional</b> before relying on any information. You use the
+ service at your own risk.</p>
+
+<h2>3. Business listings</h2>
 <ul>
-<li>The directory is provided <b>“as is”</b>. Listing details are gathered from public sources and
- may be incomplete or out of date — always confirm with the business directly.</li>
-<li>We are <b>not affiliated</b> with the listed businesses unless stated. Names and trademarks
- belong to their owners.</li>
-<li>Business owners may claim, correct, or request removal of their listing for free.</li>
-<li>Don't scrape, overload, or misuse the service; automated access should use our provided tools
- and respect rate limits.</li>
-<li>Listing data derived from OpenStreetMap is © OpenStreetMap contributors, licensed under the
- <a href="https://opendatacommons.org/licenses/odbl/" rel="nofollow">ODbL</a>.</li>
+<li>We are <b>not affiliated</b> with listed businesses unless stated; names and trademarks belong
+ to their owners, and a listing is not an endorsement.</li>
+<li>Owners may register, claim, correct, or request removal of their listing for free.</li>
 </ul>
-<p>Questions: <a href="mailto:{email}">{email}</a>.</p>"""
+
+<h2>4. Accounts &amp; registration</h2>
+<ul>
+<li>To manage a business you must register with a valid email (which we verify) or sign in with
+ Google, and accept these Terms and the <a href="/privacy">Privacy Policy</a>.</li>
+<li>Provide accurate information and keep your password secure; you're responsible for activity
+ under your account.</li>
+<li>Only list businesses you're authorized to represent.</li>
+<li>We may suspend accounts or remove content that is fraudulent, spammy, unlawful, or off-topic.</li>
+</ul>
+
+<h2>5. Your submissions</h2>
+<p>When you add or edit a listing, you confirm the information is accurate and that you have the
+ right to share it, and you grant us a non-exclusive license to display and distribute it through
+ the directory, API, and AI-agent interfaces. Don't submit false, misleading, infringing, or spam
+ content.</p>
+
+<h2>6. Acceptable use</h2>
+<ul>
+<li>Don't scrape, overload, disrupt, or misuse the service. Automated access should use our
+ provided tools (MCP server / JSON API) and respect rate limits.</li>
+<li>Don't use the service for unlawful purposes or to harass others.</li>
+</ul>
+
+<h2>7. Intellectual property &amp; data</h2>
+<p>Listing data derived from OpenStreetMap is © OpenStreetMap contributors, licensed under the
+ <a href="https://opendatacommons.org/licenses/odbl/" rel="nofollow">ODbL</a>; data from Wikidata is
+ CC0. Our own text, design, and branding remain ours.</p>
+
+<h2>8. Limitation of liability</h2>
+<p>To the fullest extent permitted by law, {plat} and its operators are not liable for any indirect,
+ incidental, or consequential damages, or for any loss arising from your use of — or reliance on —
+ the service or any listing. The service is provided without warranty of accuracy or availability.</p>
+
+<h2>9. Changes</h2>
+<p>We may update these terms; continued use after changes means you accept them. The “last updated”
+ date reflects the latest version.</p>
+
+<h2>10. Contact</h2>
+<p>Questions: <a href="mailto:{email}">{email}</a>.</p>
+<p class="lead" style="font-size:13px;margin-top:18px">This is a general template provided for
+ convenience, not legal advice; have a lawyer review it before relying on it.</p>"""
     return _doc("/terms", "Terms of Use",
-                "Plain-English terms: the directory is provided as-is, data may be imperfect, "
-                "owners can claim/correct/remove listings.", body)
+                "Terms for using the directory: information-only/as-is, no professional advice, "
+                "accounts & submissions, acceptable use, IP, and liability.", body)
 
 
 def contact(request: Request) -> HTMLResponse:
     email = html.escape(settings.outreach_contact_email)
     body = f"""<h1>Contact</h1>
-<p class="lead">We'd love to hear from you.</p>
+<p class="lead">We'd love to hear from you — questions, ideas, and requests all welcome.</p>
 <ul>
+<li><b>Ask {html.escape(settings.assistant_name)}:</b> the fastest way to find a place or get an
+ answer is the <a href="/chat">chat</a>.</li>
 <li><b>Add or fix a listing:</b> <a href="/submit">submit a business</a>, or claim an existing one
  from its page.</li>
-<li><b>Email:</b> <a href="mailto:{email}">{email}</a> — corrections, removals, partnerships, or feedback.</li>
-<li><b>Ask {html.escape(settings.assistant_name)}:</b> try the <a href="/chat">chat</a> to find
- what you need fast.</li>
+<li><b>Request data we don't have yet:</b> looking for a category, city, or type of listing that's
+ missing? Email us at <a href="mailto:{email}?subject=Data%20request">{email}</a> and we'll work on
+ adding it — your requests directly shape what we cover next.</li>
+<li><b>Corrections, removals, partnerships, feedback:</b> <a href="mailto:{email}">{email}</a>.</li>
 </ul>"""
     return _doc("/contact", "Contact",
                 "Get in touch — add or fix a listing, email us, or ask the assistant.", body)
