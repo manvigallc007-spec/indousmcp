@@ -98,6 +98,13 @@ class Settings(BaseSettings):
     def effective_caterbid_query(self) -> str:
         return self.caterbid_query.strip() or _CATERBID_DEFAULT_QUERY
 
+    # H-1B intelligence from the free DOL OFLC LCA disclosure data (public domain). Blank = disabled.
+    # Point this at the current fiscal-year file from dol.gov (URL or local path). The annual file is
+    # large — prefer a single quarter, or convert to .csv first (the .csv reader streams in constant
+    # memory; .xlsx needs openpyxl + more RAM). dol_h1b_fiscal_year just labels the output.
+    dol_h1b_disclosure_url: str = ""
+    dol_h1b_fiscal_year: str = ""
+
     # Public claim web page (owner-facing)
     web_host: str = "0.0.0.0"
     web_port: int = 8080

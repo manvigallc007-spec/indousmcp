@@ -217,6 +217,11 @@ def cmd_demographics_refresh(args: argparse.Namespace) -> None:
         print(f"  {r['indian_population']:>8,}  {r['name']}")
 
 
+def cmd_h1b_import(args: argparse.Namespace) -> None:
+    from . import labor
+    _print(labor.import_disclosure(source=args.source, fiscal_year=args.year, max_rows=args.limit))
+
+
 def cmd_approval_digest(_: argparse.Namespace) -> None:
     _print(ingest.summarize_approvals())
 
@@ -603,6 +608,13 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Pull Asian-Indian population by state/metro from the free Census ACS API")
     dg.add_argument("--year", default="2022", help="ACS 5-year vintage, e.g. 2022")
     dg.set_defaults(func=cmd_demographics_refresh)
+
+    h1 = sub.add_parser("h1b-import",
+                        help="Aggregate the free DOL H-1B disclosure file (sponsors, wages) into the KB")
+    h1.add_argument("--source", default=None, help="URL or local path (defaults to DOL_H1B_DISCLOSURE_URL)")
+    h1.add_argument("--year", default=None, help="Fiscal year label, e.g. 2024")
+    h1.add_argument("--limit", type=int, default=None, help="Max rows to read (for a quick sample)")
+    h1.set_defaults(func=cmd_h1b_import)
 
     sub.add_parser("approval-digest", help="Human-readable summary of pending approvals").set_defaults(
         func=cmd_approval_digest

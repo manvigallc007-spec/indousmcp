@@ -14,6 +14,7 @@ dependencies = [
     "stripe>=7.0",
     "itsdangerous>=2.0",
     "reverse_geocoder>=1.5",
+    "openpyxl>=3.1",   # read the DOL H-1B disclosure .xlsx (streamed, read-only); .csv needs no dep
 ]
 
 [project.optional-dependencies]

@@ -643,6 +643,18 @@ class DemographicsAgent(Agent):
         return demographics.refresh_all(year=params.get("year", "2022"))
 
 
+class H1BAgent(Agent):
+    name = "h1b"
+    description = ("Aggregates the free DOL H-1B disclosure data (top sponsoring employers, typical "
+                  "wages by occupation, top states) into Dost's knowledge base — the diaspora's "
+                  "professional/income story. DORMANT until DOL_H1B_DISCLOSURE_URL is set.")
+    default_interval_s = 7776000  # quarterly — DOL publishes new disclosure files each quarter
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from .. import labor
+        return labor.import_disclosure(**params)
+
+
 class DiasporaIntelligenceAgent(Agent):
     name = "intelligence"
     description = ("Continuously develops Dost's knowledge about Indians from India in the USA: "
@@ -765,6 +777,7 @@ ALL_AGENTS = [
     LearningAgent(),
     KnowledgeIndexerAgent(),
     DemographicsAgent(),
+    H1BAgent(),
     DiasporaIntelligenceAgent(),
     ReportingAgent(),
     MonitoringAgent(),

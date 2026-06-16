@@ -65,6 +65,10 @@ services:
       CENSUS_API_KEY: ${CENSUS_API_KEY:-}
       # Free Socrata app token (open city/state datasets) — optional, just raises rate limits.
       SOCRATA_APP_TOKEN: ${SOCRATA_APP_TOKEN:-}
+      # Free DOL H-1B disclosure file (sponsors + wages -> knowledge base). Blank = the H1BAgent
+      # stays dormant. Point at a dol.gov fiscal-year file URL or a local path; .csv or .xlsx.
+      DOL_H1B_DISCLOSURE_URL: ${DOL_H1B_DISCLOSURE_URL:-}
+      DOL_H1B_FISCAL_YEAR: ${DOL_H1B_FISCAL_YEAR:-}
       # Outreach (OutreachAgent runs here). Auto-send stays OFF until SMTP *and*
       # OUTREACH_POSTAL_ADDRESS are set (CAN-SPAM); otherwise it only drafts.
       SECRET_KEY: ${SECRET_KEY:-dev-insecure-change-me}      # signs one-click opt-out links
