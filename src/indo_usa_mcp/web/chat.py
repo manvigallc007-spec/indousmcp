@@ -303,6 +303,16 @@ function applyLang(){const t=T();
  const vl=document.querySelector('#convo .vlabel');if(vl)vl.textContent=convoMode?t.voiceStop:t.voiceLabel;
  const sel=document.getElementById('lang');if(sel)sel.value=lang;
 }
+function isIOS(){return /iPad|iPhone|iPod/.test(navigator.userAgent||"")||((navigator.platform==='MacIntel')&&navigator.maxTouchPoints>1);}
+async function micPermState(){
+ // 'granted' | 'denied' | 'prompt' | 'unknown' — lets us guide instead of failing blindly.
+ try{if(navigator.permissions&&navigator.permissions.query){return (await navigator.permissions.query({name:'microphone'})).state;}}catch(e){}
+ return 'unknown';
+}
+// The universal easy path: every phone keyboard has a 🎤 (dictation) that needs no site permission.
+function keyboardMicTip(){return isIOS()
+ ? '🎤 Easiest on iPhone: tap the message box, then tap the 🎤 on your keyboard and just speak — that always works. (In-app voice is limited on iPhone/Safari.)'
+ : '🎤 Easiest way: tap the message box, then tap the 🎤 on your phone keyboard (or press Windows + H on a PC) and just speak — no permission needed.';}
 async function ensureMic(){
  // Trigger the browser's native "Allow microphone?" popup (cleaner/more reliable than letting
  // SpeechRecognition request it). Returns false if blocked/denied.
@@ -312,8 +322,9 @@ async function ensureMic(){
 }
 async function startMic(){
  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
- if(!SR){fillBot(addBot(),'🎤 Voice input isn’t supported in this browser — please type instead.',[]);return;}
- if(!window.isSecureContext){fillBot(addBot(),'🎤 Voice input needs a secure (https) connection — you can still type.',[]);return;}
+ if(!window.isSecureContext){fillBot(addBot(),'🎤 Voice needs a secure (https) connection — you can still type.',[]);return;}
+ if(!SR||isIOS()){fillBot(addBot(),keyboardMicTip(),[]);return;}   // unsupported / iPhone -> keyboard mic
+ if((await micPermState())==='denied'){fillBot(addBot(),micError('not-allowed'),[]);return;}
  if(!(await ensureMic())){fillBot(addBot(),micError('not-allowed'),[]);return;}
  let r;try{r=new SR();}catch(e){return;}
  r.lang=LOCALE[lang]||'en-US';r.interimResults=false;r.maxAlternatives=1;
@@ -323,13 +334,14 @@ async function startMic(){
  r.onend=function(){if(mic)mic.classList.remove('rec');};
  try{r.start();}catch(e){if(mic)mic.classList.remove('rec');}
 }
-function micError(code){return {
- 'not-allowed':'🎤 The mic is blocked for this site. Easiest fix: open it in an Incognito/Private tab and tap 🎙️ → Allow. (Or tap the 🔒 next to the web address → Microphone → Allow → reload.)',
- 'service-not-allowed':'🎤 Microphone access is blocked for this site — enable it in your browser settings and retry.',
- 'no-speech':'🎤 I didn’t catch that — tap the mic and speak again.',
- 'audio-capture':'🎤 No microphone found — check your device’s mic.',
- 'language-not-supported':'🎤 Voice isn’t available for this language on your device — switch the language to English and try again.',
- 'network':'🎤 Voice recognition needs an internet connection — please check your network.'}[code]||null;}
+function micError(code){var m={
+ 'not-allowed':'🎤 The mic isn’t allowed for this site yet. Tap the 🔒 (or “aA”) next to the web address → Microphone → Allow, then reload. ',
+ 'service-not-allowed':'🎤 Microphone access is turned off in your browser settings — switch it on and retry. ',
+ 'no-speech':'🎤 I didn’t catch that — tap Voice and speak again. ',
+ 'audio-capture':'🎤 No microphone found — check your device’s mic. ',
+ 'language-not-supported':'🎤 Voice isn’t available for this language on your device — switch to English and try again. ',
+ 'network':'🎤 Voice recognition needs an internet connection — please check your network. '}[code];
+ return m?(m+keyboardMicTip()):null;}
 function pickVoice(loc){
   // Pick the best available on-device voice for this locale. Hindi/Telugu device voices vary a lot
   // in quality, so we score: exact locale > higher-quality engines (neural/natural/Google) > on-device.
@@ -369,8 +381,9 @@ function convoStatus(s){var bar=document.getElementById('convobar'),txt=document
 function toggleConvo(){convoMode?stopConvo():startConvo();}
 async function startConvo(){
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){fillBot(addBot(),'🎙️ Voice isn’t supported in this browser — try Chrome, or type instead.',[]);return;}
   if(!window.isSecureContext){fillBot(addBot(),'🎙️ Voice needs a secure (https) connection.',[]);return;}
+  if(!SR||isIOS()){fillBot(addBot(),keyboardMicTip(),[]);return;}   // unsupported / iPhone -> keyboard mic
+  if((await micPermState())==='denied'){fillBot(addBot(),micError('not-allowed'),[]);return;}
   if(!(await ensureMic())){fillBot(addBot(),micError('not-allowed'),[]);return;}
   convoMode=true;speakOn=true;localStorage.setItem('dost_speak','1');
   var cb=document.getElementById('convo');if(cb){cb.classList.add('on');var vl=cb.querySelector('.vlabel');if(vl)vl.textContent=T().voiceStop;}
