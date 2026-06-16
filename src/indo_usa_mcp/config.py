@@ -120,6 +120,9 @@ class Settings(BaseSettings):
     # Google Analytics 4 measurement ID, e.g. G-XXXXXXXXXX. Blank = no tracking. NOT a secret —
     # it's public in the page source; injected into every public page's <head> when set.
     google_analytics_id: str = ""
+    # Let the SubmissionReviewAgent auto-publish obviously-good, complete, clearly-Indian business
+    # submissions (ambiguous ones still wait for a human). Set false to require manual approval for all.
+    auto_approve_submissions: bool = True
     # Google sign-in for the business-owner portal (optional; magic-link still works without it).
     # Create an OAuth 2.0 Web client at console.cloud.google.com -> APIs & Services -> Credentials.
     # Authorized redirect URI = <PUBLIC_WEB_URL>/portal/google/callback. Secrets via env only.

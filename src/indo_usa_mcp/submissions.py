@@ -62,3 +62,51 @@ def reject(sub_id: int) -> dict[str, Any]:
     db.execute("UPDATE submissions SET status = 'rejected', reviewed_at = now() "
                "WHERE id = %s AND status = 'pending'", (sub_id,))
     return {"ok": True}
+
+
+# Tokens that strongly signal an Indian / South-Asian business. Used ONLY to AUTO-approve the
+# obvious, complete submissions; anything ambiguous stays pending for a human (no false auto-publish).
+_INDIAN_TOKENS = (
+    "indian", "india", "desi", "south asian", "punjabi", "gujarati", "tamil", "telugu", "bengali",
+    "marathi", "kannada", "malayalam", "hyderabad", "andhra", "kerala", "mumbai", "bombay", "delhi",
+    "chennai", "masala", "tandoor", "biryani", "dosa", "idli", "curry", "chaat", "tiffin", "mithai",
+    "sweets", "namaste", "maharaja", "taj", "ganesh", "krishna", "shiva", "mandir", "temple",
+    "gurdwara", "gurudwara", "swaminarayan", "jain", "sikh", "hindu", "ayurved", "saree", "sari",
+    "mehndi", "henna", "bollywood", "patel", "shah", "sharma", "gupta", "reddy", "rao", "iyer",
+    "nair", "menon", "singh", "kaur", "agarwal", "swad", "apna", "bharat", "jaipur", "rajasthan",
+    "punjab", "gujarat",
+)
+
+
+def _high_confidence(payload: dict) -> bool:
+    """A complete listing AND a clear Indian/South-Asian signal -> safe to auto-publish."""
+    name = (payload.get("name") or "").strip()
+    city = (payload.get("city") or "").strip()
+    state = (payload.get("state") or "").strip()
+    has_contact = any((payload.get(k) or "").strip()
+                      for k in ("phone", "website", "email", "address", "address_full"))
+    if not (name and city and state and has_contact):
+        return False
+    text = f"{name} {payload.get('description') or ''} {payload.get('cuisine_type') or ''}".lower()
+    return any(tok in text for tok in _INDIAN_TOKENS)
+
+
+def auto_approve_pending(limit: int = 50) -> dict[str, Any]:
+    """Agentic queue-shrinker: auto-approve obviously-good, complete, clearly-Indian submissions;
+    leave anything ambiguous for a human. Duplicates are rejected (already in the directory).
+    Moderation can still remove anything later."""
+    approved = dups = left = 0
+    for sub in list_pending(limit):
+        payload = sub["payload"] if isinstance(sub["payload"], dict) else {}
+        if not _high_confidence(payload):
+            left += 1
+            continue
+        res = approve(sub["id"])
+        if res.get("ok"):
+            approved += 1
+        elif res.get("error") == "duplicate":
+            reject(sub["id"])
+            dups += 1
+        else:
+            left += 1
+    return {"auto_approved": approved, "duplicates_rejected": dups, "left_for_human": left}

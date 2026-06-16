@@ -47,6 +47,23 @@ def compute_daily_report() -> dict[str, Any]:
     health["tool_calls_24h"] = _scalar(
         "SELECT count(*) FROM tool_log WHERE created_at > now() - interval '24 hours'")
 
+    # ---- Escalation digest: what needs a human (so the email is actionable, no login required) ----
+    def _safe(sql: str) -> int:
+        try:
+            return _scalar(sql)
+        except Exception:
+            return 0
+    health["messages_pending"] = _safe(
+        "SELECT count(*) FROM contact_messages WHERE status IN ('new','drafted')")
+    health["submissions_pending"] = _safe("SELECT count(*) FROM submissions WHERE status='pending'")
+    try:
+        health["escalations"] = [
+            {"severity": a["severity"], "message": a["message"]} for a in db.query(
+                "SELECT severity, message FROM agent_alerts WHERE NOT resolved ORDER BY "
+                "CASE severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END LIMIT 20")]
+    except Exception:
+        health["escalations"] = []
+
     # ---- Per-vertical totals + today's new (growth) + raw backlog (health) ----
     per_vertical = {}
     for key, cfg in VERTICALS.items():
@@ -106,6 +123,23 @@ def render_text(report: dict) -> str:
     m, d = report["metrics"], report.get("deltas", {})
     h, g = m["health"], m["growth"]
     lines = [f"{settings.platform_name} — daily report", ""]
+
+    # Lead with what needs a human today (so you can act straight from the email).
+    attn: list[str] = [f"  [{e['severity']}] {e['message']}" for e in h.get("escalations", [])]
+    if h.get("messages_pending"):
+        attn.append(f"  {h['messages_pending']} contact message(s) to reply  → /admin/messages")
+    if h.get("submissions_pending"):
+        attn.append(f"  {h['submissions_pending']} submission(s) to review  → /admin/submissions")
+    if h.get("approvals_pending"):
+        attn.append(f"  {h['approvals_pending']} approval(s) pending  → /admin/approvals")
+    if h.get("feedback_pending"):
+        attn.append(f"  {h['feedback_pending']} correction(s) to review  → /admin/feedback")
+    if attn:
+        lines += ["NEEDS YOUR ATTENTION:"] + attn + ["", f"  (Open the admin: "
+                  f"{settings.public_web_url.rstrip('/')}/admin/ops )", ""]
+    else:
+        lines += ["NEEDS YOUR ATTENTION: nothing — the agents have it handled. ✓", ""]
+
     lines.append("DATA (active / +today / claimed / featured):")
     for key, v in g["verticals"].items():
         delta = d.get(key, 0)

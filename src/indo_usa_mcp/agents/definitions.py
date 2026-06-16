@@ -631,6 +631,20 @@ class KnowledgeIndexerAgent(Agent):
         return out
 
 
+class SubmissionReviewAgent(Agent):
+    name = "submission_review"
+    description = ("Auto-approves obviously-good, complete, clearly-Indian business submissions "
+                  "(ambiguous ones still wait for a human), shrinking the manual approval queue.")
+    default_interval_s = 3600  # hourly
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from ..config import settings
+        if not settings.auto_approve_submissions:
+            return {"skipped": "disabled"}
+        from .. import submissions
+        return submissions.auto_approve_pending(limit=params.get("limit", 50))
+
+
 class ContactReplyAgent(Agent):
     name = "contact_reply"
     description = ("Drafts a reply to each new contact-form message with the free LLM, for a human "
@@ -831,6 +845,7 @@ ALL_AGENTS = [
     DemographicsAgent(),
     H1BAgent(),
     ContactReplyAgent(),
+    SubmissionReviewAgent(),
     DiasporaIntelligenceAgent(),
     ReportingAgent(),
     MonitoringAgent(),

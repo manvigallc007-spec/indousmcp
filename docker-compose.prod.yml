@@ -69,6 +69,9 @@ services:
       # stays dormant. Point at a dol.gov fiscal-year file URL or a local path; .csv or .xlsx.
       DOL_H1B_DISCLOSURE_URL: ${DOL_H1B_DISCLOSURE_URL:-}
       DOL_H1B_FISCAL_YEAR: ${DOL_H1B_FISCAL_YEAR:-}
+      # Auto-publish obviously-good, complete, clearly-Indian business submissions (ambiguous ones
+      # still wait for a human). Set false to require manual approval for every submission.
+      AUTO_APPROVE_SUBMISSIONS: ${AUTO_APPROVE_SUBMISSIONS:-true}
       # Outreach (OutreachAgent runs here). Auto-send stays OFF until SMTP *and*
       # OUTREACH_POSTAL_ADDRESS are set (CAN-SPAM); otherwise it only drafts.
       SECRET_KEY: ${SECRET_KEY:-dev-insecure-change-me}      # signs one-click opt-out links
