@@ -82,8 +82,9 @@ def _page(title: str, body: str, status: int = 200) -> HTMLResponse:
 # Grouped admin nav: (section label, [(item label, href), ...]).
 _ADMIN_NAV = [
     ("", [("Overview", "/admin"), ("Operations", "/admin/ops"), ("Dashboard", "/admin/dashboard")]),
-    ("Listings", [("Data", "/admin/data/restaurants"), ("Geography", "/admin/geo/restaurants"),
-                  ("Quality", "/admin/quality/restaurants"), ("Moderation", "/admin/moderation")]),
+    ("Listings", [("Data", "/admin/data/restaurants"), ("Coverage", "/admin/coverage"),
+                  ("Geography", "/admin/geo/restaurants"), ("Quality", "/admin/quality/restaurants"),
+                  ("Moderation", "/admin/moderation")]),
     ("Inbox", [("Messages", "/admin/messages"), ("Submissions", "/admin/submissions"),
                ("Approvals", "/admin/approvals"), ("Feedback", "/admin/feedback"),
                ("Claims", "/admin/claims")]),

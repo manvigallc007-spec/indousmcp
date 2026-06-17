@@ -14,3 +14,7 @@ def test_agent_detail_route_gated():
 
 def test_messages_route_still_gated():
     assert c.get("/admin/messages?show=auto", follow_redirects=False).status_code in (302, 303)
+
+
+def test_coverage_route_gated():
+    assert c.get("/admin/coverage", follow_redirects=False).status_code in (302, 303)

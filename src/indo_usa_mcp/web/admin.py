@@ -633,6 +633,55 @@ def agent_detail(request: Request) -> HTMLResponse:
     return admin_page(f"Agent · {name}", body, active="Agents")
 
 
+# ----------------------------------------------------------------------- coverage matrix
+def coverage_page(request: Request) -> HTMLResponse:
+    """Active listings per category x state — so you can see coverage and spot gaps to fill."""
+    if (r := require_admin(request)):
+        return r
+    data: dict[str, dict[str, int]] = {}
+    totals: dict[str, int] = {}
+    for v, cfg in verticals.VERTICALS.items():
+        try:
+            rows = db.query(f"SELECT state, count(*) AS n FROM {cfg['table']} "
+                            "WHERE deleted_at IS NULL AND is_active AND state IS NOT NULL "
+                            "AND state <> '' GROUP BY state")
+        except Exception:
+            rows = []
+        cells = {r["state"]: int(r["n"]) for r in rows}
+        data[v] = cells
+        totals[v] = sum(cells.values())
+
+    state_tot: dict[str, int] = {}
+    for cells in data.values():
+        for st, n in cells.items():
+            state_tot[st] = state_tot.get(st, 0) + n
+    top_states = [s for s, _ in sorted(state_tot.items(), key=lambda x: x[1], reverse=True)[:14]]
+
+    def _cell(n: int) -> str:
+        if not n:
+            return "<td style='background:#fdecec;color:#c5221f;text-align:center'>0</td>"
+        bg = "#fff7e6" if n < 5 else "#eaf7ee"
+        return f"<td style='background:{bg};text-align:center'>{n}</td>"
+    head = "<th>Category</th>" + "".join(f"<th>{esc(s)}</th>" for s in top_states) + "<th>Total</th>"
+    rows_html = ""
+    for v, cfg in sorted(verticals.VERTICALS.items(), key=lambda kv: totals[kv[0]], reverse=True):
+        tds = "".join(_cell(data[v].get(s, 0)) for s in top_states)
+        rows_html += f"<tr><td><b>{esc(cfg['label'])}</b></td>{tds}<td><b>{totals[v]}</b></td></tr>"
+    foot = ("<tr><td><b>Total</b></td>"
+            + "".join(f"<td style='text-align:center'><b>{state_tot.get(s, 0)}</b></td>" for s in top_states)
+            + f"<td><b>{sum(totals.values())}</b></td></tr>")
+    thin = sorted(totals.items(), key=lambda kv: kv[1])[:3]
+    body = (f"<p class='muted'>Active listings per category × state (top {len(top_states)} states by "
+            f"volume). <span style='background:#fdecec;color:#c5221f;padding:1px 6px'>red</span> = a "
+            f"gap (0). Live total: <b>{sum(totals.values()):,}</b> across <b>{len(state_tot)}</b> "
+            "states. Thinnest categories: "
+            + ", ".join(f"{verticals.VERTICALS[v]['label']} ({n})" for v, n in thin) + ".</p>"
+            "<div style='overflow-x:auto'><table><tr>" + head + "</tr>" + rows_html + foot + "</table></div>"
+            "<p class='muted' style='margin-top:10px'>Fill a gap with "
+            "<code>cli collect --state &lt;ST&gt;</code> or <code>cli collect --metro &lt;name&gt;</code>.</p>")
+    return admin_page("Coverage", body, active="Coverage")
+
+
 # ---------------------------------------------------------------------- payments
 def payments_page(request: Request) -> HTMLResponse:
     if (r := require_admin(request)):
@@ -1219,6 +1268,7 @@ routes = [
     Route("/admin/dashboard", dashboard_page, methods=["GET"]),
     Route("/admin/moderation", moderation_page, methods=["GET"]),
     Route("/admin/moderation", moderation_action, methods=["POST"]),
+    Route("/admin/coverage", coverage_page, methods=["GET"]),
     Route("/admin/messages", messages_page, methods=["GET"]),
     Route("/admin/messages", messages_action, methods=["POST"]),
     Route("/admin/data/{vertical}", data_list, methods=["GET"]),
