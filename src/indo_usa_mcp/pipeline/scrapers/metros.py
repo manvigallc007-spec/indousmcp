@@ -8,24 +8,25 @@ from __future__ import annotations
 # (south_lat, west_lng, north_lat, east_lng)
 METROS: dict[str, tuple[float, float, float, float]] = {
     # Phase-1 high-density metros
-    "bay_area": (37.20, -122.55, 38.10, -121.75),
+    "bay_area": (37.15, -122.55, 38.15, -121.55),   # + Tracy/Mountain House (east)
     "nyc_nj": (40.49, -74.30, 40.92, -73.70),
     # Full DFW metroplex: Fort Worth/Arlington (west) + the dense northern Indian suburbs —
     # Irving, Plano, Richardson, Carrollton AND Frisco/McKinney/Allen/Prosper (north) + Rockwall (east).
     "dallas": (32.45, -97.50, 33.35, -96.40),
-    "houston": (29.50, -95.70, 30.10, -95.10),
-    "chicago": (41.65, -87.95, 42.10, -87.50),
+    "houston": (29.45, -95.90, 30.20, -95.05),     # + Katy (west) + The Woodlands/Spring (north)
+    # Chicagoland incl. the western Indian belt — Naperville/Aurora (SW) + Schaumburg/Hoffman/Palatine (NW).
+    "chicago": (41.55, -88.45, 42.25, -87.50),
     # Secondary metros (diaspora hubs)
     "los_angeles": (33.70, -118.55, 34.30, -117.85),
-    "seattle": (47.40, -122.45, 47.78, -122.10),
-    "atlanta": (33.55, -84.55, 34.05, -84.10),
-    "phoenix": (33.25, -112.35, 33.75, -111.65),
-    "austin": (30.10, -97.95, 30.50, -97.55),
-    "boston": (42.25, -71.20, 42.45, -70.95),
-    "philadelphia": (39.85, -75.30, 40.15, -74.95),
-    "raleigh": (35.70, -78.80, 35.95, -78.50),
-    "detroit": (42.20, -83.35, 42.55, -82.90),
-    "central_nj": (40.40, -74.55, 40.70, -74.20),
+    "seattle": (47.30, -122.50, 47.85, -121.95),    # + Redmond/Sammamish/Issaquah (east) + Bothell (north)
+    "atlanta": (33.45, -84.65, 34.25, -83.90),      # + Alpharetta/Cumming (north) + Johns Creek/Lawrenceville (east)
+    "phoenix": (33.20, -112.35, 33.75, -111.60),    # + Chandler/Gilbert (southeast)
+    "austin": (30.05, -98.05, 30.65, -97.50),       # + Round Rock/Cedar Park/Leander (north)
+    "boston": (42.10, -71.70, 42.65, -70.80),       # + MetroWest (Framingham/Westborough/Shrewsbury) + Burlington/Lowell
+    "philadelphia": (39.80, -75.65, 40.25, -74.90),  # + King of Prussia/Exton (west PA)
+    "raleigh": (35.60, -79.05, 36.15, -78.45),      # + Morrisville/Cary/Apex + Durham/Chapel Hill
+    "detroit": (42.10, -83.60, 42.70, -82.85),      # + Novi/Canton/Farmington/Northville (west) + Troy/Rochester (north)
+    "central_nj": (40.25, -74.75, 40.92, -74.05),   # + Princeton (south) + Parsippany/Bridgewater/Somerset (north)
     # Additional diaspora hubs (broaden coverage). DC-area is split into NoVA + suburban MD so the
     # state backfill stays single-state (the actual Indian hubs are Fairfax/Loudoun + Montgomery Co.).
     "northern_virginia": (38.60, -77.70, 39.12, -77.00),
