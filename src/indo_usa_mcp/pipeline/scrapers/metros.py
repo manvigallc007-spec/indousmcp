@@ -30,34 +30,34 @@ METROS: dict[str, tuple[float, float, float, float]] = {
     # Additional diaspora hubs (broaden coverage). DC-area is split into NoVA + suburban MD so the
     # state backfill stays single-state (the actual Indian hubs are Fairfax/Loudoun + Montgomery Co.).
     "northern_virginia": (38.60, -77.70, 39.12, -77.00),
-    "suburban_maryland": (38.85, -77.35, 39.25, -76.80),
+    "suburban_maryland": (38.80, -77.40, 39.35, -76.65),  # + Howard Co (Columbia/Ellicott City)
     "sacramento": (38.35, -121.65, 38.85, -121.05),
-    "minneapolis": (44.70, -93.55, 45.15, -92.90),
+    "minneapolis": (44.65, -93.60, 45.25, -92.80),   # Eden Prairie/Maple Grove/Eagan/Woodbury edges
     "san_diego": (32.53, -117.40, 33.18, -116.90),
-    "denver": (39.55, -105.20, 39.95, -104.70),
-    "tampa": (27.70, -82.75, 28.20, -82.25),
+    "denver": (39.45, -105.30, 40.05, -104.60),    # + Boulder/Broomfield (N) + Parker/Castle Rock (S)
+    "tampa": (27.65, -82.80, 28.45, -82.20),       # + Wesley Chapel/Land O'Lakes (north)
     "orlando": (28.25, -81.65, 28.85, -81.15),
-    "charlotte": (35.05, -81.05, 35.45, -80.60),
-    "columbus": (39.85, -83.20, 40.20, -82.80),
-    "portland": (45.35, -123.00, 45.65, -122.45),
+    "charlotte": (35.00, -81.10, 35.60, -80.50),   # + Huntersville/Cornelius (Lake Norman) + Concord
+    "columbus": (39.80, -83.35, 40.30, -82.70),    # + Dublin/Powell/Westerville/New Albany (north)
+    "portland": (45.30, -123.10, 45.70, -122.40),  # + Hillsboro/Beaverton (west)
     "las_vegas": (35.95, -115.35, 36.35, -114.95),
     "hartford": (41.55, -72.90, 41.90, -72.45),
     # Batch 3 — more diaspora hubs (single-state envelopes)
     "san_antonio": (29.20, -98.75, 29.65, -98.25),
     "miami": (25.55, -80.45, 26.40, -80.05),       # Miami-Dade + Broward (Davie/Pembroke Pines)
-    "nashville": (35.95, -87.05, 36.40, -86.55),
-    "indianapolis": (39.55, -86.40, 39.95, -85.90),
-    "cleveland": (41.35, -81.95, 41.65, -81.45),
-    "cincinnati": (39.00, -84.75, 39.30, -84.30),
-    "pittsburgh": (40.30, -80.20, 40.60, -79.75),
+    "nashville": (35.80, -87.10, 36.45, -86.35),   # + Franklin (S) + Murfreesboro/Smyrna (SE)
+    "indianapolis": (39.55, -86.45, 40.10, -85.80),   # + Carmel/Westfield/Noblesville/Fishers (north hubs)
+    "cleveland": (41.25, -82.05, 41.70, -81.35),   # + Solon/Twinsburg/Hudson (SE) + Westlake/Avon (W)
+    "cincinnati": (39.00, -84.80, 39.45, -84.25),  # + Mason/West Chester/Liberty Twp (north hubs)
+    "pittsburgh": (40.25, -80.25, 40.75, -79.65),  # + Cranberry/Wexford (N) + Monroeville/Murrysville (E)
     "overland_park": (38.85, -94.85, 39.10, -94.55),   # KC's Indian hub is on the KS side
-    "st_louis": (38.50, -90.45, 38.80, -90.10),
-    "milwaukee": (42.90, -88.10, 43.20, -87.85),
-    "salt_lake_city": (40.50, -112.10, 40.90, -111.75),
+    "st_louis": (38.45, -90.75, 38.90, -90.05),    # + Chesterfield/Ballwin/Wildwood (west hubs)
+    "milwaukee": (42.85, -88.35, 43.25, -87.85),   # + Brookfield/Waukesha/New Berlin (W) + Mequon (N)
+    "salt_lake_city": (40.30, -112.20, 40.95, -111.65),  # + Lehi/American Fork (Silicon Slopes, south)
     "richmond": (37.40, -77.65, 37.70, -77.25),
     "long_island": (40.60, -73.75, 40.95, -72.85),     # Nassau + Suffolk, NY
     "orange_county": (33.55, -118.10, 33.95, -117.60),  # Irvine/Anaheim, CA
-    "inland_empire": (33.75, -117.65, 34.20, -117.10),  # Riverside/San Bernardino, CA
+    "inland_empire": (33.70, -117.85, 34.20, -117.05),  # + Chino Hills/Chino/Eastvale (W); Riverside/San Bernardino, CA
 }
 
 
