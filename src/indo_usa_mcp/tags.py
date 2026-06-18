@@ -81,6 +81,31 @@ _SERVICE_TAGS: dict[str, tuple[str, ...]] = {
 }
 
 
+# Human-facing amenity / dietary / service chips (Part A patterns 8/10/14). Dish tags (biryani,
+# dosa…) are intentionally omitted from display — they're implied by the search query itself.
+_DISPLAY_TAGS: dict[str, str] = {
+    "vegetarian": "🥗 Veg", "vegan": "🌱 Vegan", "halal": "☪️ Halal", "jain": "Jain",
+    "gluten-free": "Gluten-free", "eggless": "Eggless",
+    "delivery": "🛵 Delivery", "takeout": "🥡 Takeout", "catering": "🍱 Catering",
+    "tiffin": "🍱 Tiffin", "buffet": "🍽️ Buffet", "reservations": "📅 Reservations",
+    "outdoor-seating": "☀️ Outdoor seating", "drive-thru": "🚗 Drive-thru",
+    "wheelchair-accessible": "♿ Accessible", "wifi": "📶 Wi-Fi", "air-conditioned": "❄️ A/C",
+    "cards-accepted": "💳 Cards", "organic": "🌿 Organic", "smoke-free": "🚭 Smoke-free",
+    "money-transfer": "💸 Money transfer", "immigration": "🛂 Immigration", "travel": "✈️ Travel",
+}
+
+
+def for_display(tags, limit: int = 6) -> list[str]:
+    """Curated, human-friendly amenity/dietary/service chips from a record's tags (skips dish tags).
+    These come from OSM attributes already captured at ingestion (see osm.attribute_tags)."""
+    out: list[str] = []
+    for t in (tags or []):
+        lab = _DISPLAY_TAGS.get(str(t).lower())
+        if lab and lab not in out:
+            out.append(lab)
+    return out[:limit]
+
+
 def _match(text: str, table: dict[str, tuple[str, ...]]) -> set[str]:
     return {tag for tag, kws in table.items() if any(k in text for k in kws)}
 

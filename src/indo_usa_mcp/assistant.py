@@ -17,7 +17,7 @@ from typing import Any
 
 import httpx
 
-from . import analytics, verticals
+from . import analytics, tags as _tags, verticals
 from .config import settings
 
 _SYSTEM = (
@@ -310,6 +310,7 @@ def _cards(res: dict) -> list[dict]:
             "verified_ago": r.get("verified_ago"),
             "distance_miles": r.get("distance_miles"),
             "id": r.get("id"),
+            "features": _tags.for_display(r.get("tags")),
         })
     return out
 

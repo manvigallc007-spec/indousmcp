@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Route
 
-from .. import db, reviews as reviews_mod, verticals
+from .. import db, reviews as reviews_mod, tags as tagsmod, verticals
 from ..config import settings
 from .auth import verify_captcha
 from .common import captcha_field
@@ -30,6 +30,8 @@ _CSS = """<style>
 .lmeta{color:#4b5563;margin:6px 0}.lmeta a{font-weight:600}
 .banner{background:#fff;border:1px solid #cfe6e0;border-left:4px solid #0f9b8e;border-radius:10px;
  padding:12px 14px;margin:12px 0;font-weight:600}.banner.ok{border-left-color:#137333;color:#137333}
+.feats{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.fchip{background:#f3efe9;border:1px solid #e7e0d6;border-radius:999px;padding:4px 11px;font-size:13px;color:#5b6470}
 .rev{background:#fff;border:1px solid #ececec;border-radius:12px;padding:13px 15px;margin:10px 0}
 .rev .rstars{color:#f5a623;font-size:17px;letter-spacing:1px}
 .rev .rbody{margin:5px 0;color:#26303a}.rev .meta{color:#6b7280;font-size:13px}
@@ -51,10 +53,18 @@ _CSS = """<style>
 def _fetch(vertical: str, listing_id: int) -> dict | None:
     table = verticals._table(vertical)
     return db.query_one(
-        f"SELECT id, name, address_full, city, state, lat, lng, phone, website, description, "
+        f"SELECT id, name, address_full, city, state, lat, lng, phone, website, description, tags, "
         f"is_claimed, rating, rating_count, community_rating, community_rating_count, "
         f"{_FEATURED} AS is_featured FROM {table} "
         f"WHERE id = %s AND deleted_at IS NULL AND is_active", [listing_id])
+
+
+def _features_html(r: dict) -> str:
+    feats = tagsmod.for_display(r.get("tags"), limit=10)
+    if not feats:
+        return ""
+    chips = "".join(f"<span class='fchip'>{html.escape(f)}</span>" for f in feats)
+    return f"<div class='feats'>{chips}</div>"
 
 
 def _ratings_html(r: dict) -> str:
@@ -183,6 +193,7 @@ def listing_page(request: Request) -> HTMLResponse:
         + (f"<p class='lmeta'>📍 {html.escape(addr)}</p>" if addr else "")
         + (f"<p class='lmeta'>{links}</p>" if links else "")
         + (f"<p>{html.escape(r.get('description') or '')}</p>" if r.get("description") else "")
+        + _features_html(r)
         + "<h2 style='margin-top:26px'>Community reviews</h2>"
         + _reviews_html(items)
         + _form_html(v, listing_id))

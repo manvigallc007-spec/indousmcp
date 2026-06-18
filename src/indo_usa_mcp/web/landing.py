@@ -16,7 +16,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 from starlette.routing import Route
 
-from .. import db, verticals
+from .. import db, tags as tagsmod, verticals
 from ..config import settings
 from .chat import _CAT_BLURB, _CAT_COLOR, _CAT_ICON
 from .common import analytics_tag
@@ -122,6 +122,8 @@ def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200)
    padding:14px 16px;margin:10px 0}}
  .lc h3{{margin:0 0 4px;font-size:17px}} .lc p{{margin:5px 0;color:#4b5563;font-size:14px}}
  .lc .meta{{color:#6b7280;font-size:13px}} .lc .feat{{color:#b45309;font-weight:600}}
+ .feats{{display:flex;flex-wrap:wrap;gap:5px;margin:7px 0 2px}}
+ .fchip{{background:#f3efe9;border:1px solid #e7e0d6;border-radius:999px;padding:2px 9px;font-size:12px;color:#5b6470}}
  .lc .ver{{color:#1565c0;font-weight:600}} .lc .rate{{color:#b45309;font-weight:600}}
  .cta{{background:{_BRAND};color:#fff;padding:11px 18px;border-radius:10px;display:inline-block;margin-top:8px}}
  nav.crumbs{{font-size:13px;margin-bottom:14px}}
@@ -187,7 +189,7 @@ def browse_state(request: Request) -> HTMLResponse:
 def _listings(v: str, state: str, city: str, limit: int = 200) -> list[dict]:
     table = verticals._table(v)
     return db.query(
-        f"SELECT id, name, address_full, city, state, lat, lng, phone, website, description, "
+        f"SELECT id, name, address_full, city, state, lat, lng, phone, website, description, tags, "
         f"is_claimed, rating, rating_count, community_rating, community_rating_count, "
         f"{_FEATURED} AS is_featured "
         f"FROM {table} WHERE deleted_at IS NULL AND is_active "
@@ -225,9 +227,13 @@ def browse_city(request: Request) -> HTMLResponse:
             if r.get("rating") else ""
         rate = " · ".join(x for x in (crate, wrate) if x)
         name_html = f"<a href='/listing/{v}/{r['id']}'>{html.escape(r['name'])}</a>"
+        feats = tagsmod.for_display(r.get("tags"), limit=8)
+        feats_html = ("<div class='feats'>" + "".join(
+            f"<span class='fchip'>{html.escape(x)}</span>" for x in feats) + "</div>") if feats else ""
         cards += (f"<div class='lc'><h3>{i}. {name_html}{feat}</h3>"
                   f"<div class='meta'>{html.escape(addr)} {rate}</div>"
                   + (f"<p>{html.escape((r.get('description') or '')[:220])}</p>" if r.get("description") else "")
+                  + feats_html
                   + (f"<div class='meta'>{links} · <a href='/listing/{v}/{r['id']}'>Details &amp; reviews</a></div>"
                      if links else f"<div class='meta'><a href='/listing/{v}/{r['id']}'>Details &amp; reviews</a></div>")
                   + "</div>")
