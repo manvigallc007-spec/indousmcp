@@ -10,7 +10,9 @@ METROS: dict[str, tuple[float, float, float, float]] = {
     # Phase-1 high-density metros
     "bay_area": (37.20, -122.55, 38.10, -121.75),
     "nyc_nj": (40.49, -74.30, 40.92, -73.70),
-    "dallas": (32.55, -97.05, 33.05, -96.55),
+    # Full DFW metroplex: Fort Worth/Arlington (west) + the dense northern Indian suburbs —
+    # Irving, Plano, Richardson, Carrollton AND Frisco/McKinney/Allen/Prosper (north) + Rockwall (east).
+    "dallas": (32.45, -97.50, 33.35, -96.40),
     "houston": (29.50, -95.70, 30.10, -95.10),
     "chicago": (41.65, -87.95, 42.10, -87.50),
     # Secondary metros (diaspora hubs)
