@@ -27,9 +27,39 @@ W_VECTOR = 2.0
 W_PROXIMITY = 1.5
 W_FRESHNESS = 1.0
 W_FEATURED = 1.0
+W_RATING = 1.3     # star-rating signal (confidence-weighted; community rating preferred over web)
 STALE_HALFLIFE_DAYS = 45.0
 PROX_HALFLIFE_MI = 5.0
 _CANDIDATES = 100  # how many relevance candidates to rerank
+
+# Rating-as-a-trust-signal tuning. A listing needs a MINIMUM number of reviews before its rating
+# affects ranking — this kills the "one 5-star review wins 'best'" problem. Confidence then ramps
+# up to RATING_CONF_FULL reviews. A "best/top/highest-rated" query multiplies the rating weight.
+RATING_MIN_REVIEWS = 3
+RATING_CONF_FULL = 15
+SUPERLATIVE_MULT = 2.2
+_SUPERLATIVE_RE = re.compile(
+    r"\b(best|top|highest[ -]?rated|top[ -]?rated|highest[ -]?rating|most[ -]?reviewed|"
+    r"well[ -]?rated|finest|number[ -]?one|no\.?\s?1|5[ -]?star)\b")
+
+
+def _is_superlative(query: str) -> bool:
+    """True when the user is explicitly asking to rank by quality ('best biryani', 'top rated')."""
+    return bool(_SUPERLATIVE_RE.search((query or "").lower()))
+
+
+def rating_score(row: dict) -> float:
+    """Confidence-weighted star-rating signal in [0,1]. Prefers the first-party COMMUNITY rating;
+    falls back to the web-harvested rating. Returns 0 until a listing has RATING_MIN_REVIEWS reviews
+    (so a single 5-star can't win 'best'), and only ratings above ~3 contribute."""
+    val, cnt = row.get("community_rating"), row.get("community_rating_count") or 0
+    if not (val and cnt >= RATING_MIN_REVIEWS):
+        val, cnt = row.get("rating"), row.get("rating_count") or 0
+        if not (val and cnt >= RATING_MIN_REVIEWS):
+            return 0.0
+    quality = max(0.0, min((float(val) - 3.0) / 2.0, 1.0))   # 3★ -> 0.0, 5★ -> 1.0
+    confidence = min(cnt / RATING_CONF_FULL, 1.0)
+    return quality * confidence
 
 # category-ish columns to treat as an exact/keyword match target, across verticals
 _CAT_FIELDS = ("cuisine_type", "store_type", "salon_type", "studio_type", "service_type",
@@ -98,7 +128,8 @@ def _name_exact(q_norm: str, q_terms: set[str], name: str) -> float:
 
 
 def score_row(row: dict, q_norm: str, q_terms: set[str],
-              vector_sim: float, distance_mi: float | None) -> float:
+              vector_sim: float, distance_mi: float | None,
+              rating_weight: float = W_RATING) -> float:
     name = _norm(row.get("name"))
     cats = {_norm(row.get(k)) for k in _CAT_FIELDS if row.get(k)}
     tags = {str(t).lower() for t in (row.get("tags") or [])}
@@ -118,6 +149,7 @@ def score_row(row: dict, q_norm: str, q_terms: set[str],
         + W_PROXIMITY * proximity_score(distance_mi)
         + W_FRESHNESS * freshness_score(row.get("last_seen_at"))
         + W_FEATURED * featured
+        + rating_weight * rating_score(row)
     )
 
 
@@ -132,6 +164,8 @@ def rerank(rows: list[dict], query: str, point: tuple[float, float] | None = Non
     """
     q_norm = _norm(query)
     q_terms = set(q_norm.split())
+    # "best biryani" / "top-rated salon" -> weight the rating much more heavily.
+    rating_weight = W_RATING * (SUPERLATIVE_MULT if _is_superlative(query) else 1.0)
     for r in rows:
         dist = None
         if point and r.get("lat") is not None and r.get("lng") is not None:
@@ -139,7 +173,7 @@ def rerank(rows: list[dict], query: str, point: tuple[float, float] | None = Non
             r["distance_miles"] = round(dist, 2)
         vs = r.get("match_score")
         vs = float(vs) if vs is not None else 0.0
-        r["score"] = round(score_row(r, q_norm, q_terms, vs, dist), 4)
+        r["score"] = round(score_row(r, q_norm, q_terms, vs, dist, rating_weight), 4)
         r["verified_ago"] = verified_label(r.get("last_seen_at"))
     if nearest_first and point:
         # exact-name hits first; then nearest; score breaks ties; no-coord rows last.
@@ -181,6 +215,10 @@ def text_search(table: str, cols_sql: str, query: str, *, city: str | None = Non
     them, so a wider pool is gathered to avoid missing the genuinely-closest matches. Pass
     `nearest_first=False` to force pure hybrid-relevance ordering."""
     near = (point is not None) if nearest_first is None else nearest_first
+    # An explicit "best/top-rated" request ranks by quality (rating-weighted score), not pure
+    # distance — proximity still contributes to the score, so it's "best among the nearby ones".
+    if nearest_first is None and near and _is_superlative(query):
+        near = False
     where, params = _filters(city, state, extra_where)
     where_sql = " AND ".join(where)
     cand: dict[Any, dict] = {}
