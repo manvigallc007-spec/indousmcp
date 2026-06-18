@@ -20,6 +20,7 @@ from starlette.routing import Route
 
 from .. import db, reviews as reviews_mod, tags as tagsmod, verticals
 from ..config import settings
+from . import i18n
 from .auth import verify_captcha
 from .common import captcha_field
 from .landing import _FEATURED, _cathead, _label, _page
@@ -81,9 +82,9 @@ def _ratings_html(r: dict) -> str:
     return " &nbsp;·&nbsp; ".join(parts)
 
 
-def _reviews_html(items: list[dict]) -> str:
+def _reviews_html(items: list[dict], tr: dict) -> str:
     if not items:
-        return "<p class='muted'>No community reviews yet — be the first to write one below.</p>"
+        return f"<p class='muted'>{html.escape(tr['no_reviews'])}</p>"
     out = []
     for r in items:
         n = int(r["rating"])
@@ -100,26 +101,25 @@ def _reviews_html(items: list[dict]) -> str:
     return "".join(out)
 
 
-def _form_html(vertical: str, listing_id: int) -> str:
+def _form_html(vertical: str, listing_id: int, tr: dict) -> str:
     stars = "".join(
         f"<input type='radio' id='star{i}' name='rating' value='{i}' required>"
         f"<label for='star{i}' aria-label='{i} star{'s' if i != 1 else ''}'>★</label>"
         for i in (5, 4, 3, 2, 1))
+    opt = html.escape(tr["optional"])
     return (
-        f"<h2 style='margin-top:26px'>Write a review</h2>"
+        f"<h2 style='margin-top:26px'>{html.escape(tr['write_review'])}</h2>"
         f"<form class='rform' method='post' action='/listing/{vertical}/{listing_id}/review'>"
         "<input class='hp' type='text' name='website' tabindex='-1' autocomplete='off' aria-hidden='true'>"
-        "<label>Your rating</label>"
+        f"<label>{html.escape(tr['your_rating'])}</label>"
         f"<fieldset class='stars'>{stars}</fieldset>"
-        "<label>Your review <span style='font-weight:400;color:#6b7280'>(optional)</span></label>"
-        "<textarea name='body' rows='4' maxlength='2000' "
-        "placeholder='What was your experience? Be honest and helpful.'></textarea>"
-        "<label>Your name <span style='font-weight:400;color:#6b7280'>(optional)</span></label>"
+        f"<label>{html.escape(tr['your_review'])} <span style='font-weight:400;color:#6b7280'>({opt})</span></label>"
+        f"<textarea name='body' rows='4' maxlength='2000' placeholder='{html.escape(tr['review_placeholder'])}'></textarea>"
+        f"<label>{html.escape(tr['your_name'])} <span style='font-weight:400;color:#6b7280'>({opt})</span></label>"
         "<input type='text' name='name' maxlength='120' placeholder='Anonymous'>"
         f"{captcha_field()}"
-        "<button type='submit'>Submit review</button>"
-        "<p class='muted' style='font-size:12.5px;margin-top:10px'>Reviews are moderated. Be "
-        "respectful and on-topic — spam and abuse are removed.</p></form>")
+        f"<button type='submit'>{html.escape(tr['submit_review'])}</button>"
+        f"<p class='muted' style='font-size:12.5px;margin-top:10px'>{html.escape(tr['review_note'])}</p></form>")
 
 
 def _jsonld(vertical: str, r: dict, items: list[dict]) -> str:
@@ -165,6 +165,7 @@ def listing_page(request: Request) -> HTMLResponse:
                      "<a href='/chat'>ask the assistant</a>.</p>", status=404)
 
     items = reviews_mod.list_for_listing(v, listing_id, limit=30)
+    tr = i18n.t(request)                                    # UI labels in the visitor's language
     loc = ", ".join(x for x in (r.get("city"), (r["state"].upper() if r.get("state") else None)) if x)
     addr = r.get("address_full") or loc
     label = _label(v)
@@ -194,12 +195,12 @@ def listing_page(request: Request) -> HTMLResponse:
         + (f"<p class='lmeta'>📍 {html.escape(addr)}</p>" if addr else "")
         + (f"<p class='lmeta'>{links}</p>" if links else "")
         + (f"<p>{html.escape(r.get('description') or '')}</p>" if r.get("description") else "")
-        + (f"<p class='langs'>🗣 Speaks {html.escape(', '.join(r['languages']))}</p>"
+        + (f"<p class='langs'>🗣 {html.escape(tr['speaks'])}: {html.escape(', '.join(r['languages']))}</p>"
            if r.get("languages") else "")
         + _features_html(r)
-        + "<h2 style='margin-top:26px'>Community reviews</h2>"
-        + _reviews_html(items)
-        + _form_html(v, listing_id))
+        + f"<h2 style='margin-top:26px'>{html.escape(tr['community_reviews'])}</h2>"
+        + _reviews_html(items, tr)
+        + _form_html(v, listing_id, tr))
     desc = (f"{r['name']} — Indian {label} in {loc}. Read community reviews and ratings, contact "
             "details, and share your own experience.")
     return _page(f"{r['name']} · {label} · {settings.platform_name}", desc, body,

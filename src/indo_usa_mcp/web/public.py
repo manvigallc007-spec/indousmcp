@@ -18,6 +18,7 @@ _STATIC_DIR = pathlib.Path(__file__).resolve().parent / "static"
 from .. import payments, submissions, verticals
 from ..config import settings
 from ..pipeline import compliance, ingest, outreach
+from . import i18n
 from .auth import verify_captcha
 from .landing import CATEGORY_CSS, category_grid
 from .common import _page, captcha_field, esc as _esc
@@ -235,33 +236,34 @@ def _sub_rate_ok(ip: str, limit: int = 5, window: int = 3600) -> bool:
 
 
 def submit_get(request: Request) -> HTMLResponse:
+    tr = i18n.t(request)
     pre = request.query_params.get("category")
     opts = "".join(
         f"<option value='{v}'{' selected' if v == pre else ''}>"
         f"{html.escape(verticals.VERTICALS[v]['label'])}</option>"
         for v in submissions.SUBMITTABLE)
     body = (
-        "<h2>Add your business</h2>"
-        "<p class='muted'>List your Indian-American business for free. We review each "
-        "submission before it goes live.</p>"
+        f"<h2>{_esc(tr['add_business'])}</h2>"
+        f"<p class='muted'>{_esc(tr['add_intro'])}</p>"
         "<form method='post' action='/submit'>"
-        f"<label>Category</label><select name='vertical'>{opts}</select>"
-        "<label>Business name *</label><input name='name' required>"
-        "<label>Address</label><input name='address_full'>"
-        "<label>City</label><input name='city'>"
-        "<label>State</label><input name='state' placeholder='NJ'>"
-        "<label>Phone</label><input name='phone' type='tel'>"
-        "<label>Your email *</label><input name='email' type='email' required>"
-        "<label>Website</label><input name='website' placeholder='https://'>"
-        "<label>Languages spoken <span style='font-weight:400;color:#6b7280'>(comma-separated)</span></label>"
+        f"<label>{_esc(tr['category'])}</label><select name='vertical'>{opts}</select>"
+        f"<label>{_esc(tr['business_name'])} *</label><input name='name' required>"
+        f"<label>{_esc(tr['address'])}</label><input name='address_full'>"
+        f"<label>{_esc(tr['city'])}</label><input name='city'>"
+        f"<label>{_esc(tr['state'])}</label><input name='state' placeholder='NJ'>"
+        f"<label>{_esc(tr['phone'])}</label><input name='phone' type='tel'>"
+        f"<label>{_esc(tr['your_email'])} *</label><input name='email' type='email' required>"
+        f"<label>{_esc(tr['website'])}</label><input name='website' placeholder='https://'>"
+        f"<label>{_esc(tr['languages_spoken'])} <span style='font-weight:400;color:#6b7280'>"
+        f"({_esc(tr['comma_separated'])})</span></label>"
         "<input name='languages' placeholder='Telugu, Hindi, English'>"
-        "<label>Anything else? (specialties, region, hours)</label>"
+        f"<label>{_esc(tr['anything_else'])}</label>"
         "<input name='note'>"
         # honeypot — bots fill this hidden field; humans don't.
         "<input type='text' name='company' style='position:absolute;left:-9999px' tabindex='-1' autocomplete='off'>"
         + captcha_field() +
-        "<button type='submit'>Submit for review</button></form>")
-    return _page("Add your business", body)
+        f"<button type='submit'>{_esc(tr['submit_for_review'])}</button></form>")
+    return _page(tr["add_business"], body)
 
 
 async def submit_post(request: Request) -> HTMLResponse:

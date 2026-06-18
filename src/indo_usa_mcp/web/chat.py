@@ -316,7 +316,7 @@ const I18N={
   browse:"వర్గం వారీగా బ్రౌజ్ చేయండి"}
 };
 function T(){return I18N[lang]||I18N.en;}
-function setLang(v){lang=I18N[v]?v:'en';localStorage.setItem('dost_lang',lang);applyLang();}
+function setLang(v){lang=I18N[v]?v:'en';localStorage.setItem('dost_lang',lang);document.cookie='lang='+lang+';path=/;max-age=31536000;samesite=lax';applyLang();}
 function applyLang(){const t=T();
  const set=(sel,val)=>{const e=document.querySelector(sel);if(e)e.textContent=val;};
  set('#welcome h1',t.hero);set('#welcome .heroSub',t.heroSub);set('#welcome .welcome-contrib',t.contribLine);
