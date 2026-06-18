@@ -18,6 +18,7 @@ from starlette.routing import Route
 
 from .. import db, tags as tagsmod, verticals
 from ..config import settings
+from . import i18n
 from .chat import _CAT_BLURB, _CAT_COLOR, _CAT_ICON
 from .common import analytics_tag
 
@@ -140,9 +141,9 @@ def _label(v: str) -> str:
 
 # ---------------------------------------------------------------- browse indexes
 def browse_root(request: Request) -> HTMLResponse:
-    body = ("<h1>Browse the Indian-American directory</h1>"
-            "<p class='muted'>Find restaurants, temples, groceries, events and more by city, "
-            "across the USA.</p>"
+    tr = i18n.t(request)
+    body = (f"<h1>{html.escape(tr['browse'])}</h1>"
+            f"<p class='muted'>{html.escape(tr['browse_intro'])}</p>"
             f"{category_grid()}"
             "<p style='margin-top:6px'><a class='cta' href='/events'>📅 Upcoming events &amp; festivals →</a></p>")
     return _page(f"Browse · {settings.platform_name}",
@@ -155,13 +156,14 @@ def browse_vertical(request: Request) -> HTMLResponse:
         return _page("Not found", "Unknown category.", "<h1>Not found</h1>", status=404)
     if v == "events":  # events are date-based — send to the calendar
         return RedirectResponse("/events", status_code=307)
+    tr = i18n.t(request)
     rows = verticals.geo_summary(v)  # states with active counts
     items = "".join(
         f"<a class='chip' href='/browse/{v}/{_slug(r['state'])}'>{html.escape(r['state'])} "
         f"<span class='muted'>({r['n']})</span></a>" for r in rows if r["state"] and r["state"] != "(unknown)")
-    body = (f"<nav class='crumbs'><a href='/browse'>Browse</a> › {html.escape(_label(v))}</nav>"
+    body = (f"<nav class='crumbs'><a href='/browse'>{html.escape(tr['browse'])}</a> › {html.escape(_label(v))}</nav>"
             f"{_cathead(v)}"
-            "<p class='muted'>Pick a state to see cities.</p>"
+            f"<p class='muted'>{html.escape(tr['pick_state'])}</p>"
             f"<div class='chips'>{items}</div>")
     return _page(f"Indian {_label(v)} in the USA · {settings.platform_name}",
                  f"Browse Indian {_label(v)} across the USA by state and city.", body)
@@ -171,17 +173,18 @@ def browse_state(request: Request) -> HTMLResponse:
     v, state = request.path_params["vertical"], _unslug(request.path_params["state"])
     if v not in verticals.VERTICALS:
         return _page("Not found", "Unknown category.", "<h1>Not found</h1>", status=404)
+    tr = i18n.t(request)
     rows = verticals.geo_summary(v, state)  # cities in this state
     items = "".join(
         f"<a class='chip' href='/browse/{v}/{_slug(state)}/{_slug(r['city'])}'>{html.escape(r['city'])} "
         f"<span class='muted'>({r['n']})</span></a>" for r in rows if r["city"] and r["city"] != "(unknown)")
     label = _label(v)
-    body = (f"<nav class='crumbs'><a href='/browse'>Browse</a> › "
+    body = (f"<nav class='crumbs'><a href='/browse'>{html.escape(tr['browse'])}</a> › "
             f"<a href='/browse/{v}'>{html.escape(label)}</a> › {html.escape(state.upper())}</nav>"
             f"{_cathead(v)}"
             f"<h1>Indian {html.escape(label)} in {html.escape(state.upper())}</h1>"
-            "<p class='muted'>Pick a city.</p>"
-            f"<div class='chips'>{items or '<span class=muted>No listings yet.</span>'}</div>")
+            f"<p class='muted'>{html.escape(tr['pick_city'])}</p>"
+            f"<div class='chips'>{items or ('<span class=muted>' + html.escape(tr['no_listings']) + '</span>')}</div>")
     return _page(f"Indian {label} in {state.upper()} · {settings.platform_name}",
                  f"Browse Indian {label} in {state.upper()} by city.", body)
 
@@ -203,6 +206,8 @@ def browse_city(request: Request) -> HTMLResponse:
     city = _unslug(request.path_params["city"])
     if v not in verticals.VERTICALS:
         return _page("Not found", "Unknown category.", "<h1>Not found</h1>", status=404)
+    tr = i18n.t(request)
+    dr = html.escape(tr["details_reviews"])
     rows = _listings(v, state, city)
     label = _label(v)
     loc = f"{city.title()}, {state.upper()}"
@@ -211,34 +216,34 @@ def browse_city(request: Request) -> HTMLResponse:
     cards, ld_items = "", []
     for i, r in enumerate(rows, 1):
         addr = ", ".join(x for x in (r.get("address_full"),) if x) or loc
-        feat = " <span class='feat'>★ Featured</span>" if r.get("is_featured") else ""
-        feat += " <span class='ver'>✓ Owner-verified</span>" if r.get("is_claimed") else ""
+        feat = f" <span class='feat'>★ {html.escape(tr['featured'])}</span>" if r.get("is_featured") else ""
+        feat += f" <span class='ver'>✓ {html.escape(tr['owner_verified'])}</span>" if r.get("is_claimed") else ""
         links = " · ".join(
             x for x in (
                 (f"<a href='{html.escape(r['website'])}' rel='nofollow'>Website</a>" if r.get("website") else ""),
                 (f"<a href='tel:{html.escape(r['phone'])}'>{html.escape(r['phone'])}</a>" if r.get("phone") else ""),
             ) if x)
         crate = (f"<span class='rate'>★ {r['community_rating']:.1f} "
-                 f"({r['community_rating_count'] or 0} review"
-                 f"{'s' if (r.get('community_rating_count') or 0) != 1 else ''})</span>") \
+                 f"({r['community_rating_count'] or 0} {html.escape(tr['community'])})</span>") \
             if r.get("community_rating") else ""
         wrate = (f"<span class='muted'>★ {r['rating']}"
-                 + (f" ({r['rating_count']})" if r.get("rating_count") else "") + " web</span>") \
+                 + (f" ({r['rating_count']})" if r.get("rating_count") else "")
+                 + f" {html.escape(tr['from_web'])}</span>") \
             if r.get("rating") else ""
         rate = " · ".join(x for x in (crate, wrate) if x)
         name_html = f"<a href='/listing/{v}/{r['id']}'>{html.escape(r['name'])}</a>"
         feats = tagsmod.for_display(r.get("tags"), limit=8)
         feats_html = ("<div class='feats'>" + "".join(
             f"<span class='fchip'>{html.escape(x)}</span>" for x in feats) + "</div>") if feats else ""
-        langs_html = (f"<div class='meta' style='color:#0f766e;font-weight:600'>🗣 Speaks "
+        langs_html = (f"<div class='meta' style='color:#0f766e;font-weight:600'>🗣 {html.escape(tr['speaks'])}: "
                       f"{html.escape(', '.join(r['languages']))}</div>") if r.get("languages") else ""
         cards += (f"<div class='lc'><h3>{i}. {name_html}{feat}</h3>"
                   f"<div class='meta'>{html.escape(addr)} {rate}</div>"
                   + (f"<p>{html.escape((r.get('description') or '')[:220])}</p>" if r.get("description") else "")
                   + langs_html
                   + feats_html
-                  + (f"<div class='meta'>{links} · <a href='/listing/{v}/{r['id']}'>Details &amp; reviews</a></div>"
-                     if links else f"<div class='meta'><a href='/listing/{v}/{r['id']}'>Details &amp; reviews</a></div>")
+                  + (f"<div class='meta'>{links} · <a href='/listing/{v}/{r['id']}'>{dr}</a></div>"
+                     if links else f"<div class='meta'><a href='/listing/{v}/{r['id']}'>{dr}</a></div>")
                   + "</div>")
         biz = {"@type": "LocalBusiness", "name": r["name"],
                "address": {"@type": "PostalAddress", "addressLocality": r.get("city"),
@@ -262,20 +267,20 @@ def browse_city(request: Request) -> HTMLResponse:
         ld_items.append({"@type": "ListItem", "position": i, "item": biz})
 
     if not rows:
-        body = (f"<h1>{html.escape(h1)}</h1><p class='muted'>No listings here yet — "
-                f"<a href='/submit'>add one</a> or <a href='/chat'>ask the assistant</a>.</p>")
+        body = (f"<h1>{html.escape(h1)}</h1><p class='muted'>{html.escape(tr['no_listings'])} "
+                f"<a href='/submit'>{html.escape(tr['add_business'])}</a> · "
+                f"<a href='/chat'>{html.escape(tr['ask_picks'])}</a></p>")
         return _page(f"{h1} · {settings.platform_name}", f"Indian {label} in {loc}.", body)
 
     jsonld = json.dumps({"@context": "https://schema.org", "@type": "ItemList",
                          "name": h1, "numberOfItems": len(rows), "itemListElement": ld_items})
-    body = (f"<nav class='crumbs'><a href='/browse'>Browse</a> › "
+    body = (f"<nav class='crumbs'><a href='/browse'>{html.escape(tr['browse'])}</a> › "
             f"<a href='/browse/{v}'>{html.escape(label)}</a> › "
             f"<a href='/browse/{v}/{_slug(state)}'>{html.escape(state.upper())}</a> › {html.escape(city.title())}</nav>"
             f"{_cathead(v)}"
             f"<h1>{html.escape(h1)}</h1>"
-            f"<p class='muted'>{len(rows)} listing{'s' if len(rows) != 1 else ''}. "
-            f"<a href='/chat'>Ask {html.escape(settings.assistant_name)}</a> for personalized picks.</p>"
-            f"{cards}<p><a class='cta' href='/chat'>Ask the assistant →</a></p>")
+            f"<p class='muted'>{len(rows)} · <a href='/chat'>{html.escape(tr['ask_picks'])}</a></p>"
+            f"{cards}<p><a class='cta' href='/chat'>{html.escape(tr['ask_picks'])} →</a></p>")
     return _page(f"{h1} · {settings.platform_name} ({len(rows)})",
                  f"Directory of {len(rows)} Indian {label} in {loc} — addresses, phone, websites.",
                  body, jsonld=jsonld)

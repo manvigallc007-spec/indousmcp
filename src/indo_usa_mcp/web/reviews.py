@@ -69,16 +69,15 @@ def _features_html(r: dict) -> str:
     return f"<div class='feats'>{chips}</div>"
 
 
-def _ratings_html(r: dict) -> str:
+def _ratings_html(r: dict, tr: dict) -> str:
     parts = []
     cr, crc = r.get("community_rating"), r.get("community_rating_count") or 0
     if cr:
-        parts.append(f"<span class='rate'>★ {cr:.1f} ({crc} community review"
-                     f"{'s' if crc != 1 else ''})</span>")
+        parts.append(f"<span class='rate'>★ {cr:.1f} ({crc} {html.escape(tr['community'])})</span>")
     if r.get("rating"):
         rc = r.get("rating_count")
         parts.append("<span class='muted'>★ " + html.escape(str(r["rating"]))
-                     + (f" ({rc})" if rc else "") + " from the web</span>")
+                     + (f" ({rc})" if rc else "") + f" {html.escape(tr['from_web'])}</span>")
     return " &nbsp;·&nbsp; ".join(parts)
 
 
@@ -169,24 +168,24 @@ def listing_page(request: Request) -> HTMLResponse:
     loc = ", ".join(x for x in (r.get("city"), (r["state"].upper() if r.get("state") else None)) if x)
     addr = r.get("address_full") or loc
     label = _label(v)
-    ratings = _ratings_html(r)
+    ratings = _ratings_html(r, tr)
     links = " &nbsp;·&nbsp; ".join(x for x in (
         (f"<a href='{html.escape(r['website'])}' rel='nofollow'>Website</a>" if r.get("website") else ""),
         (f"<a href='tel:{html.escape(r['phone'])}'>{html.escape(r['phone'])}</a>" if r.get("phone") else ""),
     ) if x)
-    verified = " <span style='color:#1565c0;font-weight:600'>✓ Owner-verified</span>" if r.get("is_claimed") else ""
+    verified = (f" <span style='color:#1565c0;font-weight:600'>✓ {html.escape(tr['owner_verified'])}</span>"
+                if r.get("is_claimed") else "")
 
     ok = request.query_params.get("ok")
     banner = ""
     if ok == "published":
-        banner = "<div class='banner ok'>✓ Thanks! Your review is now live.</div>"
+        banner = f"<div class='banner ok'>✓ {html.escape(tr['review_live'])}</div>"
     elif ok == "pending":
-        banner = ("<div class='banner'>✓ Thanks! Your review was received and will appear "
-                  "after a quick moderation check.</div>")
+        banner = f"<div class='banner'>✓ {html.escape(tr['review_pending'])}</div>"
 
     body = (
         _CSS
-        + f"<nav class='crumbs'><a href='/browse'>Browse</a> › "
+        + f"<nav class='crumbs'><a href='/browse'>{html.escape(tr['browse'])}</a> › "
         + f"<a href='/browse/{v}'>{html.escape(label)}</a> › {html.escape(r['name'])}</nav>"
         + _cathead(v)
         + banner

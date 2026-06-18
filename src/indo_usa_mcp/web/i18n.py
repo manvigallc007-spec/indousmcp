@@ -51,6 +51,28 @@ _T: dict[str, dict[str, str]] = {
     "submit_for_review": {"en": "Submit for review", "hi": "समीक्षा के लिए भेजें", "te": "సమీక్ష కోసం సమర్పించండి"},
     "comma_separated": {"en": "comma-separated", "hi": "अल्पविराम से अलग", "te": "కామాతో వేరు చేయండి"},
     "required_star": {"en": "required", "hi": "आवश्यक", "te": "అవసరం"},
+    # --- browse + listing ---
+    "browse": {"en": "Browse", "hi": "ब्राउज़ करें", "te": "బ్రౌజ్ చేయండి"},
+    "browse_intro": {"en": "Find Indian restaurants, temples, groceries, events and more by city, across the USA.",
+                     "hi": "पूरे अमेरिका में शहर के अनुसार भारतीय रेस्टोरेंट, मंदिर, ग्रोसरी, इवेंट और बहुत कुछ खोजें।",
+                     "te": "అమెరికా అంతటా నగరం వారీగా ఇండియన్ రెస్టారెంట్లు, ఆలయాలు, గ్రోసరీలు, ఈవెంట్లు మరియు మరిన్ని కనుగొనండి."},
+    "pick_state": {"en": "Pick a state to see cities.", "hi": "शहर देखने के लिए एक राज्य चुनें।",
+                   "te": "నగరాలు చూడటానికి ఒక రాష్ట్రాన్ని ఎంచుకోండి."},
+    "pick_city": {"en": "Pick a city.", "hi": "एक शहर चुनें।", "te": "ఒక నగరాన్ని ఎంచుకోండి."},
+    "no_listings": {"en": "No listings yet.", "hi": "अभी तक कोई लिस्टिंग नहीं।", "te": "ఇంకా లిస్టింగ్‌లు లేవు."},
+    "details_reviews": {"en": "Details & reviews", "hi": "विवरण और समीक्षाएँ", "te": "వివరాలు & సమీక్షలు"},
+    "owner_verified": {"en": "Owner-verified", "hi": "स्वामी-सत्यापित", "te": "యజమాని ధృవీకరించారు"},
+    "featured": {"en": "Featured", "hi": "विशेष", "te": "ఫీచర్డ్"},
+    "from_web": {"en": "from the web", "hi": "वेब से", "te": "వెబ్ నుండి"},
+    "community": {"en": "community", "hi": "सामुदायिक", "te": "కమ్యూనిటీ"},
+    "ask_picks": {"en": "Ask for personalized picks", "hi": "व्यक्तिगत सुझावों के लिए पूछें",
+                  "te": "వ్యక్తిగత సూచనల కోసం అడగండి"},
+    "review_live": {"en": "Thanks! Your review is now live.", "hi": "धन्यवाद! आपकी समीक्षा अब लाइव है।",
+                    "te": "ధన్యవాదాలు! మీ సమీక్ష ఇప్పుడు లైవ్‌లో ఉంది."},
+    "review_pending": {"en": "Thanks! Your review was received and will appear after a quick moderation check.",
+                       "hi": "धन्यवाद! आपकी समीक्षा मिल गई और जाँच के बाद दिखाई देगी।",
+                       "te": "ధన్యవాదాలు! మీ సమీక్ష అందింది, త్వరిత పరిశీలన తర్వాత కనిపిస్తుంది."},
+    "back_listing": {"en": "Back to the listing", "hi": "लिस्टिंग पर वापस जाएँ", "te": "లిస్టింగ్‌కు తిరిగి వెళ్ళండి"},
 }
 
 

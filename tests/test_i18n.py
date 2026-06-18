@@ -32,3 +32,9 @@ def test_submit_form_renders_in_telugu_and_hindi():
 
 def test_submit_form_defaults_to_english():
     assert "Add your business" in TestClient(app).get("/submit").text
+
+
+def test_browse_root_renders_in_telugu_and_english():
+    te = i18n.t(_R("te"))
+    assert te["browse_intro"] in TestClient(app, cookies={"lang": "te"}).get("/browse").text
+    assert "Find Indian restaurants" in TestClient(app).get("/browse").text   # English default
