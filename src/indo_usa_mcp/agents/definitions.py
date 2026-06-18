@@ -731,6 +731,34 @@ class H1BAgent(Agent):
         return labor.import_disclosure(**params)
 
 
+class ReviewModerationAgent(Agent):
+    name = "review_moderation"
+    description = ("Re-screens held community reviews: auto-publishes ones that are now clean and "
+                  "leaves genuinely spam/abusive ones for a human (Admin → Reviews).")
+    default_interval_s = 3600  # hourly
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from ..config import settings
+        if not settings.reviews_enabled:
+            return {"skipped": "disabled"}
+        from .. import reviews
+        return reviews.moderate_pending(limit=params.get("limit", 200))
+
+
+class ReviewAggregatorAgent(Agent):
+    name = "review_aggregator"
+    description = ("Recomputes each listing's community star-rating from its published reviews so "
+                  "the rolled-up score stays correct.")
+    default_interval_s = 7200  # every 2 hours
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from ..config import settings
+        if not settings.reviews_enabled:
+            return {"skipped": "disabled"}
+        from .. import reviews
+        return reviews.aggregate_all()
+
+
 class DiasporaIntelligenceAgent(Agent):
     name = "intelligence"
     description = ("Continuously develops Dost's knowledge about Indians from India in the USA: "
@@ -764,7 +792,8 @@ class MonitoringAgent(Agent):
     # Kinds this agent owns: it raises them when a condition is true and auto-resolves them when the
     # condition clears, so the open-alerts list always reflects what ACTUALLY needs a human now.
     MANAGED = {"raw_backlog", "approval_backlog", "stale_data", "agent_failure",
-               "messages_waiting", "smtp_unconfigured", "submissions_pending", "feedback_pending"}
+               "messages_waiting", "smtp_unconfigured", "submissions_pending", "feedback_pending",
+               "reviews_pending"}
 
     def run(self, **params: Any) -> dict[str, Any]:
         from ..config import settings
@@ -799,6 +828,10 @@ class MonitoringAgent(Agent):
         if fb:
             cand.append(_alert("info", "feedback_pending",
                                f"{fb} correction(s) awaiting review — Admin → Feedback"))
+        revs = _scalar("SELECT count(*) FROM reviews WHERE status='pending'")
+        if revs:
+            cand.append(_alert("info", "reviews_pending",
+                               f"{revs} community review(s) awaiting moderation — Admin → Reviews"))
 
         # --- any agent failing repeatedly in the last 24h ---
         failing = db.query("SELECT agent, count(*) AS n FROM agent_runs WHERE status = 'error' "
@@ -889,6 +922,8 @@ ALL_AGENTS = [
     H1BAgent(),
     ContactReplyAgent(),
     SubmissionReviewAgent(),
+    ReviewModerationAgent(),
+    ReviewAggregatorAgent(),
     IrsEoAgent(),
     DiasporaIntelligenceAgent(),
     ReportingAgent(),

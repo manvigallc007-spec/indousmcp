@@ -39,7 +39,8 @@ def _agent_id(request: Request, ip: str) -> str:
 # the contract stays predictable for third-party consumers.
 _PUBLIC_FIELDS = (
     "vertical", "name", "city", "state", "address", "phone", "website",
-    "latitude", "longitude", "rating", "rating_count", "tags", "description",
+    "latitude", "longitude", "rating", "rating_count", "community_rating",
+    "community_rating_count", "tags", "description",
     "distance_miles", "is_featured", "is_claimed", "open_now", "verified_ago",
 )
 
@@ -129,6 +130,34 @@ def verticals_list(request: Request) -> JSONResponse:
         {"key": k, "label": cfg["label"]} for k, cfg in verticals.VERTICALS.items()]})
 
 
+def reviews_endpoint(request: Request) -> JSONResponse:
+    """GET /api/v1/reviews?vertical=&listing_id= -> published community reviews + rolled-up rating."""
+    ip = (request.client.host if request.client else "?") or "?"
+    if not _rate_ok(ip):
+        return JSONResponse({"error": "rate_limited"}, status_code=429)
+    from .. import reviews
+    qp = request.query_params
+    vertical = (qp.get("vertical") or "").strip()
+    if vertical not in verticals.VERTICALS:
+        return JSONResponse({"error": "unknown_vertical", "valid": list(verticals.VERTICALS)},
+                            status_code=400)
+    try:
+        listing_id = int(qp.get("listing_id") or qp.get("id") or "")
+    except ValueError:
+        return JSONResponse({"error": "missing_listing_id",
+                             "message": "Pass ?vertical=&listing_id=."}, status_code=400)
+    try:
+        limit = max(1, min(50, int(qp.get("limit") or 20)))
+    except ValueError:
+        limit = 20
+    summary = reviews.rating_summary(vertical, listing_id)
+    items = [{"rating": int(r["rating"]), "title": r.get("title"), "body": r.get("body"),
+              "author": r.get("author_name") or "Anonymous", "created_at": str(r.get("created_at"))}
+             for r in reviews.list_for_listing(vertical, listing_id, limit=limit)]
+    return JSONResponse({"vertical": vertical, "listing_id": listing_id,
+                         **summary, "count": len(items), "reviews": items})
+
+
 def openapi(request: Request) -> JSONResponse:
     """Machine-readable OpenAPI 3 spec so agent frameworks can auto-consume the JSON API."""
     base = settings.public_web_url.rstrip("/")
@@ -166,6 +195,18 @@ def openapi(request: Request) -> JSONResponse:
             "/api/v1/verticals": {"get": {
                 "operationId": "listVerticals", "summary": "List the category keys",
                 "responses": {"200": {"description": "Category list"}}}},
+            "/api/v1/reviews": {"get": {
+                "operationId": "getReviews",
+                "summary": "Published community reviews + rolled-up rating for one listing",
+                "parameters": [
+                    {"name": "vertical", "in": "query", "required": True,
+                     "schema": {"type": "string", "enum": list(verticals.VERTICALS)}},
+                    {"name": "listing_id", "in": "query", "required": True,
+                     "schema": {"type": "integer"}, "description": "id from a get_/search_ result"},
+                    {"name": "limit", "in": "query",
+                     "schema": {"type": "integer", "default": 20, "minimum": 1, "maximum": 50}},
+                ],
+                "responses": {"200": {"description": "Reviews + community rating"}}}},
         },
         "components": {"schemas": {
             "SearchResult": {"type": "object", "properties": {
@@ -178,6 +219,9 @@ def openapi(request: Request) -> JSONResponse:
                 "address": {"type": "string"}, "phone": {"type": "string"},
                 "website": {"type": "string"}, "latitude": {"type": "number"},
                 "longitude": {"type": "number"}, "rating": {"type": "number"},
+                "community_rating": {"type": "number", "nullable": True,
+                                     "description": "First-party visitor rating (separate from web rating)"},
+                "community_rating_count": {"type": "integer", "nullable": True},
                 "tags": {"type": "array", "items": {"type": "string"}},
                 "description": {"type": "string"}, "distance_miles": {"type": "number"},
                 "open_now": {"type": "boolean", "nullable": True}}},
@@ -255,6 +299,7 @@ routes = [
     Route("/api", docs, methods=["GET"]),
     Route("/api/v1/search", search, methods=["GET"]),
     Route("/api/v1/verticals", verticals_list, methods=["GET"]),
+    Route("/api/v1/reviews", reviews_endpoint, methods=["GET"]),
     Route("/openapi.json", openapi, methods=["GET"]),
     Route("/.well-known/ai-plugin.json", ai_plugin, methods=["GET"]),
 ]

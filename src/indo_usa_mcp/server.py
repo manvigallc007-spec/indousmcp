@@ -9,7 +9,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from . import queries, verticals
+from . import queries, reviews, verticals
 from .apparel import queries as apparel_queries
 from .community import queries as community_queries
 from .config import settings
@@ -116,6 +116,34 @@ def submit_correction(restaurant_id: int, field: str, value: str, reason: str = 
     human for claimed/featured ones. Identity fields (name, coordinates) are not correctable.
     """
     return feedback.submit_correction(restaurant_id, field, value, reason=reason, source="agent")
+
+
+@mcp.tool()
+def submit_review(vertical: str, listing_id: int, rating: int, text: str = "",
+                  name: str = "") -> dict[str, Any]:
+    """Submit a community review (1-5 star rating + optional text) for a listing.
+
+    `vertical` is the category key (restaurants, temples, groceries, professionals, salons, apparel,
+    sweets, studios, services, community, legal, education, realestate, finance) and `listing_id` is
+    the id returned by that category's get_/search_ tools. Reviews are moderated: clean ones publish
+    immediately and spam/abusive ones are held for human review. Returns {'ok', 'id', 'status'}.
+    """
+    return reviews.submit(vertical, listing_id, rating, body=text, name=name, source="agent")
+
+
+@mcp.tool()
+def get_reviews(vertical: str, listing_id: int, limit: int = 20) -> dict[str, Any]:
+    """Published community reviews for a listing (newest first) + its rolled-up community rating.
+
+    The community rating is first-party (visitor-submitted) and is separate from any web-harvested
+    `rating` returned by the get_/search_ tools. Returns {'community_rating', 'community_rating_count',
+    'reviews': [{rating, title, body, author, created_at}]}.
+    """
+    summary = reviews.rating_summary(vertical, listing_id)
+    items = [{"rating": int(r["rating"]), "title": r.get("title"), "body": r.get("body"),
+              "author": r.get("author_name") or "Anonymous", "created_at": str(r.get("created_at"))}
+             for r in reviews.list_for_listing(vertical, listing_id, limit=limit)]
+    return {**summary, "reviews": items}
 
 
 # --------------------------------------------------------------- temples (Phase 2)

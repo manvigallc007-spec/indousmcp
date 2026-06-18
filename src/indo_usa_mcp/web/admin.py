@@ -8,8 +8,8 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Route
 
-from .. import (analytics, db, inbox, payments, quality, recommendations, reporting, submissions,
-                verticals)
+from .. import (analytics, db, inbox, payments, quality, recommendations, reporting, reviews,
+                submissions, verticals)
 from ..agents import AGENTS, run_agent
 from ..events import pipeline as events
 from ..config import settings
@@ -949,6 +949,80 @@ async def submissions_action(request: Request) -> HTMLResponse:
     return RedirectResponse("/admin/submissions", status_code=303)
 
 
+_REVIEW_TABS = ["pending", "published", "rejected"]
+
+
+def reviews_page(request: Request) -> HTMLResponse:
+    """Moderate community reviews. Clean ones auto-publish; flagged ones land in 'pending' here."""
+    if (r := require_admin(request)):
+        return r
+    show = request.query_params.get("show") or "pending"
+    if show not in _REVIEW_TABS:
+        show = "pending"
+    c = reviews.counts()
+    items = reviews.list_by_status(show, limit=200)
+
+    def _stars(n) -> str:
+        n = int(n or 0)
+        return "★" * n + "☆" * (5 - n)
+
+    rows = ""
+    for x in items:
+        v, lid = x["vertical"], x["listing_id"]
+        listing = reviews._listing(v, lid)
+        lname = esc(listing["name"]) if listing else f"{esc(v)} #{lid}"
+        link = f"<a href='/listing/{esc(v)}/{lid}' target='_blank' rel='noopener'>{lname}</a>"
+        who = esc(x.get("author_name") or "Anonymous")
+        text = esc((x.get("body") or "")[:600]) or "<span class='muted'>(rating only)</span>"
+        flag = (f"<div class='warn'>flagged: {esc(x.get('flagged_reason'))}</div>"
+                if x.get("flagged_reason") else "")
+
+        def act(op: str, label: str, gray: bool = False) -> str:
+            return (f"<form method='post' action='/admin/reviews' class='inline'>"
+                    f"<input type='hidden' name='id' value='{x['id']}'>"
+                    f"<input type='hidden' name='show' value='{show}'>"
+                    f"<button class='btn{' gray' if gray else ''}' name='op' value='{op}'>{label}</button></form> ")
+        if show == "pending":
+            actions = act("approve", "Approve &amp; publish") + act("reject", "Reject", True)
+        elif show == "published":
+            actions = act("reject", "Remove", True)
+        else:
+            actions = act("approve", "Restore")
+        rows += (f"<tr><td style='color:#f5a623;white-space:nowrap'>{_stars(x['rating'])}</td>"
+                 f"<td>{link}<br><span class='muted'>— {who} · {esc(str(x.get('created_at'))[:16])}</span>{flag}</td>"
+                 f"<td>{text}</td><td>{actions}</td></tr>")
+
+    def _tab(name: str) -> str:
+        n = c.get(name, 0)
+        style = "font-weight:700;color:#c1440e" if name == show else "color:#475467"
+        return f"<a href='/admin/reviews?show={name}' style='{style}'>{name.title()} ({n})</a>"
+
+    tabs = " &nbsp;·&nbsp; ".join(_tab(t) for t in _REVIEW_TABS)
+    table = (f"<table><tr><th>Rating</th><th>Listing / author</th><th>Review</th><th></th></tr>{rows}</table>"
+             if rows else f"<p class='muted'>No {esc(show)} reviews.</p>")
+    body = (f"<p class='muted'>Visitor star-ratings &amp; reviews. Clean ones auto-publish; spam or "
+            f"abusive ones are held here for you. <b>{c.get('pending', 0)}</b> awaiting moderation.</p>"
+            f"<div style='margin:10px 0 4px'>{tabs}</div>{table}")
+    return admin_page("Reviews", body, active="Reviews")
+
+
+async def reviews_action(request: Request) -> HTMLResponse:
+    if (r := require_admin(request)):
+        return r
+    form = await request.form()
+    show = form.get("show") if form.get("show") in _REVIEW_TABS else "pending"
+    try:
+        rid = int(form.get("id"))
+    except (TypeError, ValueError):
+        return RedirectResponse(f"/admin/reviews?show={show}", status_code=303)
+    op = form.get("op")
+    if op == "approve":
+        reviews.approve(rid)
+    elif op == "reject":
+        reviews.reject(rid, reason="removed by admin")
+    return RedirectResponse(f"/admin/reviews?show={show}", status_code=303)
+
+
 def _ago(ts) -> str:
     import datetime
     if not ts:
@@ -1227,11 +1301,13 @@ def ops_page(request: Request) -> HTMLResponse:
     appr = _scalar("SELECT count(*) FROM approval_queue WHERE status='pending'")
     subs = _scalar("SELECT count(*) FROM submissions WHERE status='pending'")
     fb = _scalar("SELECT count(*) FROM feedback WHERE status='pending'")
+    revs = _scalar("SELECT count(*) FROM reviews WHERE status='pending'")
 
     def q(n: int, label: str, href: str) -> str:
         return f"<a class='kpi act' href='{href}'><b>{n}</b><span>{esc(label)}</span></a>"
     queues = (q(msgs, "Reply to messages", "/admin/messages") + q(appr, "Review approvals", "/admin/approvals")
-              + q(subs, "Review submissions", "/admin/submissions") + q(fb, "Review corrections", "/admin/feedback"))
+              + q(subs, "Review submissions", "/admin/submissions") + q(fb, "Review corrections", "/admin/feedback")
+              + q(revs, "Moderate reviews", "/admin/reviews"))
 
     # 3) Agent roster — what each agent does continuously (self-documenting from the registry).
     last = {r["agent"]: r for r in db.query(
@@ -1290,6 +1366,8 @@ routes = [
     Route("/admin/claims", claims, methods=["GET"]),
     Route("/admin/submissions", submissions_page, methods=["GET"]),
     Route("/admin/submissions", submissions_action, methods=["POST"]),
+    Route("/admin/reviews", reviews_page, methods=["GET"]),
+    Route("/admin/reviews", reviews_action, methods=["POST"]),
     Route("/admin/agents", agents_page, methods=["GET"]),
     Route("/admin/agents", agents_action, methods=["POST"]),
     Route("/admin/agents/{name}", agent_detail, methods=["GET"]),

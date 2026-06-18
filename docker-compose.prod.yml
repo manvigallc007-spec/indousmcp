@@ -79,6 +79,10 @@ services:
       # Auto-SEND replies to clearly-routine, non-sensitive contact messages (needs SMTP + an LLM;
       # a copy is stored + emailed to REPORT_EMAIL/OUTREACH_CONTACT_EMAIL). Sensitive topics wait.
       AUTO_REPLY_ROUTINE: ${AUTO_REPLY_ROUTINE:-true}
+      # Community reviews: clean ones auto-publish; flagged ones wait in Admin -> Reviews.
+      # Set REVIEW_AUTO_PUBLISH=false to hold ALL reviews for manual approval.
+      REVIEWS_ENABLED: ${REVIEWS_ENABLED:-true}
+      REVIEW_AUTO_PUBLISH: ${REVIEW_AUTO_PUBLISH:-true}
       REPORT_EMAIL: ${REPORT_EMAIL:-}
       # Outreach (OutreachAgent runs here). Auto-send stays OFF until SMTP *and*
       # OUTREACH_POSTAL_ADDRESS are set (CAN-SPAM); otherwise it only drafts.
@@ -138,6 +142,11 @@ services:
       # Optional Cloudflare Turnstile (free) for the registration captcha. Blank = built-in math captcha.
       TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      # Community reviews (visitor star-ratings + text). Clean ones auto-publish; flagged ones wait
+      # in Admin -> Reviews. REVIEW_AUTO_PUBLISH=false holds ALL reviews for manual approval.
+      REVIEWS_ENABLED: ${REVIEWS_ENABLED:-true}
+      REVIEW_AUTO_PUBLISH: ${REVIEW_AUTO_PUBLISH:-true}
+      REVIEWS_PER_IP_PER_DAY: ${REVIEWS_PER_IP_PER_DAY:-8}
       REPORT_EMAIL: ${REPORT_EMAIL:-}
       # SMTP (shared with outreach) — also used for the daily report + magic-links.
       SMTP_HOST: ${SMTP_HOST:-}

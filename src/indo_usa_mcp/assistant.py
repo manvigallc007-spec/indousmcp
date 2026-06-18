@@ -247,6 +247,9 @@ def _cards(res: dict) -> list[dict]:
             "is_claimed": bool(r.get("is_claimed")),
             "rating": float(r["rating"]) if r.get("rating") is not None else None,
             "rating_count": r.get("rating_count"),
+            "community_rating": (float(r["community_rating"])
+                                 if r.get("community_rating") is not None else None),
+            "community_rating_count": r.get("community_rating_count"),
             "verified_ago": r.get("verified_ago"),
             "distance_miles": r.get("distance_miles"),
             "id": r.get("id"),

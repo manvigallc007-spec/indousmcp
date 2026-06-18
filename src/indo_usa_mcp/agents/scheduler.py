@@ -38,7 +38,8 @@ _RUN_ORDER = [
     "finance_scraper", "finance_cleaner",
     "event_feed_discovery", "event_scraper", "event_cleaner",
     "web_enrichment", "link_check", "recommendation", "lifecycle", "learning", "knowledge_indexer",
-    "demographics", "h1b", "intelligence", "contact_reply", "submission_review", "irs_eo",
+    "demographics", "h1b", "intelligence", "contact_reply", "submission_review",
+    "review_moderation", "review_aggregator", "irs_eo",
     "discovery", "outreach", "reporting", "monitoring", "submission",
 ]
 

@@ -211,11 +211,16 @@ _BUILDERS = {"restaurants": _restaurant, "temples": _temple, "groceries": _groce
 
 
 def _rating(rec: dict) -> str:
-    r = rec.get("rating")
-    if not r:
-        return ""
-    n = rec.get("rating_count")
-    return f" Rated {r}/5 from {n} reviews." if n else f" Rated {r}/5."
+    out = ""
+    cr, crc = rec.get("community_rating"), rec.get("community_rating_count")
+    if cr:
+        out += (f" Community-rated {round(cr, 1)}/5 from {crc} review{'s' if crc != 1 else ''}."
+                if crc else f" Community-rated {round(cr, 1)}/5.")
+    r, n = rec.get("rating"), rec.get("rating_count")
+    if r:
+        suffix = " (web)" if cr else ""   # only label the source when both ratings are present
+        out += (f" Rated {r}/5 from {n} reviews{suffix}." if n else f" Rated {r}/5{suffix}.")
+    return out
 
 
 def describe(vertical: str, rec: dict) -> str:

@@ -132,6 +132,16 @@ class Settings(BaseSettings):
     # Let the ContactReplyAgent auto-SEND replies to clearly-routine, non-sensitive messages (a copy
     # is stored + emailed to you). Needs SMTP + an LLM; sensitive topics always wait for approval.
     auto_reply_routine: bool = True
+    # Community reviews (visitor 1-5 star ratings + optional text on a listing). Moderated: a clean
+    # review is auto-published; spam/abusive/off-topic ones are held ('pending') and escalated to
+    # Admin -> Reviews. Flip review_auto_publish=False to hold ALL reviews for manual approval. The
+    # rolled-up community score lives in separate columns and never clobbers the web-harvested rating.
+    # Reuses the same captcha + per-IP rate-limit that protect the contact/submission forms.
+    reviews_enabled: bool = True
+    review_auto_publish: bool = True
+    review_min_chars: int = 0          # 0 = a star-only rating (no text) is allowed
+    review_max_chars: int = 2000
+    reviews_per_ip_per_day: int = 8    # across all listings (abuse guard)
     # Google sign-in for the business-owner portal (optional; magic-link still works without it).
     # Create an OAuth 2.0 Web client at console.cloud.google.com -> APIs & Services -> Credentials.
     # Authorized redirect URI = <PUBLIC_WEB_URL>/portal/google/callback. Secrets via env only.

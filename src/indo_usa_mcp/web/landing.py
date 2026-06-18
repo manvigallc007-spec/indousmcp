@@ -187,8 +187,9 @@ def browse_state(request: Request) -> HTMLResponse:
 def _listings(v: str, state: str, city: str, limit: int = 200) -> list[dict]:
     table = verticals._table(v)
     return db.query(
-        f"SELECT name, address_full, city, state, lat, lng, phone, website, description, "
-        f"is_claimed, rating, rating_count, {_FEATURED} AS is_featured "
+        f"SELECT id, name, address_full, city, state, lat, lng, phone, website, description, "
+        f"is_claimed, rating, rating_count, community_rating, community_rating_count, "
+        f"{_FEATURED} AS is_featured "
         f"FROM {table} WHERE deleted_at IS NULL AND is_active "
         f"AND LOWER(state) = LOWER(%s) AND LOWER(city) = LOWER(%s) "
         f"ORDER BY {_FEATURED} DESC, confidence_score DESC LIMIT %s", (state, city, limit))
@@ -215,13 +216,21 @@ def browse_city(request: Request) -> HTMLResponse:
                 (f"<a href='{html.escape(r['website'])}' rel='nofollow'>Website</a>" if r.get("website") else ""),
                 (f"<a href='tel:{html.escape(r['phone'])}'>{html.escape(r['phone'])}</a>" if r.get("phone") else ""),
             ) if x)
-        rate = (f"<span class='rate'>★ {r['rating']}"
-                + (f" ({r['rating_count']})" if r.get("rating_count") else "") + "/5</span>") \
+        crate = (f"<span class='rate'>★ {r['community_rating']:.1f} "
+                 f"({r['community_rating_count'] or 0} review"
+                 f"{'s' if (r.get('community_rating_count') or 0) != 1 else ''})</span>") \
+            if r.get("community_rating") else ""
+        wrate = (f"<span class='muted'>★ {r['rating']}"
+                 + (f" ({r['rating_count']})" if r.get("rating_count") else "") + " web</span>") \
             if r.get("rating") else ""
-        cards += (f"<div class='lc'><h3>{i}. {html.escape(r['name'])}{feat}</h3>"
+        rate = " · ".join(x for x in (crate, wrate) if x)
+        name_html = f"<a href='/listing/{v}/{r['id']}'>{html.escape(r['name'])}</a>"
+        cards += (f"<div class='lc'><h3>{i}. {name_html}{feat}</h3>"
                   f"<div class='meta'>{html.escape(addr)} {rate}</div>"
                   + (f"<p>{html.escape((r.get('description') or '')[:220])}</p>" if r.get("description") else "")
-                  + (f"<div class='meta'>{links}</div>" if links else "") + "</div>")
+                  + (f"<div class='meta'>{links} · <a href='/listing/{v}/{r['id']}'>Details &amp; reviews</a></div>"
+                     if links else f"<div class='meta'><a href='/listing/{v}/{r['id']}'>Details &amp; reviews</a></div>")
+                  + "</div>")
         biz = {"@type": "LocalBusiness", "name": r["name"],
                "address": {"@type": "PostalAddress", "addressLocality": r.get("city"),
                            "addressRegion": r.get("state"), "streetAddress": r.get("address_full")}}
@@ -231,11 +240,16 @@ def browse_city(request: Request) -> HTMLResponse:
             biz["url"] = r["website"]
         if r.get("lat") and r.get("lng"):
             biz["geo"] = {"@type": "GeoCoordinates", "latitude": r["lat"], "longitude": r["lng"]}
-        if r.get("rating"):
+        if r.get("community_rating"):       # prefer first-party community rating when present
+            biz["aggregateRating"] = {"@type": "AggregateRating",
+                                      "ratingValue": round(r["community_rating"], 1),
+                                      "reviewCount": r.get("community_rating_count") or 1}
+        elif r.get("rating"):
             ar = {"@type": "AggregateRating", "ratingValue": r["rating"]}
             if r.get("rating_count"):
                 ar["reviewCount"] = r["rating_count"]
             biz["aggregateRating"] = ar
+        biz["url"] = f"{_base()}/listing/{v}/{r['id']}"
         ld_items.append({"@type": "ListItem", "position": i, "item": biz})
 
     if not rows:
@@ -332,6 +346,16 @@ def sitemap(request: Request) -> Response:
             rows = []
         for r in rows:
             urls.append(f"{base}/browse/{v}/{_slug(r['state'])}/{_slug(r['city'])}")
+    # Per-listing detail pages (reviews live here). Bounded per vertical to keep the file sane.
+    for v in verticals.VERTICALS:
+        if v == "events":
+            continue
+        try:
+            ids = db.query(f"SELECT id FROM {verticals._table(v)} WHERE deleted_at IS NULL "
+                           f"AND is_active ORDER BY id LIMIT 5000")
+        except Exception:
+            ids = []
+        urls += [f"{base}/listing/{v}/{r['id']}" for r in ids]
     body = ('<?xml version="1.0" encoding="UTF-8"?>'
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
             + "".join(f"<url><loc>{html.escape(u)}</loc></url>" for u in urls) + "</urlset>")

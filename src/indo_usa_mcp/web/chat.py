@@ -473,7 +473,8 @@ function card(c){
   if(c.is_claimed)head.appendChild(el('span','pill claimed','✓ Owner-verified'));
   if(c.open_now)head.appendChild(el('span','pill open','● Open now'));
   d.appendChild(head);d.appendChild(el('h4',null,c.name||''));
-  if(c.rating){const rt=el('div','lc-rate','★ '+c.rating+(c.rating_count?(' ('+c.rating_count+')'):'')+'/5');d.appendChild(rt);}
+  if(c.community_rating){const rc=el('div','lc-rate','★ '+c.community_rating.toFixed(1)+' ('+(c.community_rating_count||0)+' community review'+((c.community_rating_count==1)?'':'s')+')');d.appendChild(rc);}
+  if(c.rating){const rt=el('div','lc-rate',(c.community_rating?'web ':'')+'★ '+c.rating+(c.rating_count?(' ('+c.rating_count+')'):'')+'/5');if(c.community_rating)rt.style.opacity='.65';d.appendChild(rt);}
   const loc=[c.city,c.state].filter(Boolean).join(', ');
   let locline=loc;
   if(c.distance_miles!=null) locline+=(loc?' · ':'')+c.distance_miles+' mi';
@@ -481,6 +482,7 @@ function card(c){
   if(c.description)d.appendChild(el('p','lc-desc',c.description));
   if(c.verified_ago)d.appendChild(el('div','lc-fresh','✓ '+c.verified_ago));
   const act=el('div','lc-act');
+  if(c.id&&c.vertical)act.appendChild(lnk('/listing/'+c.vertical+'/'+c.id,'Details & reviews'));
   if(c.phone)act.appendChild(lnk('tel:'+c.phone,'Call'));
   if(c.website)act.appendChild(lnk(c.website,'Visit website',true));
   if(loc)act.appendChild(lnk('https://maps.google.com/?q='+encodeURIComponent((c.name||'')+' '+loc),'Map',true));
