@@ -79,6 +79,14 @@ services:
       # Auto-SEND replies to clearly-routine, non-sensitive contact messages (needs SMTP + an LLM;
       # a copy is stored + emailed to REPORT_EMAIL/OUTREACH_CONTACT_EMAIL). Sensitive topics wait.
       AUTO_REPLY_ROUTINE: ${AUTO_REPLY_ROUTINE:-true}
+      # LLM (Groq) for the agents that use it: contact-reply drafts/auto-replies, the diaspora
+      # intelligence agent, and recommendation research. Same key as the web chat; blank/search
+      # makes those agents degrade gracefully (no auto-replies, weaker research).
+      LLM_PROVIDER: ${LLM_PROVIDER:-search}
+      LLM_API_KEY: ${LLM_API_KEY:-ollama}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_USE_TOOLS: ${LLM_USE_TOOLS:-false}
       # Community reviews: clean ones auto-publish; flagged ones wait in Admin -> Reviews.
       # Set REVIEW_AUTO_PUBLISH=false to hold ALL reviews for manual approval.
       REVIEWS_ENABLED: ${REVIEWS_ENABLED:-true}
@@ -89,7 +97,7 @@ services:
       SECRET_KEY: ${SECRET_KEY:-dev-insecure-change-me}      # signs one-click opt-out links
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:8080}  # base for the opt-out link
       CLAIM_BASE_URL: ${CLAIM_BASE_URL:-https://yourdomain.com/claim}
-      PLATFORM_NAME: ${PLATFORM_NAME:-Indian Eats Directory}
+      PLATFORM_NAME: ${PLATFORM_NAME:-Namaste America}
       OUTREACH_CONTACT_EMAIL: ${OUTREACH_CONTACT_EMAIL:-}
       OUTREACH_POSTAL_ADDRESS: ${OUTREACH_POSTAL_ADDRESS:-}
       OUTREACH_DAILY_SEND_CAP: ${OUTREACH_DAILY_SEND_CAP:-15}

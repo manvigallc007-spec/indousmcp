@@ -47,7 +47,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         h.setdefault("X-Content-Type-Options", "nosniff")
         h.setdefault("X-Frame-Options", "DENY")
         h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        h.setdefault("Permissions-Policy", "geolocation=(self), camera=(), microphone=()")
+        # Allow the page's OWN mic (voice search / Hindi-Telugu dictation) + geolocation ("near me").
+        h.setdefault("Permissions-Policy", "geolocation=(self), camera=(), microphone=(self)")
         proto = request.headers.get("x-forwarded-proto", request.url.scheme)
         if proto == "https":  # only meaningful over TLS
             h.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")

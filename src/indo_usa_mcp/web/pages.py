@@ -193,6 +193,9 @@ def privacy(request: Request) -> HTMLResponse:
 <li><b>Business accounts.</b> If you register or claim a business, we collect your email address
  and, if you set one, a password stored only as a salted one-way hash (never in plain text).
  Listing details you provide are published in the directory.</li>
+<li><b>Reviews you post.</b> A star rating, your review text, an optional display name, and (only if
+ you provide it) an email used solely to contact you about the review — your email is never
+ published. Reviews are public and moderated.</li>
 <li><b>Cookies.</b> A signed session cookie is used only for admin and business-owner logins. We
  don't use cookies to track general visitors for advertising.</li>
 </ul>
@@ -285,11 +288,17 @@ def terms(request: Request) -> HTMLResponse:
 <li>We may suspend accounts or remove content that is fraudulent, spammy, unlawful, or off-topic.</li>
 </ul>
 
-<h2>5. Your submissions</h2>
+<h2>5. Your submissions &amp; reviews</h2>
 <p>When you add or edit a listing, you confirm the information is accurate and that you have the
  right to share it, and you grant us a non-exclusive license to display and distribute it through
  the directory, API, and AI-agent interfaces. Don't submit false, misleading, infringing, or spam
  content.</p>
+<p><b>Reviews &amp; ratings.</b> If you post a review or star rating, it is <b>public</b> and shown
+ with the name you provide (or “Anonymous”); any email you give is used only to contact you about the
+ review and is <b>never published</b>. Reviews are <b>moderated</b> — we may decline, hold, or remove
+ content that is spam, advertising, hateful, harassing, defamatory, off-topic, fake, or that reveals
+ someone's private information. Post only your own genuine, first-hand experience; you grant us a
+ non-exclusive license to display it, and you remain responsible for what you post.</p>
 
 <h2>6. Acceptable use</h2>
 <ul>

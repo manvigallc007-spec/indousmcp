@@ -18,8 +18,9 @@ _STATIC_DIR = pathlib.Path(__file__).resolve().parent / "static"
 from .. import payments, submissions, verticals
 from ..config import settings
 from ..pipeline import compliance, ingest, outreach
+from .auth import verify_captcha
 from .landing import CATEGORY_CSS, category_grid
-from .common import _page, esc as _esc
+from .common import _page, captcha_field, esc as _esc
 
 # Text fields shown on the owner edit form (label, restaurant field).
 _EDIT_FIELDS = [
@@ -258,6 +259,7 @@ def submit_get(request: Request) -> HTMLResponse:
         "<input name='note'>"
         # honeypot — bots fill this hidden field; humans don't.
         "<input type='text' name='company' style='position:absolute;left:-9999px' tabindex='-1' autocomplete='off'>"
+        + captcha_field() +
         "<button type='submit'>Submit for review</button></form>")
     return _page("Add your business", body)
 
@@ -270,6 +272,9 @@ async def submit_post(request: Request) -> HTMLResponse:
     if not _sub_rate_ok(ip):
         return _page("Slow down", "<h2>Too many submissions</h2>"
                      "<p class='muted'>Please try again later.</p>", status=429)
+    if not verify_captcha(form):
+        return _page("Could not submit", "<h2 class='err'>The captcha answer was incorrect.</h2>"
+                     "<p><a href='/submit'>‹ try again</a></p>", status=400)
     vertical = (form.get("vertical") or "").strip()
     payload = {k: (form.get(k) or "").strip()
                for k in ("name", "address_full", "city", "state", "phone", "email", "website",
