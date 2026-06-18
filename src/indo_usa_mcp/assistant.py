@@ -277,14 +277,42 @@ def _translate_to_english(text: str, src: str) -> str | None:
     return out
 
 
+def _interpret_to_english(text: str, src: str) -> str | None:
+    """Interpret a ROMANIZED or speech-to-text Hindi/Telugu message (Latin letters) into a clean
+    English search query. Speech-to-text frequently returns romanized text ("naaku biryani kavali")
+    or a mishearing rather than native script, so the script gate alone misses it. LLM-only — a
+    plain translator (MyMemory) can't read romanized input."""
+    key = f"i:{src}:{text}"
+    if key in _XLATE_CACHE:
+        return _XLATE_CACHE[key]
+    name = _LANG_NAMES.get(src, src)
+    out = complete_text(
+        f"The user is searching an Indian-American business directory and chose {name}. Their message "
+        f"may be in {name} script, in romanized {name} ({name} written with English letters), or in "
+        "English, and may contain speech-to-text mistakes. Rewrite it as a short, correct ENGLISH "
+        "search query — keep cuisines, dishes, business types and place/city names. If it is already "
+        "clear English, return it unchanged. Output ONLY the query, nothing else.", text)
+    out = out.strip() if out else None
+    if out:
+        if len(_XLATE_CACHE) > 500:
+            _XLATE_CACHE.clear()
+        _XLATE_CACHE[key] = out
+    return out
+
+
 def _english(text: str, filters: dict | None) -> str:
     """English form of the user's request, for searching the English directory + topic routing.
-    Translates only when the language is Hindi/Telugu AND the text is in native Indic script, so an
-    English (or LLM-supplied English) query is left untouched and we never double-translate."""
+    Native Indic script is translated; romanized / speech-to-text Hindi-Telugu (Latin letters) is
+    interpreted by the LLM (handles 'naaku biryani kavali' + mishearings); plain English passes
+    through ~unchanged."""
     lang = (filters or {}).get("lang")
-    if not text or lang in (None, "", "en") or not _has_indic(text):
+    if not text or lang in (None, "", "en"):
         return text
-    return _translate_to_english(text, lang) or text
+    if _has_indic(text):                                # native script -> translate (LLM/MyMemory)
+        return _translate_to_english(text, lang) or text
+    if lang in ("hi", "te") and llm_active():           # romanized / mis-heard -> LLM interprets
+        return _interpret_to_english(text, lang) or text
+    return text
 
 
 def _cards(res: dict) -> list[dict]:

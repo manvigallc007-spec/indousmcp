@@ -47,3 +47,18 @@ def test_translate_prefers_llm_when_active(monkeypatch):
     monkeypatch.setattr(a, "complete_text", lambda system, user: "temple near me")
     a._XLATE_CACHE.clear()
     assert a._translate_to_english(HIN, "hi") == "temple near me"
+
+
+def test_romanized_telugu_interpreted_via_llm(monkeypatch):
+    # STT often returns ROMANIZED Telugu (Latin letters), not native script -> the LLM interprets it.
+    monkeypatch.setattr(a, "llm_active", lambda: True)
+    monkeypatch.setattr(a, "complete_text", lambda system, user: "biryani in plano")
+    a._XLATE_CACHE.clear()
+    assert a._english("naaku plano lo biryani kavali", {"lang": "te"}) == "biryani in plano"
+
+
+def test_romanized_passthrough_without_llm(monkeypatch):
+    # No LLM -> can't interpret romanized input; leave it untouched (no MyMemory on Latin text).
+    monkeypatch.setattr(a, "llm_active", lambda: False)
+    a._XLATE_CACHE.clear()
+    assert a._english("naaku biryani", {"lang": "te"}) == "naaku biryani"
