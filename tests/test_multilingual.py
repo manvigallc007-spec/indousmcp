@@ -62,3 +62,22 @@ def test_romanized_passthrough_without_llm(monkeypatch):
     monkeypatch.setattr(a, "llm_active", lambda: False)
     a._XLATE_CACHE.clear()
     assert a._english("naaku biryani", {"lang": "te"}) == "naaku biryani"
+
+
+def test_reply_feeds_english_to_engine(monkeypatch):
+    # THE FIX: a Telugu request -> the LLM engine receives the ENGLISH translation (so its tool
+    # search is reliable), not the raw Telugu. Reply language is handled separately by _lang_note.
+    monkeypatch.setattr(a, "_needs_location", lambda *args, **k: False)
+    monkeypatch.setattr(a, "llm_active", lambda: True)
+    monkeypatch.setattr(a, "_english", lambda text, filters: "biryani in plano")
+    monkeypatch.setattr(a, "_is_knowledge_question", lambda q, f: False)
+    monkeypatch.setattr(a, "_thin_contribute", lambda *args, **k: None)
+    captured = {}
+
+    def fake_engine(messages, geo, filters):
+        captured["text"] = messages[-1]["content"]
+        return {"reply": "ok", "cards": [{"name": "X"}], "provider": "llm"}
+    monkeypatch.setattr(a, "_llm_reply", fake_engine)
+    monkeypatch.setattr(a, "_grounded_reply", fake_engine)
+    a.reply([{"role": "user", "content": TEL}], filters={"lang": "te"})
+    assert captured["text"] == "biryani in plano"            # engine got English, not Telugu

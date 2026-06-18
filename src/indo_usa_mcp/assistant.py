@@ -226,10 +226,11 @@ def _lang_note(filters: dict | None) -> str | None:
             f"AVOID heavy literary/Sanskritized or bureaucratic wording. Short, clear sentences that "
             f"sound good when read aloud. Keep proper nouns (business names, cities) in their usual "
             f"spelling, and you may keep common English words people normally use (e.g. "
-            f"'restaurant', 'temple', 'open'). The user may type or speak in {name} or a romanized "
-            f"form — understand either. When you search the directory or call a tool, TRANSLATE the "
-            f"request into English search terms (listings are stored in English); never show the "
-            f"English translation to the user.")
+            f"'restaurant', 'temple', 'open'). The user's request may reach you in {name}, in "
+            f"romanized {name}, or already auto-translated to English — in ALL cases reply in {name} "
+            f"(its native script); never reply in English. When you search the directory or call a "
+            f"tool, use English search terms (listings are stored in English); never show the "
+            f"English text to the user.")
 
 
 # --- Multilingual normalization -------------------------------------------------------------
@@ -822,33 +823,45 @@ def _needs_location(messages: list[dict], geo: dict | None, filters: dict | None
     return not named_place
 
 
+def _replace_last_user(messages: list[dict], text: str) -> list[dict]:
+    """A copy of the history with the latest user turn replaced by `text` (its English form), so the
+    LLM + its tool search operate on English while the reply still goes back in-language (_lang_note)."""
+    out = [dict(m) for m in messages]
+    for m in reversed(out):
+        if m.get("role") == "user":
+            m["content"] = text
+            break
+    return out
+
+
 def reply(messages: list[dict], geo: dict | None = None, filters: dict | None = None) -> dict:
     """Produce an assistant reply for a chat history. Never raises into the web layer."""
     messages = [m for m in (messages or []) if m.get("role") in ("user", "assistant")][-12:]
     if _needs_location(messages, geo, filters):
         return {"reply": "Which city or area should I look in? For example: “Edison, NJ”, "
                 "“Jersey City”, or “Bay Area”.", "cards": [], "provider": "clarify"}
-    query = _search_query(messages)
-    # Topic routing below is English-keyword based, so normalize a Hindi/Telugu request to English
-    # first (otherwise a native-script question could be mis-declined as "off-topic"). The LLM still
-    # sees the original `messages` and replies in the user's language (see _lang_note).
-    query = _english(query, filters)
+    raw = _search_query(messages)
+    # The directory AND the LLM's tool search are English. Translate a Hindi/Telugu request to
+    # English and feed the ENGLISH message to the engine — so the search is reliable instead of
+    # depending on the model to translate its own tool query (the part that was failing). The reply
+    # still goes back in the user's language via _lang_note.
+    query = _english(raw, filters)
+    eng_messages = _replace_last_user(messages, query) if (query and query != raw) else messages
     # Free-form knowledge question (explain/what/how, no place named) -> answer in prose from the
-    # knowledge base (then the free web), instead of forcing listing cards. This is what makes Dost
-    # conversational ("how is Pongal celebrated?") rather than a search box.
+    # knowledge base (then the free web), instead of forcing listing cards.
     if query and is_indian_american_topic(query) and _is_knowledge_question(query, filters):
-        return _knowledge_reply(query, messages, geo, filters)
+        return _knowledge_reply(query, eng_messages, geo, filters)
     if llm_active():
         try:
             engine = _llm_reply if settings.effective_llm_use_tools else _grounded_reply
-            out = engine(messages, geo, filters)
+            out = engine(eng_messages, geo, filters)
         except Exception as exc:  # LLM unreachable/misconfigured -> degrade to search
-            out = _search_reply(messages, geo, filters)
+            out = _search_reply(eng_messages, geo, filters)
             out["reply"] = ("(Live assistant is unavailable right now — showing a direct "
                             f"search instead.) {out['reply']}")
             out["llm_error"] = type(exc).__name__
     else:
-        out = _search_reply(messages, geo, filters)
+        out = _search_reply(eng_messages, geo, filters)
 
     # Directory found nothing for a real query. Route the dead-end into something useful:
     #  - off-topic            -> polite decline
@@ -858,7 +871,7 @@ def reply(messages: list[dict], geo: dict | None = None, filters: dict | None = 
         if not is_indian_american_topic(query):
             return _decline(query)
         if _is_local_request(query, filters):
-            return _discovery_reply(query, messages, geo, filters)
+            return _discovery_reply(query, eng_messages, geo, filters)
         return _web_fallback(query, geo, filters)
     # Thin result in a submission-fed vertical -> invite the visitor to add one they know.
     if query and out.get("cards") and "contribute" not in out:
