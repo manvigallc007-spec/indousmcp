@@ -318,6 +318,9 @@ def _edit_form(vertical: str, rec: dict) -> str:
     if cfg["has_dietary"]:
         rows += (f"<label>Dietary (comma-separated)</label>"
                  f"<input name='dietary_csv' value='{esc(','.join(rec.get('dietary_tags') or []))}'>")
+    rows += (f"<label>Languages spoken (comma-separated)</label>"
+             f"<input name='languages_csv' value='{esc(','.join(rec.get('languages') or []))}' "
+             f"placeholder='Telugu, Hindi, English'>")
     return (f"<form method='post' action='/portal/edit/{vertical}/{rec['id']}'>{rows}"
             f"<button>Save changes</button></form>")
 
@@ -355,6 +358,9 @@ async def edit_post(request: Request) -> HTMLResponse:
         edits["hours_json"] = {"raw": hv} if hv else None
     if cfg["has_dietary"] and "dietary_csv" in form:
         edits["dietary_tags"] = sorted(t.strip() for t in (form.get("dietary_csv") or "").split(",") if t.strip())
+    if "languages_csv" in form:
+        from .. import tags as tagsmod
+        edits["languages"] = tagsmod.parse_languages(form.get("languages_csv"))
     result = verticals.apply_edits(vertical, rec_id, edits)
     n = result.get("updated", 0)
     return _page("Saved", f"<h2 class='ok'>&#10003; Saved {n} change(s)</h2>"

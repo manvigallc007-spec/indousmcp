@@ -40,7 +40,7 @@ def _agent_id(request: Request, ip: str) -> str:
 _PUBLIC_FIELDS = (
     "vertical", "name", "city", "state", "address", "phone", "website",
     "latitude", "longitude", "rating", "rating_count", "community_rating",
-    "community_rating_count", "tags", "description",
+    "community_rating_count", "languages", "tags", "description",
     "distance_miles", "is_featured", "is_claimed", "open_now", "verified_ago",
 )
 

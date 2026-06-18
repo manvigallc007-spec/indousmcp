@@ -223,6 +223,12 @@ def _rating(rec: dict) -> str:
     return out
 
 
+def _languages(rec: dict) -> str:
+    """Spoken languages in prose, so agents + embeddings can match 'Telugu-speaking doctor'."""
+    langs = rec.get("languages") or []
+    return (" Speaks " + ", ".join(str(x) for x in langs) + ".") if langs else ""
+
+
 def describe(vertical: str, rec: dict) -> str:
     builder = _BUILDERS.get(vertical, _restaurant)
-    return " ".join((builder(rec) + _rating(rec)).split())
+    return " ".join((builder(rec) + _rating(rec) + _languages(rec)).split())

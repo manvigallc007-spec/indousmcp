@@ -6,6 +6,8 @@ recall (they're appended to the embedded text). Derived only from known fields â
 
 from __future__ import annotations
 
+import re
+
 # canonical tag -> substrings that imply it (matched against name + description + cuisine).
 _TAG_KEYWORDS: dict[str, tuple[str, ...]] = {
     "biryani": ("biryani", "biriyani", "briyani", "dum biryani", "kacchi", "hyderabadi", "ambur"),
@@ -104,6 +106,42 @@ def for_display(tags, limit: int = 6) -> list[str]:
         if lab and lab not in out:
             out.append(lab)
     return out[:limit]
+
+
+# Common Indian languages (+ English) -> canonical Title-cased form, so owner/admin input stays tidy.
+_LANG_CANON: dict[str, str] = {
+    "telugu": "Telugu", "hindi": "Hindi", "tamil": "Tamil", "gujarati": "Gujarati",
+    "punjabi": "Punjabi", "bengali": "Bengali", "kannada": "Kannada", "malayalam": "Malayalam",
+    "marathi": "Marathi", "urdu": "Urdu", "english": "English", "odia": "Odia", "oriya": "Odia",
+    "assamese": "Assamese", "konkani": "Konkani", "sanskrit": "Sanskrit", "nepali": "Nepali",
+    "sindhi": "Sindhi", "bhojpuri": "Bhojpuri",
+}
+
+
+def parse_languages(value) -> list[str]:
+    """Normalize owner/admin language input (a list, or a comma/semicolon/slash string) into a tidy,
+    de-duplicated, Title-cased list. Unknown languages are kept (title-cased), not dropped."""
+    items = ([str(x) for x in value] if isinstance(value, (list, tuple, set))
+             else re.split(r"[,;/]+", str(value or "")))
+    out: list[str] = []
+    for raw in items:
+        w = raw.strip()
+        if not w:
+            continue
+        canon = _LANG_CANON.get(w.lower(), w.title())
+        if canon not in out:
+            out.append(canon)
+    return out
+
+
+def language_tags(langs) -> list[str]:
+    """Searchable tags for spoken languages: 'Telugu' -> 'telugu-speaking' (folded into tags[])."""
+    out: list[str] = []
+    for lang in (langs or []):
+        w = str(lang).strip().lower()
+        if w and f"{w}-speaking" not in out:
+            out.append(f"{w}-speaking")
+    return out
 
 
 def _match(text: str, table: dict[str, tuple[str, ...]]) -> set[str]:

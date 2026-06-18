@@ -303,6 +303,7 @@ def data_new(request: Request) -> HTMLResponse:
         rows += "<label>hours (e.g. Mo-Su 10:00-21:00)</label><input name='hours'>"
     if cfg["has_dietary"]:
         rows += "<label>dietary_tags (comma-separated)</label><input name='dietary_csv'>"
+    rows += "<label>languages (comma-separated)</label><input name='languages' placeholder='Telugu, Hindi, English'>"
     body = (f"<p><a href='/admin/data/{vertical}'>‹ back to {vertical}</a></p>"
             f"<h3>Add a {verticals.VERTICALS[vertical]['label']} listing</h3>"
             "<p class='muted'>Manually add a business OSM doesn't have. Name is required; "
@@ -364,6 +365,8 @@ def data_detail(request: Request) -> HTMLResponse:
     if cfg["has_dietary"]:
         field_rows += (f"<label>dietary_tags (comma-separated)</label>"
                        f"<input name='dietary_csv' value='{esc(','.join(rec.get('dietary_tags') or []))}'>")
+    field_rows += (f"<label>languages (comma-separated)</label>"
+                   f"<input name='languages_csv' value='{esc(','.join(rec.get('languages') or []))}'>")
     edit_form = (f"<form method='post' action='/admin/data/{vertical}/{rec_id}'>"
                  f"{field_rows}<button>Save edits</button></form>")
 
@@ -388,6 +391,9 @@ async def data_edit(request: Request) -> HTMLResponse:
         edits["hours_json"] = {"raw": hv} if hv else None
     if cfg["has_dietary"] and "dietary_csv" in form:
         edits["dietary_tags"] = sorted(t.strip() for t in (form.get("dietary_csv") or "").split(",") if t.strip())
+    if "languages_csv" in form:
+        from .. import tags as tagsmod
+        edits["languages"] = tagsmod.parse_languages(form.get("languages_csv"))
     verticals.apply_edits(vertical, rec_id, edits)
     return RedirectResponse(f"/admin/data/{vertical}/{rec_id}", status_code=303)
 

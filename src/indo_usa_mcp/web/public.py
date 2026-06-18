@@ -252,6 +252,8 @@ def submit_get(request: Request) -> HTMLResponse:
         "<label>Phone</label><input name='phone' type='tel'>"
         "<label>Your email *</label><input name='email' type='email' required>"
         "<label>Website</label><input name='website' placeholder='https://'>"
+        "<label>Languages spoken <span style='font-weight:400;color:#6b7280'>(comma-separated)</span></label>"
+        "<input name='languages' placeholder='Telugu, Hindi, English'>"
         "<label>Anything else? (specialties, region, hours)</label>"
         "<input name='note'>"
         # honeypot — bots fill this hidden field; humans don't.
@@ -270,7 +272,8 @@ async def submit_post(request: Request) -> HTMLResponse:
                      "<p class='muted'>Please try again later.</p>", status=429)
     vertical = (form.get("vertical") or "").strip()
     payload = {k: (form.get(k) or "").strip()
-               for k in ("name", "address_full", "city", "state", "phone", "email", "website")}
+               for k in ("name", "address_full", "city", "state", "phone", "email", "website",
+                         "languages")}
     res = submissions.submit(vertical, payload, contact_email=payload.get("email"),
                              note=(form.get("note") or "").strip() or None)
     if not res.get("ok"):
@@ -368,6 +371,9 @@ def render_edit_form(r: dict, action: str, hidden: str) -> str:
         f"<label>Opening hours</label>"
         f"<input name='hours' value='{_esc(hours_raw)}' placeholder='Mo-Su 11:00-22:00'>"
         f"<label>Dietary</label><div style='margin:6px 0 16px'>{checks}</div>"
+        f"<label>Languages spoken (comma-separated)</label>"
+        f"<input name='languages_csv' value='{_esc(', '.join(r.get('languages') or []))}' "
+        f"placeholder='Telugu, Hindi, English'>"
         f"<button type='submit'>Save changes</button></form>")
 
 
@@ -380,6 +386,9 @@ def parse_edit_form(form) -> dict:
         hours = (form.get("hours") or "").strip()
         edits["hours_json"] = {"raw": hours} if hours else None
     edits["dietary_tags"] = sorted(set(form.getlist("dietary")))
+    if "languages_csv" in form:
+        from .. import tags as tagsmod
+        edits["languages"] = tagsmod.parse_languages(form.get("languages_csv"))
     return edits
 
 

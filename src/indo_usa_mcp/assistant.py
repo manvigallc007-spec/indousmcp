@@ -311,6 +311,7 @@ def _cards(res: dict) -> list[dict]:
             "distance_miles": r.get("distance_miles"),
             "id": r.get("id"),
             "features": _tags.for_display(r.get("tags")),
+            "languages": r.get("languages") or [],
         })
     return out
 

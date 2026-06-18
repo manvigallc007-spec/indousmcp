@@ -190,7 +190,7 @@ def _listings(v: str, state: str, city: str, limit: int = 200) -> list[dict]:
     table = verticals._table(v)
     return db.query(
         f"SELECT id, name, address_full, city, state, lat, lng, phone, website, description, tags, "
-        f"is_claimed, rating, rating_count, community_rating, community_rating_count, "
+        f"languages, is_claimed, rating, rating_count, community_rating, community_rating_count, "
         f"{_FEATURED} AS is_featured "
         f"FROM {table} WHERE deleted_at IS NULL AND is_active "
         f"AND LOWER(state) = LOWER(%s) AND LOWER(city) = LOWER(%s) "
@@ -230,9 +230,12 @@ def browse_city(request: Request) -> HTMLResponse:
         feats = tagsmod.for_display(r.get("tags"), limit=8)
         feats_html = ("<div class='feats'>" + "".join(
             f"<span class='fchip'>{html.escape(x)}</span>" for x in feats) + "</div>") if feats else ""
+        langs_html = (f"<div class='meta' style='color:#0f766e;font-weight:600'>🗣 Speaks "
+                      f"{html.escape(', '.join(r['languages']))}</div>") if r.get("languages") else ""
         cards += (f"<div class='lc'><h3>{i}. {name_html}{feat}</h3>"
                   f"<div class='meta'>{html.escape(addr)} {rate}</div>"
                   + (f"<p>{html.escape((r.get('description') or '')[:220])}</p>" if r.get("description") else "")
+                  + langs_html
                   + feats_html
                   + (f"<div class='meta'>{links} · <a href='/listing/{v}/{r['id']}'>Details &amp; reviews</a></div>"
                      if links else f"<div class='meta'><a href='/listing/{v}/{r['id']}'>Details &amp; reviews</a></div>")

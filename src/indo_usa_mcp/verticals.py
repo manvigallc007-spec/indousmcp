@@ -385,13 +385,26 @@ def apply_edits(vertical: str, rec_id: int, edits: dict) -> dict:
     existing = get_record(vertical, rec_id)
     if existing is None:
         return {"ok": False, "error": "not_found"}
-    allowed = set(cfg["edit_fields"]) | ({"hours_json"} if cfg["has_hours"] else set()) \
+    allowed = set(cfg["edit_fields"]) | {"languages"} | ({"hours_json"} if cfg["has_hours"] else set()) \
         | ({"dietary_tags"} if cfg["has_dietary"] else set())
     from .pipeline.ingest import _normalize
     diff = {k: v for k, v in edits.items()
             if k in allowed and _normalize(existing.get(k)) != _normalize(v)}
     if not diff:
         return {"ok": True, "updated": 0}
+    # A languages edit feeds the description (embedded for search) + the searchable language tags —
+    # refresh both so search/display stay consistent and the row re-embeds. Tag refresh is surgical
+    # (only the '*-speaking' tags) so OSM amenity/dish tags are preserved.
+    if "languages" in diff:
+        from . import describe, tags as tagmod
+        merged = {**existing, **diff}
+        new_desc = describe.describe(vertical, merged)
+        if _normalize(existing.get("description")) != _normalize(new_desc):
+            diff["description"] = new_desc
+        kept = [t for t in (existing.get("tags") or []) if not str(t).endswith("-speaking")]
+        new_tags = sorted(set(kept) | set(tagmod.language_tags(merged.get("languages"))))
+        if _normalize(existing.get("tags")) != _normalize(new_tags):
+            diff["tags"] = new_tags
     cfg["update"](existing, diff)
     return {"ok": True, "updated": len(diff), "fields": sorted(diff)}
 
@@ -452,12 +465,13 @@ def create_record(vertical: str, data: dict) -> dict[str, Any]:
         rec["hours_json"] = clean._with_hours({"raw": raw}) if raw else None
     if cfg["has_dietary"]:
         rec["dietary_tags"] = data.get("dietary_tags") or []
+    rec["languages"] = tagmod.parse_languages(data.get("languages"))
     for f in cfg["edit_fields"]:  # vertical-specific scalars (type column, speciality, ...)
         if f not in rec:
             v = data.get(f)
             rec[f] = (v.strip() or None) if isinstance(v, str) else v
     rec["description"] = describe.describe(vertical, rec)
-    rec["tags"] = tagmod.extract(vertical, rec)
+    rec["tags"] = sorted(set(tagmod.extract(vertical, rec)) | set(tagmod.language_tags(rec["languages"])))
 
     if db.query_one(f"SELECT 1 AS x FROM {table} WHERE natural_key = %s", (rec["natural_key"],)):
         return {"ok": False, "error": "duplicate"}

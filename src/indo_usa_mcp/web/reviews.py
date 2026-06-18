@@ -30,6 +30,7 @@ _CSS = """<style>
 .lmeta{color:#4b5563;margin:6px 0}.lmeta a{font-weight:600}
 .banner{background:#fff;border:1px solid #cfe6e0;border-left:4px solid #0f9b8e;border-radius:10px;
  padding:12px 14px;margin:12px 0;font-weight:600}.banner.ok{border-left-color:#137333;color:#137333}
+.langs{color:#0f766e;font-weight:600;margin:8px 0}
 .feats{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
 .fchip{background:#f3efe9;border:1px solid #e7e0d6;border-radius:999px;padding:4px 11px;font-size:13px;color:#5b6470}
 .rev{background:#fff;border:1px solid #ececec;border-radius:12px;padding:13px 15px;margin:10px 0}
@@ -54,7 +55,7 @@ def _fetch(vertical: str, listing_id: int) -> dict | None:
     table = verticals._table(vertical)
     return db.query_one(
         f"SELECT id, name, address_full, city, state, lat, lng, phone, website, description, tags, "
-        f"is_claimed, rating, rating_count, community_rating, community_rating_count, "
+        f"languages, is_claimed, rating, rating_count, community_rating, community_rating_count, "
         f"{_FEATURED} AS is_featured FROM {table} "
         f"WHERE id = %s AND deleted_at IS NULL AND is_active", [listing_id])
 
@@ -193,6 +194,8 @@ def listing_page(request: Request) -> HTMLResponse:
         + (f"<p class='lmeta'>📍 {html.escape(addr)}</p>" if addr else "")
         + (f"<p class='lmeta'>{links}</p>" if links else "")
         + (f"<p>{html.escape(r.get('description') or '')}</p>" if r.get("description") else "")
+        + (f"<p class='langs'>🗣 Speaks {html.escape(', '.join(r['languages']))}</p>"
+           if r.get("languages") else "")
         + _features_html(r)
         + "<h2 style='margin-top:26px'>Community reviews</h2>"
         + _reviews_html(items)

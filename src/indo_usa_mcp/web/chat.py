@@ -186,6 +186,7 @@ a{color:var(--brand);text-decoration:none}
 .lc-rate{color:#b45309;font-size:14px;font-weight:600;margin-top:4px}
 .lc-fresh{color:#137333;font-size:13px;margin-top:6px}
 .lc-desc{color:#475467;font-size:15px;margin:9px 0 0;line-height:1.5}
+.lc-langs{color:#0f766e;font-size:13.5px;font-weight:600;margin:7px 0 0}
 .lc-feats{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 0}
 .feat-chip{background:#f3efe9;border:1px solid #e7e0d6;border-radius:999px;padding:2px 9px;font-size:11.5px;color:#5b6470}
 .lc-act{display:flex;gap:9px;margin-top:13px;flex-wrap:wrap}
@@ -482,6 +483,7 @@ function card(c){
   if(c.distance_miles!=null) locline+=(loc?' · ':'')+c.distance_miles+' mi';
   if(locline)d.appendChild(el('div','lc-loc','📍 '+locline));
   if(c.description)d.appendChild(el('p','lc-desc',c.description));
+  if(c.languages&&c.languages.length)d.appendChild(el('div','lc-langs','🗣 Speaks '+c.languages.join(', ')));
   if(c.features&&c.features.length){const f=el('div','lc-feats');c.features.forEach(function(x){f.appendChild(el('span','feat-chip',x));});d.appendChild(f);}
   if(c.verified_ago)d.appendChild(el('div','lc-fresh','✓ '+c.verified_ago));
   const act=el('div','lc-act');

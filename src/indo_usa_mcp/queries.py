@@ -18,7 +18,7 @@ _PUBLIC_COLS = [
 _FEATURED = "(is_featured AND (featured_until IS NULL OR featured_until > now()))"
 # Always return the effective featured flag (not the raw column).
 _COLS_SQL = (", ".join(_PUBLIC_COLS)
-             + f", rating, rating_count, community_rating, community_rating_count, {_FEATURED} AS is_featured")
+             + f", rating, rating_count, community_rating, community_rating_count, languages, {_FEATURED} AS is_featured")
 
 
 def get_indian_restaurants(
