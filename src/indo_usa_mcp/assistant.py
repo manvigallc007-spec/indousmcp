@@ -138,7 +138,9 @@ def _run_search(args: dict, filters: dict | None = None, geo: dict | None = None
     a `vertical` scopes to one category; `open_now` keeps only currently-open listings.
     `geo` enables proximity ranking ("near me")."""
     filters = filters or {}
-    query = (args.get("query") or "").strip()
+    # The directory is English: translate a native-script (Hindi/Telugu) request to English first,
+    # so search works in every path (an English/LLM-supplied query passes through untouched).
+    query = _english((args.get("query") or "").strip(), filters)
     city = filters.get("city") or args.get("city") or None
     state = filters.get("state") or args.get("state") or None
     vertical = filters.get("vertical") or args.get("vertical") or None
@@ -228,6 +230,61 @@ def _lang_note(filters: dict | None) -> str | None:
             f"form — understand either. When you search the directory or call a tool, TRANSLATE the "
             f"request into English search terms (listings are stored in English); never show the "
             f"English translation to the user.")
+
+
+# --- Multilingual normalization -------------------------------------------------------------
+# The directory + topic routing are English. When the user speaks/types Hindi or Telugu, the STT
+# may return native script (or a browser may even mis-transcribe), so we translate the request to
+# English BEFORE searching/routing — making search correct in every path (tool, grounded, no-LLM),
+# not only when the LLM happens to translate. Replies still go back in the user's language (see
+# _lang_note). Free + zero-budget: reuse the configured LLM, with a key-less MyMemory fallback.
+# Indic-script Unicode blocks: Devanagari (U+0900) through Malayalam (U+0D7F) — covers Hindi &
+# Telugu (and neighbours), so a native-script request is detected regardless of the language tag.
+_XLATE_CACHE: dict[str, str] = {}
+
+
+def _has_indic(text: str) -> bool:
+    return any(0x0900 <= ord(ch) <= 0x0DFF for ch in (text or ""))
+
+
+def _mymemory_en(text: str, src: str) -> str | None:
+    """Key-less free fallback translation (MyMemory). Only used when no LLM is configured."""
+    try:
+        r = httpx.get("https://api.mymemory.translated.net/get",
+                      params={"q": text[:480], "langpair": f"{src}|en"}, timeout=6.0)
+        out = (r.json().get("responseData") or {}).get("translatedText")
+        return out.strip() if out else None
+    except Exception:
+        return None
+
+
+def _translate_to_english(text: str, src: str) -> str | None:
+    key = f"{src}:{text}"
+    if key in _XLATE_CACHE:
+        return _XLATE_CACHE[key]
+    out = None
+    if llm_active():
+        out = complete_text(
+            "You are a translator. Translate the user's message to English. Output ONLY the English "
+            "translation — no quotes, no notes, no extra text.", text)
+        out = out.strip() if out else None
+    if not out:
+        out = _mymemory_en(text, src if src in ("hi", "te") else "autodetect")
+    if out:
+        if len(_XLATE_CACHE) > 500:
+            _XLATE_CACHE.clear()
+        _XLATE_CACHE[key] = out
+    return out
+
+
+def _english(text: str, filters: dict | None) -> str:
+    """English form of the user's request, for searching the English directory + topic routing.
+    Translates only when the language is Hindi/Telugu AND the text is in native Indic script, so an
+    English (or LLM-supplied English) query is left untouched and we never double-translate."""
+    lang = (filters or {}).get("lang")
+    if not text or lang in (None, "", "en") or not _has_indic(text):
+        return text
+    return _translate_to_english(text, lang) or text
 
 
 def _cards(res: dict) -> list[dict]:
@@ -742,6 +799,10 @@ def reply(messages: list[dict], geo: dict | None = None, filters: dict | None = 
         return {"reply": "Which city or area should I look in? For example: “Edison, NJ”, "
                 "“Jersey City”, or “Bay Area”.", "cards": [], "provider": "clarify"}
     query = _search_query(messages)
+    # Topic routing below is English-keyword based, so normalize a Hindi/Telugu request to English
+    # first (otherwise a native-script question could be mis-declined as "off-topic"). The LLM still
+    # sees the original `messages` and replies in the user's language (see _lang_note).
+    query = _english(query, filters)
     # Free-form knowledge question (explain/what/how, no place named) -> answer in prose from the
     # knowledge base (then the free web), instead of forcing listing cards. This is what makes Dost
     # conversational ("how is Pongal celebrated?") rather than a search box.
