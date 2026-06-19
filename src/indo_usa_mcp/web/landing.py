@@ -92,20 +92,23 @@ def _base() -> str:
 
 
 def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200,
-          canonical: str = "") -> HTMLResponse:
+          canonical: str = "", image: str = "") -> HTMLResponse:
     plat = html.escape(settings.platform_name)
     # Escape "<" so a listing name containing "</script>" can't break out of the JSON-LD block.
     ld = (f'<script type="application/ld+json">{jsonld.replace("<", chr(92) + "u003c")}</script>'
           if jsonld else "")
     can = (f'<link rel="canonical" href="{html.escape(canonical)}">'
            f'<meta property="og:url" content="{html.escape(canonical)}">' if canonical else "")
+    img_meta = (f'<meta property="og:image" content="{html.escape(image)}">'
+                f'<meta name="twitter:card" content="summary_large_image">'
+                f'<meta name="twitter:image" content="{html.escape(image)}">' if image else "")
     doc = f"""<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)}</title>
 <meta name="description" content="{html.escape(desc)}">
 {can}<meta property="og:title" content="{html.escape(title)}">
 <meta property="og:description" content="{html.escape(desc)}">
-<meta property="og:type" content="website">
+<meta property="og:type" content="website">{img_meta}
 {analytics_tag()}
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
 <link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#c1440e">
@@ -197,7 +200,7 @@ def _listings(v: str, state: str, city: str, limit: int = 200) -> list[dict]:
     return db.query(
         f"SELECT id, name, address_full, city, state, lat, lng, phone, website, description, tags, "
         f"languages, is_claimed, rating, rating_count, community_rating, community_rating_count, "
-        f"{_FEATURED} AS is_featured "
+        f"photo_url, {_FEATURED} AS is_featured "
         f"FROM {table} WHERE deleted_at IS NULL AND is_active "
         f"AND LOWER(state) = LOWER(%s) AND LOWER(city) = LOWER(%s) "
         f"ORDER BY {_FEATURED} DESC, confidence_score DESC LIMIT %s", (state, city, limit))
@@ -233,7 +236,10 @@ def _listing_cards(v: str, rows: list[dict], tr: dict, *, numbered: bool = True)
         langs_html = (f"<div class='meta' style='color:#0f766e;font-weight:600'>🗣 {html.escape(tr['speaks'])}: "
                       f"{html.escape(', '.join(r['languages']))}</div>") if r.get("languages") else ""
         rank = f"{i}. " if numbered else ""
-        cards += (f"<div class='lc'><h3>{rank}{name_html}{feat}</h3>"
+        thumb = (f"<img src='{html.escape(r['photo_url'])}' alt='{html.escape(r['name'])}' "
+                 f"loading='lazy' onerror='this.remove()' style='float:right;width:84px;height:84px;"
+                 f"object-fit:cover;border-radius:10px;margin:0 0 6px 12px'>") if r.get("photo_url") else ""
+        cards += (f"<div class='lc'>{thumb}<h3>{rank}{name_html}{feat}</h3>"
                   f"<div class='meta'>{html.escape(addr)} {rate}</div>"
                   + (f"<p>{html.escape((r.get('description') or '')[:220])}</p>" if r.get("description") else "")
                   + langs_html
@@ -244,6 +250,8 @@ def _listing_cards(v: str, rows: list[dict], tr: dict, *, numbered: bool = True)
         biz = {"@type": "LocalBusiness", "name": r["name"],
                "address": {"@type": "PostalAddress", "addressLocality": r.get("city"),
                            "addressRegion": r.get("state"), "streetAddress": r.get("address_full")}}
+        if r.get("photo_url"):
+            biz["image"] = r["photo_url"]
         if r.get("phone"):
             biz["telephone"] = r["phone"]
         if r.get("lat") and r.get("lng"):
@@ -293,9 +301,10 @@ def browse_city(request: Request) -> HTMLResponse:
             f"<h1>{html.escape(h1)}</h1>"
             f"<p class='muted'>{len(rows)} · <a href='/chat'>{html.escape(tr['ask_picks'])}</a>{best_link}</p>"
             f"{cards}<p><a class='cta' href='/chat'>{html.escape(tr['ask_picks'])} →</a></p>")
+    og_img = next((x.get("photo_url") for x in rows if x.get("photo_url")), "")
     return _page(f"{h1} · {settings.platform_name} ({len(rows)})",
                  f"Directory of {len(rows)} Indian {label} in {loc} — addresses, phone, websites.",
-                 body, jsonld=jsonld, canonical=canon)
+                 body, jsonld=jsonld, canonical=canon, image=og_img)
 
 
 def _best_listings(v: str, state: str, city: str, limit: int = 15) -> list[dict]:
@@ -305,7 +314,7 @@ def _best_listings(v: str, state: str, city: str, limit: int = 15) -> list[dict]
     return db.query(
         f"SELECT id, name, address_full, city, state, lat, lng, phone, website, description, tags, "
         f"languages, is_claimed, rating, rating_count, community_rating, community_rating_count, "
-        f"{_FEATURED} AS is_featured "
+        f"photo_url, {_FEATURED} AS is_featured "
         f"FROM {table} WHERE deleted_at IS NULL AND is_active "
         f"AND LOWER(state) = LOWER(%s) AND LOWER(city) = LOWER(%s) "
         f"ORDER BY {_FEATURED} DESC, "
@@ -351,10 +360,11 @@ def best_city(request: Request) -> HTMLResponse:
             f"<a href='/browse/{v}/{_slug(state)}/{_slug(city)}'>See all</a> · "
             f"<a href='/chat'>{html.escape(tr['ask_picks'])}</a></p>"
             f"{cards}<p><a class='cta' href='/chat'>{html.escape(tr['ask_picks'])} →</a></p>")
+    og_img = next((x.get("photo_url") for x in rows if x.get("photo_url")), "")
     return _page(f"{h1} · {settings.platform_name}",
                  f"The best Indian {label.lower()} in {loc} ({year}) — top-rated picks with ratings, "
                  f"addresses, phone and websites, ranked by community and web reviews.",
-                 body, jsonld=jsonld, canonical=canon)
+                 body, jsonld=jsonld, canonical=canon, image=og_img)
 
 
 def _when(dt) -> str:

@@ -57,7 +57,7 @@ def _fetch(vertical: str, listing_id: int) -> dict | None:
     return db.query_one(
         f"SELECT id, name, address_full, city, state, lat, lng, phone, website, description, tags, "
         f"languages, is_claimed, rating, rating_count, community_rating, community_rating_count, "
-        f"{_FEATURED} AS is_featured FROM {table} "
+        f"photo_url, {_FEATURED} AS is_featured FROM {table} "
         f"WHERE id = %s AND deleted_at IS NULL AND is_active", [listing_id])
 
 
@@ -129,6 +129,8 @@ def _jsonld(vertical: str, r: dict, items: list[dict]) -> str:
         biz["telephone"] = r["phone"]
     if r.get("website"):
         biz["url"] = r["website"]
+    if r.get("photo_url"):
+        biz["image"] = r["photo_url"]
     if r.get("lat") and r.get("lng"):
         biz["geo"] = {"@type": "GeoCoordinates", "latitude": r["lat"], "longitude": r["lng"]}
     if r.get("community_rating"):
@@ -190,6 +192,9 @@ def listing_page(request: Request) -> HTMLResponse:
         + _cathead(v)
         + banner
         + f"<h1>{html.escape(r['name'])}{verified}</h1>"
+        + (f"<img src='{html.escape(r['photo_url'])}' alt='{html.escape(r['name'])}' loading='lazy' "
+           f"onerror='this.remove()' style='width:100%;max-height:300px;object-fit:cover;"
+           f"border-radius:14px;margin:8px 0'>" if r.get("photo_url") else "")
         + (f"<div class='lh'>{ratings}</div>" if ratings else "")
         + (f"<p class='lmeta'>📍 {html.escape(addr)}</p>" if addr else "")
         + (f"<p class='lmeta'>{links}</p>" if links else "")
@@ -203,7 +208,8 @@ def listing_page(request: Request) -> HTMLResponse:
     desc = (f"{r['name']} — Indian {label} in {loc}. Read community reviews and ratings, contact "
             "details, and share your own experience.")
     return _page(f"{r['name']} · {label} · {settings.platform_name}", desc, body,
-                 jsonld=_jsonld(v, r, items))
+                 jsonld=_jsonld(v, r, items), canonical=f"{settings.public_web_url.rstrip('/')}/listing/{v}/{listing_id}",
+                 image=r.get("photo_url") or "")
 
 
 def _err(vertical: str, listing_id: int, msg: str) -> HTMLResponse:
