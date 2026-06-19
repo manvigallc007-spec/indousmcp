@@ -18,7 +18,7 @@ from starlette.routing import Route
 
 from .. import db, tags as tagsmod, verticals
 from ..config import settings
-from . import i18n
+from . import i18n, seo
 from .chat import _CAT_BLURB, _CAT_COLOR, _CAT_ICON
 from .common import analytics_tag
 
@@ -91,16 +91,19 @@ def _base() -> str:
     return settings.public_web_url.rstrip("/")
 
 
-def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200) -> HTMLResponse:
+def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200,
+          canonical: str = "") -> HTMLResponse:
     plat = html.escape(settings.platform_name)
     # Escape "<" so a listing name containing "</script>" can't break out of the JSON-LD block.
     ld = (f'<script type="application/ld+json">{jsonld.replace("<", chr(92) + "u003c")}</script>'
           if jsonld else "")
+    can = (f'<link rel="canonical" href="{html.escape(canonical)}">'
+           f'<meta property="og:url" content="{html.escape(canonical)}">' if canonical else "")
     doc = f"""<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)}</title>
 <meta name="description" content="{html.escape(desc)}">
-<meta property="og:title" content="{html.escape(title)}">
+{can}<meta property="og:title" content="{html.escape(title)}">
 <meta property="og:description" content="{html.escape(desc)}">
 <meta property="og:type" content="website">
 {analytics_tag()}
@@ -200,22 +203,14 @@ def _listings(v: str, state: str, city: str, limit: int = 200) -> list[dict]:
         f"ORDER BY {_FEATURED} DESC, confidence_score DESC LIMIT %s", (state, city, limit))
 
 
-def browse_city(request: Request) -> HTMLResponse:
-    v = request.path_params["vertical"]
-    state = _unslug(request.path_params["state"])
-    city = _unslug(request.path_params["city"])
-    if v not in verticals.VERTICALS:
-        return _page("Not found", "Unknown category.", "<h1>Not found</h1>", status=404)
-    tr = i18n.t(request)
+def _listing_cards(v: str, rows: list[dict], tr: dict, *, numbered: bool = True) -> tuple[str, list]:
+    """Listing cards + schema.org ItemList items for a set of rows. Shared by the browse-city and
+    best-of pages so they stay visually + structurally identical (only the ordering differs)."""
     dr = html.escape(tr["details_reviews"])
-    rows = _listings(v, state, city)
-    label = _label(v)
-    loc = f"{city.title()}, {state.upper()}"
-    h1 = f"Indian {label} in {loc}"
-
     cards, ld_items = "", []
     for i, r in enumerate(rows, 1):
-        addr = ", ".join(x for x in (r.get("address_full"),) if x) or loc
+        loc = ", ".join(x for x in ((r.get("city") or "").title(), (r.get("state") or "").upper()) if x)
+        addr = (r.get("address_full") or "").strip() or loc
         feat = f" <span class='feat'>★ {html.escape(tr['featured'])}</span>" if r.get("is_featured") else ""
         feat += f" <span class='ver'>✓ {html.escape(tr['owner_verified'])}</span>" if r.get("is_claimed") else ""
         links = " · ".join(
@@ -237,7 +232,8 @@ def browse_city(request: Request) -> HTMLResponse:
             f"<span class='fchip'>{html.escape(x)}</span>" for x in feats) + "</div>") if feats else ""
         langs_html = (f"<div class='meta' style='color:#0f766e;font-weight:600'>🗣 {html.escape(tr['speaks'])}: "
                       f"{html.escape(', '.join(r['languages']))}</div>") if r.get("languages") else ""
-        cards += (f"<div class='lc'><h3>{i}. {name_html}{feat}</h3>"
+        rank = f"{i}. " if numbered else ""
+        cards += (f"<div class='lc'><h3>{rank}{name_html}{feat}</h3>"
                   f"<div class='meta'>{html.escape(addr)} {rate}</div>"
                   + (f"<p>{html.escape((r.get('description') or '')[:220])}</p>" if r.get("description") else "")
                   + langs_html
@@ -250,8 +246,6 @@ def browse_city(request: Request) -> HTMLResponse:
                            "addressRegion": r.get("state"), "streetAddress": r.get("address_full")}}
         if r.get("phone"):
             biz["telephone"] = r["phone"]
-        if r.get("website"):
-            biz["url"] = r["website"]
         if r.get("lat") and r.get("lng"):
             biz["geo"] = {"@type": "GeoCoordinates", "latitude": r["lat"], "longitude": r["lng"]}
         if r.get("community_rating"):       # prefer first-party community rating when present
@@ -265,25 +259,102 @@ def browse_city(request: Request) -> HTMLResponse:
             biz["aggregateRating"] = ar
         biz["url"] = f"{_base()}/listing/{v}/{r['id']}"
         ld_items.append({"@type": "ListItem", "position": i, "item": biz})
+    return cards, ld_items
+
+
+def browse_city(request: Request) -> HTMLResponse:
+    v = request.path_params["vertical"]
+    state = _unslug(request.path_params["state"])
+    city = _unslug(request.path_params["city"])
+    if v not in verticals.VERTICALS:
+        return _page("Not found", "Unknown category.", "<h1>Not found</h1>", status=404)
+    tr = i18n.t(request)
+    rows = _listings(v, state, city)
+    label = _label(v)
+    loc = f"{city.title()}, {state.upper()}"
+    h1 = f"Indian {label} in {loc}"
+    canon = f"{_base()}/browse/{v}/{_slug(state)}/{_slug(city)}"
 
     if not rows:
         body = (f"<h1>{html.escape(h1)}</h1><p class='muted'>{html.escape(tr['no_listings'])} "
                 f"<a href='/submit'>{html.escape(tr['add_business'])}</a> · "
                 f"<a href='/chat'>{html.escape(tr['ask_picks'])}</a></p>")
-        return _page(f"{h1} · {settings.platform_name}", f"Indian {label} in {loc}.", body)
+        return _page(f"{h1} · {settings.platform_name}", f"Indian {label} in {loc}.", body, canonical=canon)
 
+    cards, ld_items = _listing_cards(v, rows, tr)
     jsonld = json.dumps({"@context": "https://schema.org", "@type": "ItemList",
                          "name": h1, "numberOfItems": len(rows), "itemListElement": ld_items})
+    best_link = (f" · <a href='/best/{v}/{_slug(state)}/{_slug(city)}'>🏆 Best-rated</a>"
+                 if len(rows) >= 3 else "")
     body = (f"<nav class='crumbs'><a href='/browse'>{html.escape(tr['browse'])}</a> › "
             f"<a href='/browse/{v}'>{html.escape(label)}</a> › "
             f"<a href='/browse/{v}/{_slug(state)}'>{html.escape(state.upper())}</a> › {html.escape(city.title())}</nav>"
             f"{_cathead(v)}"
             f"<h1>{html.escape(h1)}</h1>"
-            f"<p class='muted'>{len(rows)} · <a href='/chat'>{html.escape(tr['ask_picks'])}</a></p>"
+            f"<p class='muted'>{len(rows)} · <a href='/chat'>{html.escape(tr['ask_picks'])}</a>{best_link}</p>"
             f"{cards}<p><a class='cta' href='/chat'>{html.escape(tr['ask_picks'])} →</a></p>")
     return _page(f"{h1} · {settings.platform_name} ({len(rows)})",
                  f"Directory of {len(rows)} Indian {label} in {loc} — addresses, phone, websites.",
-                 body, jsonld=jsonld)
+                 body, jsonld=jsonld, canonical=canon)
+
+
+def _best_listings(v: str, state: str, city: str, limit: int = 15) -> list[dict]:
+    """Top listings for a (vertical, city), ranked: featured, then best rating (community or web),
+    then review volume, then confidence."""
+    table = verticals._table(v)
+    return db.query(
+        f"SELECT id, name, address_full, city, state, lat, lng, phone, website, description, tags, "
+        f"languages, is_claimed, rating, rating_count, community_rating, community_rating_count, "
+        f"{_FEATURED} AS is_featured "
+        f"FROM {table} WHERE deleted_at IS NULL AND is_active "
+        f"AND LOWER(state) = LOWER(%s) AND LOWER(city) = LOWER(%s) "
+        f"ORDER BY {_FEATURED} DESC, "
+        f"GREATEST(COALESCE(community_rating, 0), COALESCE(rating, 0)) DESC, "
+        f"(COALESCE(community_rating_count, 0) + COALESCE(rating_count, 0)) DESC, "
+        f"confidence_score DESC LIMIT %s", (state, city, limit))
+
+
+def best_city(request: Request) -> HTMLResponse:
+    """'Best Indian <category> in <City>' — a curated, share-friendly Top-N ranked by ratings.
+    The page humans drop in WhatsApp groups and that captures 'best ... in ...' long-tail search."""
+    import datetime
+    v = request.path_params["vertical"]
+    state = _unslug(request.path_params["state"])
+    city = _unslug(request.path_params["city"])
+    if v not in verticals.VERTICALS or v == "events":
+        return _page("Not found", "Unknown category.", "<h1>Not found</h1>", status=404)
+    tr = i18n.t(request)
+    rows = _best_listings(v, state, city)
+    if len(rows) < 3:    # too thin to be a credible 'best' list -> the full browse page instead
+        return RedirectResponse(f"/browse/{v}/{_slug(state)}/{_slug(city)}", status_code=307)
+
+    label = _label(v)
+    loc = f"{city.title()}, {state.upper()}"
+    year = datetime.date.today().year
+    h1 = f"Best Indian {label} in {loc} ({year})"
+    canon = f"{_base()}/best/{v}/{_slug(state)}/{_slug(city)}"
+    cards, ld_items = _listing_cards(v, rows, tr)
+    crumbs_ld = seo.breadcrumb_jsonld([
+        ("Browse", f"{_base()}/browse"), (label, f"{_base()}/browse/{v}"),
+        (state.upper(), f"{_base()}/browse/{v}/{_slug(state)}"), (f"Best in {city.title()}", canon)])
+    jsonld = json.dumps({"@context": "https://schema.org", "@type": "ItemList",
+                         "name": h1, "numberOfItems": len(rows), "itemListElement": ld_items})
+    body = (crumbs_ld
+            + f"<nav class='crumbs'><a href='/browse'>{html.escape(tr['browse'])}</a> › "
+            f"<a href='/browse/{v}'>{html.escape(label)}</a> › "
+            f"<a href='/browse/{v}/{_slug(state)}'>{html.escape(state.upper())}</a> › "
+            f"Best in {html.escape(city.title())}</nav>"
+            f"{_cathead(v)}"
+            f"<h1>{html.escape(h1)}</h1>"
+            f"<p class='muted'>Top {len(rows)} Indian {html.escape(label.lower())} in {html.escape(loc)}, "
+            f"ranked by community &amp; web ratings. "
+            f"<a href='/browse/{v}/{_slug(state)}/{_slug(city)}'>See all</a> · "
+            f"<a href='/chat'>{html.escape(tr['ask_picks'])}</a></p>"
+            f"{cards}<p><a class='cta' href='/chat'>{html.escape(tr['ask_picks'])} →</a></p>")
+    return _page(f"{h1} · {settings.platform_name}",
+                 f"The best Indian {label.lower()} in {loc} ({year}) — top-rated picks with ratings, "
+                 f"addresses, phone and websites, ranked by community and web reviews.",
+                 body, jsonld=jsonld, canonical=canon)
 
 
 def _when(dt) -> str:
@@ -360,6 +431,19 @@ def sitemap(request: Request) -> Response:
             rows = []
         for r in rows:
             urls.append(f"{base}/browse/{v}/{_slug(r['state'])}/{_slug(r['city'])}")
+    # 'Best of' pages — only (vertical × city) with enough listings to make a credible ranking.
+    for v in verticals.VERTICALS:
+        if v == "events":
+            continue
+        try:
+            rows = db.query(
+                f"SELECT state, city FROM {verticals._table(v)} "
+                f"WHERE deleted_at IS NULL AND is_active AND city IS NOT NULL AND state IS NOT NULL "
+                f"GROUP BY state, city HAVING count(*) >= 5")
+        except Exception:
+            rows = []
+        for r in rows:
+            urls.append(f"{base}/best/{v}/{_slug(r['state'])}/{_slug(r['city'])}")
     # Per-listing detail pages (reviews live here). Bounded per vertical to keep the file sane.
     for v in verticals.VERTICALS:
         if v == "events":
@@ -640,6 +724,7 @@ routes = [
     Route("/browse/{vertical}", browse_vertical, methods=["GET"]),
     Route("/browse/{vertical}/{state}", browse_state, methods=["GET"]),
     Route("/browse/{vertical}/{state}/{city}", browse_city, methods=["GET"]),
+    Route("/best/{vertical}/{state}/{city}", best_city, methods=["GET"]),
     Route("/sitemap.xml", sitemap, methods=["GET"]),
     Route("/robots.txt", robots, methods=["GET"]),
     Route("/llms.txt", llms_txt, methods=["GET"]),
