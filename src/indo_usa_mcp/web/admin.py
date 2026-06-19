@@ -1128,8 +1128,9 @@ def moderation_page(request: Request) -> HTMLResponse:
     geo_intro = ("<h3>Outside the USA</h3><p class='muted'>Listings that look physically outside "
                  "the USA (foreign scrape bleed). <b>Confirmed</b> = coordinates outside the US or "
                  "an explicit non-US country (safe to remove in bulk). Rows marked <b>(review)</b> "
-                 "have only a non-US <i>state</i> and no coordinates — eyeball those before removing. "
-                 "All removals are reversible.</p>")
+                 "have only a softer hint — a city in India, or a non-US <i>state</i>, with no "
+                 "coordinates to confirm — so eyeball those before removing. All removals are "
+                 "reversible.</p>")
     body = (intro + _flagged_table(flagged, "remove_all")
             + geo_intro + _flagged_table(non_usa, "remove_all_non_usa", geo=True))
     return admin_page("Moderation", body, active="Moderation")

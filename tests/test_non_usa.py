@@ -81,3 +81,39 @@ def test_in_us_bbox_basic():
     assert v._in_us_bbox(40.0, -100.0) is True     # Kansas-ish
     assert v._in_us_bbox(17.385, 78.486) is False  # Hyderabad
     assert v._in_us_bbox(0.0, 0.0) is False        # Null Island
+
+
+def test_indian_city_without_coords_is_review():
+    # The gap city-matching closes: country defaulted 'USA', a (wrong) US state, NO coords, but the
+    # city is literally an Indian city. Telugu-belt towns included for this audience.
+    for city in ["Hyderabad", "Mumbai", "Bengaluru", "Vijayawada", "Visakhapatnam", "Guntur",
+                 "Warangal", "Tirupati", "New Delhi", "kolkata", "  Pune  "]:
+        r = v._non_usa_reason("USA", "TX", None, None, city)
+        assert r is not None and r[1] == "review", city
+
+
+def test_us_cities_and_ambiguous_names_not_flagged():
+    # Real US cities pass; Indian names with notable US namesakes are deliberately excluded.
+    for city in ["Dallas", "Plano", "Irving", "Fremont", "Edison", "Jersey City",
+                 "Delhi", "Salem", "Madras", None, ""]:
+        assert v._non_usa_reason("USA", "TX", None, None, city) is None, city
+
+
+def test_coords_outrank_city_field():
+    # Usable US coords are authoritative even if the city text looks Indian (bad city data, real US).
+    assert v._non_usa_reason("USA", "TX", 32.7767, -96.7970, "Hyderabad") is None
+    # ...and an Indian city WITH Indian coords is high (coords), not just review.
+    assert v._non_usa_reason("USA", "TX", 17.385, 78.486, "Hyderabad")[1] == "high"
+
+
+def test_junk_coords_fall_through_to_city():
+    # 0,0 placeholder coords must not mask an Indian city -> still surfaced for review.
+    assert v._non_usa_reason("USA", "TX", 0, 0, "Mumbai")[1] == "review"
+
+
+def test_is_indian_city_helper():
+    assert v._is_indian_city("Hyderabad") is True
+    assert v._is_indian_city("HYDERABAD") is True
+    assert v._is_indian_city("Dallas") is False
+    assert v._is_indian_city(None) is False
+    assert v._is_indian_city("") is False

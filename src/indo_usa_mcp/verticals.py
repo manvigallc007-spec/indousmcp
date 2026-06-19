@@ -307,25 +307,56 @@ def _in_us_bbox(lat: float, lng: float) -> bool:
     return any(a <= lat <= b and c <= lng <= d for a, b, c, d in _US_BOXES)
 
 
-def _non_usa_reason(country, state, lat, lng) -> tuple[str, str] | None:
+# Major Indian cities (incl. Telugu-belt towns + common spelling variants), stored as
+# clean.normalize_name() output (lowercase, ascii, single spaces). Used only when a listing has NO
+# usable coordinates to confirm — a city literally named e.g. "Hyderabad" is almost certainly India
+# even when the scraper defaulted country='USA'. Deliberately EXCLUDES names with notable US
+# namesakes (Delhi CA/NY, Salem OR/MA, Madras OR, Aurora, Columbus...) to avoid false hits.
+_INDIAN_CITIES = frozenset({
+    "mumbai", "bombay", "navi mumbai", "new delhi", "hyderabad", "secunderabad", "bengaluru",
+    "bangalore", "chennai", "kolkata", "calcutta", "pune", "poona", "ahmedabad", "surat", "jaipur",
+    "lucknow", "kanpur", "nagpur", "indore", "thane", "bhopal", "visakhapatnam", "vizag", "patna",
+    "vadodara", "baroda", "ghaziabad", "ludhiana", "agra", "nashik", "faridabad", "meerut", "rajkot",
+    "varanasi", "srinagar", "aurangabad", "dhanbad", "amritsar", "allahabad", "prayagraj", "ranchi",
+    "howrah", "jabalpur", "gwalior", "coimbatore", "vijayawada", "jodhpur", "madurai", "raipur",
+    "kota", "guwahati", "chandigarh", "mysuru", "mysore", "gurgaon", "gurugram", "noida",
+    "tiruchirappalli", "trichy", "bhubaneswar", "kochi", "cochin", "thiruvananthapuram", "trivandrum",
+    "warangal", "guntur", "nellore", "tirupati", "kakinada", "rajahmundry", "kurnool", "anantapur",
+    "kadapa", "eluru", "ongole", "nizamabad", "karimnagar", "khammam", "mahbubnagar", "tenali",
+    "chittoor", "bhimavaram", "machilipatnam", "srikakulam", "vizianagaram", "mangalore", "mangaluru",
+    "hubli", "belgaum", "kalaburagi", "gulbarga", "kolhapur", "solapur", "udaipur", "ajmer", "bikaner",
+    "bareilly", "moradabad", "aligarh", "gorakhpur", "saharanpur", "jhansi", "ujjain", "jammu",
+    "dehradun", "siliguri", "asansol", "durgapur", "tirunelveli", "vellore", "erode", "tiruppur",
+    "jamshedpur", "bhilai", "cuttack", "kozhikode", "calicut", "thrissur", "kollam", "kannur",
+    "jalandhar", "kakinada", "proddatur", "adoni", "hindupur",
+})
+
+
+def _is_indian_city(city) -> bool:
+    return bool(city) and clean.normalize_name(city) in _INDIAN_CITIES
+
+
+def _non_usa_reason(country, state, lat, lng, city=None) -> tuple[str, str] | None:
     """If a listing looks physically outside the USA return ``(reason, confidence)`` where
     confidence is ``'high'`` (safe to auto-remove) or ``'review'`` (surface for a human), else
     ``None``. Order of trust: an explicit non-US *country* is the most deliberate signal (scrapers
     default to ``'USA'``, so a real foreign value came from the source) and wins even over a
-    rectangular box that happens to contain a border city; then coordinates; then, with no coords
-    to confirm, a non-US *state* is a softer 'review' hint."""
+    rectangular box that happens to contain a border city; then coordinates (authoritative when
+    usable); then, with no coords to confirm, a *city in India* or a non-US *state* are softer
+    'review' hints a human should eyeball."""
     c = (country or "").strip().lower()
     if c and c not in _US_COUNTRY_NAMES:
         return (f"country = '{country}'", "high")
+    la = lo = None
     if lat is not None and lng is not None:
         try:
             la, lo = float(lat), float(lng)
         except (TypeError, ValueError):
             la = lo = None
-        if la is not None:
-            if la == 0 and lo == 0:
-                return None                       # 0,0 = junk/missing coords, not "abroad"
-            return None if _in_us_bbox(la, lo) else (f"coords outside US ({la:.3f}, {lo:.3f})", "high")
+    if la is not None and not (la == 0 and lo == 0):          # 0,0 = junk coords -> fall through
+        return None if _in_us_bbox(la, lo) else (f"coords outside US ({la:.3f}, {lo:.3f})", "high")
+    if _is_indian_city(city):
+        return (f"city = '{city}' (city in India)", "review")
     st = clean.normalize_state(state)
     if st and st.strip().upper() not in _US_REGION_CODES:
         return (f"state = '{state}' (not a US state)", "review")
@@ -342,7 +373,8 @@ def _scan_non_usa(vertical: str, scan_limit: int | None = None) -> list[dict]:
         return []
     out: list[dict] = []
     for r in rows:
-        hit = _non_usa_reason(r.get("country"), r.get("state"), r.get("lat"), r.get("lng"))
+        hit = _non_usa_reason(r.get("country"), r.get("state"), r.get("lat"), r.get("lng"),
+                              r.get("city"))
         if hit:
             reason, conf = hit
             out.append({"vertical": vertical, "id": r["id"], "name": r["name"],
@@ -354,7 +386,7 @@ def _scan_non_usa(vertical: str, scan_limit: int | None = None) -> list[dict]:
 def flagged_non_usa(limit_per: int = 80) -> list[dict]:
     """Active listings that look physically OUTSIDE the USA (foreign scrape bleed) — surfaced for
     admin review. High-confidence first (foreign coords / explicit foreign country), then 'review'
-    hints (a non-US state with no coordinates to confirm)."""
+    hints (a city in India, or a non-US state, with no coordinates to confirm)."""
     out: list[dict] = []
     for v in VERTICALS:
         hits = _scan_non_usa(v, scan_limit=3000)
@@ -381,6 +413,8 @@ def purge_non_usa(dry_run: bool = True) -> dict[str, Any]:
                 ("removed" if not dry_run else "matched"): len(high),
                 "needs_review": len(review),
                 "samples": [f"{h['name']} [{h['reason']}]" for h in high[:6]],
+                "review_samples": [f"{h['name']} ({h.get('city')}) [{h['reason']}]"
+                                   for h in review[:8]],
             }
             out["total"] += len(high)
             out["needs_review"] += len(review)
