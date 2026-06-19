@@ -96,6 +96,7 @@ services:
       # OUTREACH_POSTAL_ADDRESS are set (CAN-SPAM); otherwise it only drafts.
       SECRET_KEY: ${SECRET_KEY:-dev-insecure-change-me}      # signs one-click opt-out links
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:8080}  # base for the opt-out link
+      INDEXNOW_KEY: ${INDEXNOW_KEY:-}      # cleaner agent pings IndexNow on listing changes
       CLAIM_BASE_URL: ${CLAIM_BASE_URL:-https://yourdomain.com/claim}
       PLATFORM_NAME: ${PLATFORM_NAME:-Namaste America}
       OUTREACH_CONTACT_EMAIL: ${OUTREACH_CONTACT_EMAIL:-}
@@ -154,6 +155,7 @@ services:
       CLAIM_BASE_URL: ${CLAIM_BASE_URL:-https://namasteamerica.us/claim}
       PLATFORM_NAME: ${PLATFORM_NAME:-Namaste America}
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-https://namasteamerica.us}
+      INDEXNOW_KEY: ${INDEXNOW_KEY:-}      # serves /<key>.txt for IndexNow verification
       # Human chatbot (/chat). Default = free no-LLM semantic search ($0). For a real bot pick a
       # preset and add a key: LLM_PROVIDER=groq + LLM_API_KEY=<free Groq key> (fast, free), or
       # LLM_PROVIDER=ollama (self-hosted via the `llm` profile below, $0 but slow on CPU).
