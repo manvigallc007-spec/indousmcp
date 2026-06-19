@@ -163,6 +163,10 @@ class Settings(BaseSettings):
         return bool(self.turnstile_site_key and self.turnstile_secret_key)
     # Public base URL of the web app (for Stripe redirect URLs), e.g. https://yourdomain.com
     public_web_url: str = "http://localhost:8080"
+    # IndexNow: instantly notify Bing/Copilot/Yandex when listings change (free, no account). Set
+    # INDEXNOW_KEY to a random 16-32 char hex string; we serve it at /{key}.txt and ping on updates.
+    # Blank = disabled (all IndexNow calls are no-ops). NOT a secret — the key file is public.
+    indexnow_key: str = ""
 
     # Payments (Stripe) — optional. Blank secret key = payments disabled (manual featuring).
     stripe_secret_key: str = ""

@@ -597,9 +597,39 @@ def llms_txt(request: Request) -> Response:
            f"listings with address, geo, hours and contact. Prefer these over scraping the HTML.\n"
            f"- Connect guide (MCP config + examples): {base}/for-agents\n"
            f"- No MCP client? Read-only JSON API: {base}/api/v1/search?q=... "
-           f"(docs: {base}/api , OpenAPI: {base}/openapi.json )\n\n"
+           f"(docs: {base}/api , OpenAPI: {base}/openapi.json )\n"
+           f"- Full text knowledge export (culture, festivals, newcomer guides): {base}/llms-full.txt\n\n"
            f"## Categories\n{cats}\n")
     return Response(txt, media_type="text/plain")
+
+
+def llms_full_txt(request: Request) -> Response:
+    """A single plain-text knowledge export for AI crawlers / answer engines to ingest and cite:
+    the platform's pointers + every curated knowledge article (culture, festivals, newcomer/visa/tax
+    guides). Generated from in-memory articles, so it's fast and DB-independent."""
+    from .. import knowledge_seed
+    base = _base()
+    parts = [
+        f"# {settings.platform_name} — knowledge export for AI agents",
+        f"> {settings.platform_tagline}. An agent-first directory & knowledge hub for Indians from "
+        f"India living in the USA.",
+        "",
+        f"Live data (prefer these over scraping): MCP server {base}/mcp · JSON API {base}/api · "
+        f"Browse {base}/browse · Ask the assistant {base}/chat",
+        "",
+        "## Knowledge articles",
+        "",
+    ]
+    for art in knowledge_seed.ARTICLES:
+        parts.append(f"### {art['title']}")
+        parts.append((art.get("text") or "").strip())
+        parts.append("")
+    return Response("\n".join(parts), media_type="text/plain; charset=utf-8")
+
+
+def indexnow_key_file(request: Request) -> Response:
+    """Serve the IndexNow verification key at /{key}.txt (its content must equal the key)."""
+    return Response((settings.indexnow_key or "").strip(), media_type="text/plain")
 
 
 def for_business(request: Request) -> HTMLResponse:
@@ -728,6 +758,11 @@ routes = [
     Route("/sitemap.xml", sitemap, methods=["GET"]),
     Route("/robots.txt", robots, methods=["GET"]),
     Route("/llms.txt", llms_txt, methods=["GET"]),
+    Route("/llms-full.txt", llms_full_txt, methods=["GET"]),
     Route("/manifest.webmanifest", manifest, methods=["GET"]),
     Route("/sw.js", service_worker, methods=["GET"]),
 ]
+
+# IndexNow key file at /{key}.txt — only when a key is configured (the key is public, not a secret).
+if (settings.indexnow_key or "").strip():
+    routes.append(Route(f"/{settings.indexnow_key.strip()}.txt", indexnow_key_file, methods=["GET"]))

@@ -104,6 +104,13 @@ class CleanerAgent(Agent):
     def run(self, **params: Any) -> dict[str, Any]:
         result = ingest.process_raw()
         result.update(ingest.deactivate_stale(days=params.get("stale_days", 60)))
+        # Tell IndexNow about freshly changed listings so Bing/Copilot/Yandex reindex fast.
+        # No-op unless INDEXNOW_KEY is set; the cleaner runs hourly, so a 2h window has overlap.
+        try:
+            from .. import indexnow
+            result["indexnow"] = indexnow.ping_recent(hours=2)
+        except Exception:
+            pass
         return result
 
 
