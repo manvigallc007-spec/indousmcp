@@ -283,6 +283,110 @@ def purge_excluded(dry_run: bool = True) -> dict[str, Any]:
     return out
 
 
+# ----------------------------------------- geographic guardrail: listings OUTSIDE the USA
+# This directory is for India-from-India life *in the USA*; some scrapers (OSM/Wikidata/IRS)
+# can bleed in records that are physically abroad. Detect them by location, not by name.
+_US_REGION_CODES = clean._STATE_CODES | {"PR", "VI", "GU", "AS", "MP"}  # 50 states + DC + territories
+_US_COUNTRY_NAMES = {"usa", "us", "u.s.", "u.s.a.", "united states",
+                     "united states of america", "america"}
+# Generous US lat/lng boxes (incl. AK, HI, territories). Rectangular, so it can't separate a
+# border city from its neighbour — it only flags CLEARLY foreign coordinates. Country/state catch
+# the rest. (lat_min, lat_max, lng_min, lng_max)
+_US_BOXES = (
+    (24.0, 49.6, -125.1, -66.7),     # contiguous US
+    (51.0, 71.6, -180.0, -129.0),    # Alaska
+    (51.0, 71.6, 172.0, 180.0),      # Aleutians (across the antimeridian)
+    (18.5, 22.4, -160.6, -154.6),    # Hawaii
+    (17.6, 18.6, -67.4, -64.5),      # Puerto Rico + US Virgin Islands
+    (13.2, 20.6, 144.5, 146.2),      # Guam + Northern Mariana Islands
+    (-14.6, -14.0, -171.2, -169.3),  # American Samoa
+)
+
+
+def _in_us_bbox(lat: float, lng: float) -> bool:
+    return any(a <= lat <= b and c <= lng <= d for a, b, c, d in _US_BOXES)
+
+
+def _non_usa_reason(country, state, lat, lng) -> tuple[str, str] | None:
+    """If a listing looks physically outside the USA return ``(reason, confidence)`` where
+    confidence is ``'high'`` (safe to auto-remove) or ``'review'`` (surface for a human), else
+    ``None``. Order of trust: an explicit non-US *country* is the most deliberate signal (scrapers
+    default to ``'USA'``, so a real foreign value came from the source) and wins even over a
+    rectangular box that happens to contain a border city; then coordinates; then, with no coords
+    to confirm, a non-US *state* is a softer 'review' hint."""
+    c = (country or "").strip().lower()
+    if c and c not in _US_COUNTRY_NAMES:
+        return (f"country = '{country}'", "high")
+    if lat is not None and lng is not None:
+        try:
+            la, lo = float(lat), float(lng)
+        except (TypeError, ValueError):
+            la = lo = None
+        if la is not None:
+            if la == 0 and lo == 0:
+                return None                       # 0,0 = junk/missing coords, not "abroad"
+            return None if _in_us_bbox(la, lo) else (f"coords outside US ({la:.3f}, {lo:.3f})", "high")
+    st = clean.normalize_state(state)
+    if st and st.strip().upper() not in _US_REGION_CODES:
+        return (f"state = '{state}' (not a US state)", "review")
+    return None
+
+
+def _scan_non_usa(vertical: str, scan_limit: int | None = None) -> list[dict]:
+    lim = f" LIMIT {int(scan_limit)}" if scan_limit else ""
+    try:
+        rows = db.query(
+            f"SELECT id, name, city, state, country, lat, lng FROM {_table(vertical)} "
+            f"WHERE deleted_at IS NULL AND is_active ORDER BY id DESC{lim}")
+    except Exception:
+        return []
+    out: list[dict] = []
+    for r in rows:
+        hit = _non_usa_reason(r.get("country"), r.get("state"), r.get("lat"), r.get("lng"))
+        if hit:
+            reason, conf = hit
+            out.append({"vertical": vertical, "id": r["id"], "name": r["name"],
+                        "city": r.get("city"), "state": r.get("state"), "country": r.get("country"),
+                        "reason": reason, "confidence": conf})
+    return out
+
+
+def flagged_non_usa(limit_per: int = 80) -> list[dict]:
+    """Active listings that look physically OUTSIDE the USA (foreign scrape bleed) — surfaced for
+    admin review. High-confidence first (foreign coords / explicit foreign country), then 'review'
+    hints (a non-US state with no coordinates to confirm)."""
+    out: list[dict] = []
+    for v in VERTICALS:
+        hits = _scan_non_usa(v, scan_limit=3000)
+        hits.sort(key=lambda x: 0 if x["confidence"] == "high" else 1)
+        out.extend(hits[:limit_per])
+    return out
+
+
+def purge_non_usa(dry_run: bool = True) -> dict[str, Any]:
+    """Find (and, unless dry_run, soft-delete) listings physically outside the USA. Only
+    HIGH-confidence matches (coords outside the US, or an explicit non-US country) are removed;
+    'review' hints (non-US state, no coords) are reported but never auto-deleted. Soft-delete sets
+    deleted_at + is_active=false, so it is fully reversible."""
+    out: dict[str, Any] = {"dry_run": dry_run, "by_vertical": {}, "total": 0, "needs_review": 0}
+    for v in VERTICALS:
+        hits = _scan_non_usa(v)
+        high = [h for h in hits if h["confidence"] == "high"]
+        review = [h for h in hits if h["confidence"] == "review"]
+        if high and not dry_run:
+            db.execute(f"UPDATE {_table(v)} SET deleted_at = now(), is_active = false "
+                       f"WHERE id = ANY(%s)", [[h["id"] for h in high]])
+        if high or review:
+            out["by_vertical"][v] = {
+                ("removed" if not dry_run else "matched"): len(high),
+                "needs_review": len(review),
+                "samples": [f"{h['name']} [{h['reason']}]" for h in high[:6]],
+            }
+            out["total"] += len(high)
+            out["needs_review"] += len(review)
+    return out
+
+
 # ------------------------------------------------------------------ generic queries
 _FLT_MAP = {"featured": "is_featured", "claimed": "is_claimed",
             "inactive": "NOT is_active", "active": "is_active"}

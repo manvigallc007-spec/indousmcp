@@ -1092,30 +1092,46 @@ def dashboard_page(request: Request) -> HTMLResponse:
     return admin_page("Dashboard", body, active="Dashboard")
 
 
-def moderation_page(request: Request) -> HTMLResponse:
-    """#5: review listings flagged as not-India-from-India and remove them (reversible)."""
-    if (r := require_admin(request)):
-        return r
-    flagged = verticals.flagged_non_india()
+def _flagged_table(flagged: list, remove_all_op: str, *, geo: bool = False) -> str:
+    """Render one flagged group as a checkbox form (remove selected / all / one-by-one)."""
+    if not flagged:
+        return "<p class='muted'>Nothing flagged \U0001f389 — the guardrails are holding.</p>"
+    extra_head = "<th>Why</th>" if geo else ""
     rows = "".join(
         f"<tr><td><input type='checkbox' name='ids' value=\"{x['vertical']}:{x['id']}\"></td>"
         f"<td><a href='/admin/data/{x['vertical']}/{x['id']}'>{esc(x['name'])}</a></td>"
         f"<td>{esc(x['vertical'])}</td><td class='muted'>{esc(x.get('city'))}, {esc(x.get('state'))}</td>"
-        f"<td><button class='btn gray' name='one' value=\"{x['vertical']}:{x['id']}\">Remove</button></td></tr>"
+        + (f"<td class='muted'>{esc(x.get('reason'))}"
+           + (" <b>(review)</b>" if x.get('confidence') == 'review' else "") + "</td>" if geo else "")
+        + f"<td><button class='btn gray' name='one' value=\"{x['vertical']}:{x['id']}\">Remove</button></td></tr>"
         for x in flagged)
+    high = sum(1 for x in flagged if x.get("confidence") != "review")
+    all_label = (f"Remove all {high} confirmed" if geo else f"Remove all {len(flagged)} flagged")
     bulk = (f"<div style='margin:10px 0'><button name='op' value='remove_selected'>Remove selected</button> "
-            f"<button class='btn gray' name='op' value='remove_all'>Remove all {len(flagged)} flagged</button></div>"
-            if flagged else "")
+            f"<button class='btn gray' name='op' value='{remove_all_op}'>{all_label}</button></div>")
+    return ("<form method='post' action='/admin/moderation'>" + bulk
+            + f"<table><tr><th>{_SELECT_ALL}</th><th>Name</th><th>Category</th><th>Location</th>"
+            + f"{extra_head}<th></th></tr>{rows}</table></form>")
+
+
+def moderation_page(request: Request) -> HTMLResponse:
+    """#5: review listings flagged as not-India-from-India OR physically outside the USA, and
+    remove them (reversible)."""
+    if (r := require_admin(request)):
+        return r
+    flagged = verticals.flagged_non_india()
+    non_usa = verticals.flagged_non_usa()
     intro = ("<p class='muted'>Listings whose name suggests they are NOT India-from-India "
              "(Native American / West Indian / brand homonyms). Review and remove anything that "
              "doesn't represent India or Indians — removal is reversible. You can also remove any "
              "listing from its <a href='/admin/data/restaurants'>Data</a> page.</p>")
-    if flagged:
-        body = (intro + "<form method='post' action='/admin/moderation'>" + bulk
-                + f"<table><tr><th>{_SELECT_ALL}</th><th>Name</th><th>Category</th><th>Location</th>"
-                + f"<th></th></tr>{rows}</table></form>")
-    else:
-        body = intro + "<p class='muted'>Nothing flagged \U0001f389 — the scraping guardrails are holding.</p>"
+    geo_intro = ("<h3>Outside the USA</h3><p class='muted'>Listings that look physically outside "
+                 "the USA (foreign scrape bleed). <b>Confirmed</b> = coordinates outside the US or "
+                 "an explicit non-US country (safe to remove in bulk). Rows marked <b>(review)</b> "
+                 "have only a non-US <i>state</i> and no coordinates — eyeball those before removing. "
+                 "All removals are reversible.</p>")
+    body = (intro + _flagged_table(flagged, "remove_all")
+            + geo_intro + _flagged_table(non_usa, "remove_all_non_usa", geo=True))
     return admin_page("Moderation", body, active="Moderation")
 
 
@@ -1131,6 +1147,8 @@ async def moderation_action(request: Request) -> HTMLResponse:
             verticals.set_deleted(v, int(sid), True)
     if op == "remove_all":
         verticals.purge_excluded(dry_run=False)
+    elif op == "remove_all_non_usa":
+        verticals.purge_non_usa(dry_run=False)
     elif op == "remove_selected":
         for token in form.getlist("ids"):
             _remove(token)

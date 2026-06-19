@@ -197,6 +197,11 @@ def cmd_purge_non_diaspora(args: argparse.Namespace) -> None:
     _print(verticals.purge_excluded(dry_run=not args.apply))
 
 
+def cmd_purge_non_usa(args: argparse.Namespace) -> None:
+    from . import verticals
+    _print(verticals.purge_non_usa(dry_run=not args.apply))
+
+
 def cmd_backfill_geo(args: argparse.Namespace) -> None:
     from . import verticals
     _print(verticals.backfill_coords(limit=args.limit))
@@ -650,6 +655,13 @@ def build_parser() -> argparse.ArgumentParser:
     pnd.add_argument("--apply", action="store_true",
                      help="Actually soft-delete (default: dry-run, just report matches)")
     pnd.set_defaults(func=cmd_purge_non_diaspora)
+
+    pnu = sub.add_parser("purge-non-usa",
+                         help="Find/remove listings physically OUTSIDE the USA (foreign scrape bleed)")
+    pnu.add_argument("--apply", action="store_true",
+                     help="Soft-delete high-confidence matches (default: dry-run report). "
+                          "'review' hints (non-US state, no coords) are never auto-removed")
+    pnu.set_defaults(func=cmd_purge_non_usa)
 
     bg = sub.add_parser("backfill-geo",
                         help="Forward-geocode address-only listings (Census/Nominatim) so they sort by distance")
