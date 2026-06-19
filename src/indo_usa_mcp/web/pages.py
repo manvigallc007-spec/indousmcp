@@ -16,6 +16,7 @@ from starlette.routing import Route
 
 from .. import inbox
 from ..config import settings
+from . import seo
 from .auth import verify_captcha
 from .common import captcha_field
 
@@ -63,7 +64,8 @@ def footer_html() -> str:
         f"<a href='/contact'>Contact</a></p></footer>")
 
 
-def _doc(path: str, title: str, desc: str, body: str, status: int = 200) -> HTMLResponse:
+def _doc(path: str, title: str, desc: str, body: str, status: int = 200,
+         extra_jsonld: str = "") -> HTMLResponse:
     base = settings.public_web_url.rstrip("/")
     url, img = base + path, base + "/og-image.svg"
     t, d = html.escape(title), html.escape(desc)
@@ -79,7 +81,7 @@ def _doc(path: str, title: str, desc: str, body: str, status: int = 200) -> HTML
 <meta name="twitter:title" content="{t}"><meta name="twitter:description" content="{d}">
 <meta name="twitter:image" content="{html.escape(img)}">
 <meta name="keywords" content="{html.escape(_KEYWORDS)}">
-<script type="application/ld+json">{_org_jsonld()}</script>
+<script type="application/ld+json">{_org_jsonld()}</script>{extra_jsonld}
 <link rel="icon" type="image/svg+xml" href="/icon.svg"><meta name="theme-color" content="#e8772e">
 <style>
 :root{{--brand:#e8772e;--accent:#0f9b8e;--ink:#25303a;--muted:#6b7280;--line:#efe9e1;--bg:#faf7f2}}
@@ -387,28 +389,48 @@ async def contact_post(request: Request) -> HTMLResponse:
                 "<a href='/chat'>ask " + html.escape(settings.assistant_name) + "</a> anything.</p>")
 
 
+def _faq_pairs() -> list[tuple[str, str]]:
+    a = html.escape(settings.assistant_name)
+    plat = html.escape(settings.platform_name)
+    return [
+        ("What is " + settings.platform_name + "?",
+         f"A free directory and AI guide of Indian-American businesses, temples, classes, services and "
+         f"events across the USA — searchable by chatting with {a} or browsing by city. It's built for "
+         f"both people and AI agents (it's an MCP server with a free public API)."),
+        ("Is it free?",
+         "Yes — searching is free, and listing or claiming a business is free."),
+        ("Can I search in Hindi or Telugu?",
+         f"Yes. You can ask {a} by text or voice in <b>English, हिंदी or తెలుగు</b>, and get answers "
+         f"back in the same language."),
+        ("How does “near me” work?",
+         "With your permission we use your device location (or an approximate area from your IP) to "
+         "show the <b>nearest</b> matches first. You can also just type a city."),
+        ("Where does the data come from?",
+         "Open data (OpenStreetMap, Wikidata), businesses' own websites, and submissions from owners "
+         "and visitors — kept fresh by automated agents."),
+        ("Can AI assistants use this directory?",
+         f"Yes — {plat} is an <b>MCP server</b>, so AI assistants can search the live directory "
+         f"directly, plus there's a free JSON API and an <a href='/llms.txt'>llms.txt</a>. See "
+         f"<a href='/for-agents'>/for-agents</a>."),
+        ("How do reviews work?",
+         "Anyone can leave a star rating and review on a listing. Reviews are public and moderated — "
+         "spam, abuse, and fake content are removed."),
+        ("My business is wrong or missing.",
+         "You can <a href='/submit'>add it</a> or claim and correct an existing listing for free."),
+        ("Is this only for Indian (from India) businesses?",
+         "Yes — it focuses on the Indian (from India) / Indian-American diaspora in the USA."),
+    ]
+
+
 def faq(request: Request) -> HTMLResponse:
     a = html.escape(settings.assistant_name)
-    body = f"""<h1>Frequently asked questions</h1>
-<h2>What is this?</h2>
-<p>A free directory of Indian-American businesses, temples, classes, services and events across the
- USA, searchable by chatting with {a} or browsing by city.</p>
-<h2>Is it free?</h2>
-<p>Yes — searching is free, and listing or claiming a business is free.</p>
-<h2>How does “near me” work?</h2>
-<p>With your permission we use your device location (or an approximate area from your IP) to show
- the <b>nearest</b> matches first. You can also just type a city.</p>
-<h2>Where does the data come from?</h2>
-<p>Open data (OpenStreetMap, Wikidata), businesses' own websites, and submissions from owners and
- visitors — kept fresh by automated agents.</p>
-<h2>My business is wrong or missing.</h2>
-<p>You can <a href="/submit">add it</a> or claim and correct an existing listing for free.</p>
-<h2>Is this only for Indian (from India) businesses?</h2>
-<p>Yes — it focuses on the Indian (from India) / Indian-American diaspora in the USA.</p>
-<a class="cta" href="/chat">Ask {a} →</a>"""
+    pairs = _faq_pairs()
+    qa = "".join(f"<h2>{html.escape(q)}</h2><p>{ans}</p>" for q, ans in pairs)
+    body = f"<h1>Frequently asked questions</h1>{qa}<a class=\"cta\" href=\"/chat\">Ask {a} →</a>"
     return _doc("/faq", "FAQ",
-                "Answers about what this directory is, how 'near me' works, where the data comes "
-                "from, and how to add or fix a listing.", body)
+                "Answers about what this directory is, how 'near me' works, multilingual search, the "
+                "MCP/API for AI agents, reviews, and how to add or fix a listing.", body,
+                extra_jsonld=seo.faq_jsonld(pairs))
 
 
 routes = [
