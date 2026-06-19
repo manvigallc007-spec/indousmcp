@@ -207,6 +207,11 @@ def cmd_telegram_bot(args: argparse.Namespace) -> None:
     telegram_bot.poll_loop()
 
 
+def cmd_dedupe(args: argparse.Namespace) -> None:
+    from . import verticals
+    _print(verticals.merge_duplicates(dry_run=not args.apply))
+
+
 def cmd_backfill_geo(args: argparse.Namespace) -> None:
     from . import verticals
     _print(verticals.backfill_coords(limit=args.limit))
@@ -671,6 +676,12 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("telegram-bot",
                    help="Run the Telegram bot front-end (long-poll; needs TELEGRAM_BOT_TOKEN)"
                    ).set_defaults(func=cmd_telegram_bot)
+
+    dd = sub.add_parser("dedupe",
+                        help="Merge duplicate listings (same name+city AND same physical place)")
+    dd.add_argument("--apply", action="store_true",
+                    help="Actually merge + soft-delete losers (default: dry-run report)")
+    dd.set_defaults(func=cmd_dedupe)
 
     bg = sub.add_parser("backfill-geo",
                         help="Forward-geocode address-only listings (Census/Nominatim) so they sort by distance")

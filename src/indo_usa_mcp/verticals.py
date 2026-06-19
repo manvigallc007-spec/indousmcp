@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import uuid
 from typing import Any, Callable
+from urllib.parse import urlparse
 
 from . import db, queries as r_queries
 from .apparel import pipeline as ap_pipeline, queries as ap_queries
@@ -418,6 +419,152 @@ def purge_non_usa(dry_run: bool = True) -> dict[str, Any]:
             }
             out["total"] += len(high)
             out["needs_review"] += len(review)
+    return out
+
+
+# --------------------------------------------- duplicate auto-merge (safe: physical-identity gated)
+# Gap-fill these scalar columns on the survivor from its duplicates (only when the survivor's value
+# is empty), and union these list columns across the whole cluster.
+_MERGE_FILL = ("phone", "email", "website", "address_full", "lat", "lng", "photo_url",
+               "menu_url", "price_range", "region_tag", "description")
+_MERGE_UNION = ("tags", "languages", "dietary_tags")
+
+
+def _host(url) -> str:
+    try:
+        h = urlparse(url or "").netloc.lower()
+        return h[4:] if h.startswith("www.") else h
+    except Exception:
+        return ""
+
+
+def _near(a: dict, b: dict, tol: float = 0.0015) -> bool:   # ~150m
+    try:
+        return (abs(float(a["lat"]) - float(b["lat"])) <= tol
+                and abs(float(a["lng"]) - float(b["lng"])) <= tol)
+    except (TypeError, ValueError, KeyError):
+        return False
+
+
+def _same_place(a: dict, b: dict) -> bool:
+    """Two same-name+city rows are the SAME physical place only if a strong identity matches (phone /
+    website host / address / ~150m coords). This is what stops a chain's two branches from merging.
+    If NEITHER row has any locating signal at all, same name+city is taken as a duplicate."""
+    pa, pb = clean.normalize_phone(a.get("phone")), clean.normalize_phone(b.get("phone"))
+    if pa and pa == pb:
+        return True
+    wa, wb = _host(a.get("website")), _host(b.get("website"))
+    if wa and wa == wb:
+        return True
+    aa, ab = clean.normalize_name(a.get("address_full") or ""), clean.normalize_name(b.get("address_full") or "")
+    if aa and aa == ab:
+        return True
+    if a.get("lat") is not None and b.get("lat") is not None and _near(a, b):
+        return True
+    a_has = bool(pa or wa or aa or a.get("lat") is not None)
+    b_has = bool(pb or wb or ab or b.get("lat") is not None)
+    return not a_has and not b_has
+
+
+def _cluster(rows: list[dict]) -> list[list[dict]]:
+    """Greedy single-link clustering of same-name+city rows into same-physical-place groups."""
+    clusters: list[list[dict]] = []
+    for r in rows:
+        for cl in clusters:
+            if any(_same_place(r, m) for m in cl):
+                cl.append(r)
+                break
+        else:
+            clusters.append([r])
+    return [cl for cl in clusters if len(cl) > 1]
+
+
+def _completeness(r: dict) -> int:
+    return sum(1 for c in ("phone", "email", "website", "address_full", "lat", "photo_url",
+                           "description") if r.get(c) not in (None, ""))
+
+
+def _pick_survivor(cluster: list[dict]) -> dict:
+    """Keep the best record: owner-claimed first, then highest confidence, most complete, lowest id."""
+    return sorted(cluster, key=lambda r: (
+        0 if r.get("is_claimed") else 1,
+        -float(r.get("confidence_score") or 0),
+        -_completeness(r),
+        r["id"]))[0]
+
+
+def _table_columns(table: str) -> set[str]:
+    try:
+        return {row["column_name"] for row in db.query(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = %s", (table,))}
+    except Exception:
+        return set()
+
+
+def merge_duplicates(dry_run: bool = True) -> dict[str, Any]:
+    """Merge duplicate listings (same name+city AND same physical place) into one: keep the best
+    record, gap-fill its empty fields + union tags/languages from the rest, and soft-delete the
+    others (reversible). dry_run=True only reports what would merge. Events are skipped."""
+    from .pipeline.ingest import _adapt
+    out: dict[str, Any] = {"dry_run": dry_run, "by_vertical": {}, "merged_groups": 0, "removed": 0}
+    for v in VERTICALS:
+        if v == "events":
+            continue
+        table = _table(v)
+        try:
+            groups = db.query(
+                f"SELECT array_agg(id) AS ids FROM {table} "
+                f"WHERE deleted_at IS NULL AND is_active AND name IS NOT NULL AND city IS NOT NULL "
+                f"GROUP BY lower(name), lower(city) HAVING count(*) > 1")
+        except Exception:
+            continue
+        cols = _table_columns(table)
+        fill = [c for c in _MERGE_FILL if c in cols]
+        union = [c for c in _MERGE_UNION if c in cols]
+        vgroups = vremoved = 0
+        samples: list[str] = []
+        for g in groups:
+            try:
+                rows = db.query(f"SELECT * FROM {table} WHERE id = ANY(%s)", (g["ids"],))
+            except Exception:
+                continue
+            for cluster in _cluster(rows):
+                survivor = _pick_survivor(cluster)
+                losers = [r for r in cluster if r["id"] != survivor["id"]]
+                if not losers:
+                    continue
+                vgroups += 1
+                vremoved += len(losers)
+                if len(samples) < 6:
+                    samples.append(f"{survivor['name']} ({survivor.get('city')}) ×{len(cluster)}")
+                if dry_run:
+                    continue
+                sets, params = [], []
+                for c in fill:
+                    if survivor.get(c) in (None, ""):
+                        val = next((r.get(c) for r in losers if r.get(c) not in (None, "")), None)
+                        if val is not None:
+                            sets.append(f"{c} = %s")
+                            params.append(val)
+                for c in union:
+                    merged: list = []
+                    for r in cluster:
+                        for x in (r.get(c) or []):
+                            if x not in merged:
+                                merged.append(x)
+                    if merged and merged != (survivor.get(c) or []):
+                        sets.append(f"{c} = %s")
+                        params.append(_adapt(merged))
+                if sets:
+                    sets.append("updated_at = now()")
+                    db.execute(f"UPDATE {table} SET {', '.join(sets)} WHERE id = %s",
+                               params + [survivor["id"]])
+                db.execute(f"UPDATE {table} SET deleted_at = now(), is_active = false, "
+                           f"updated_at = now() WHERE id = ANY(%s)", ([r["id"] for r in losers],))
+        if vgroups:
+            out["by_vertical"][v] = {"merged_groups": vgroups, "removed": vremoved, "samples": samples}
+            out["merged_groups"] += vgroups
+            out["removed"] += vremoved
     return out
 
 
