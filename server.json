@@ -1,0 +1,17 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "us.namasteamerica/namaste-america",
+  "description": "Agent-first directory & knowledge hub for Indians from India in the USA — restaurants, temples, groceries, events, professionals and culture, searchable via MCP.",
+  "version": "0.1.0",
+  "websiteUrl": "https://namasteamerica.us/for-agents",
+  "repository": {
+    "url": "https://github.com/manvigallc007-spec/indousmcp",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://namasteamerica.us/mcp"
+    }
+  ]
+}

@@ -16,6 +16,27 @@ restaurants (USA).** This repo is the walking skeleton from the architecture blu
 - **One real scraper**: OpenStreetMap Overpass (public, ODbL-licensed, no login, ToS-safe).
 - **Storage**: PostgreSQL (+ `pgvector` for future embedding search) via Docker Compose.
 
+## Connect (live MCP server)
+
+The hosted server is **remote** (no install) over streamable‑HTTP:
+
+- **Endpoint:** `https://namasteamerica.us/mcp` (transport: `streamable-http`, auth: none, read‑only)
+- **Descriptor:** `https://namasteamerica.us/.well-known/mcp.json` · **Docs:** `https://namasteamerica.us/for-agents`
+
+```json
+{ "mcpServers": { "namaste-america": { "type": "streamable-http", "url": "https://namasteamerica.us/mcp" } } }
+```
+
+**Tools** (per vertical: restaurants, temples, groceries, professionals, salons, events, apparel,
+sweets, studios, services, community, legal, education, real estate, finance):
+`get_indian_<category>`, `search_<category>_by_text`, `get_<category>_details`, and a cross‑vertical
+**`search_all`**. Each result is JSON with address, geo, hours, contact, ratings, and languages.
+
+> Publishing to the official MCP registry: the manifest is [`server.json`](server.json) (namespace
+> `us.namasteamerica`, verified via DNS). Install the CLI (`mcp-publisher`), authenticate the domain
+> (`mcp-publisher login dns --domain namasteamerica.us`, then add the TXT record it prints), and run
+> `mcp-publisher publish`.
+
 ## Architecture (Phase 1)
 
 ```
