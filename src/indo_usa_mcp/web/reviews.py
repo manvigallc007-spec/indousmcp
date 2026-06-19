@@ -55,10 +55,43 @@ _CSS = """<style>
 def _fetch(vertical: str, listing_id: int) -> dict | None:
     table = verticals._table(vertical)
     return db.query_one(
-        f"SELECT id, name, address_full, city, state, lat, lng, phone, website, description, tags, "
-        f"languages, is_claimed, rating, rating_count, community_rating, community_rating_count, "
-        f"photo_url, {_FEATURED} AS is_featured FROM {table} "
+        f"SELECT id, name, address_full, city, state, lat, lng, phone, email, website, description, "
+        f"tags, languages, is_claimed, rating, rating_count, community_rating, community_rating_count, "
+        f"photo_url, updated_at, {_FEATURED} AS is_featured FROM {table} "
         f"WHERE id = %s AND deleted_at IS NULL AND is_active", [listing_id])
+
+
+_COMPLETE_FIELDS = ("phone", "email", "website", "address_full", "lat", "photo_url",
+                    "description", "languages")
+
+
+def _trust_html(r: dict) -> str:
+    """A small trust/freshness line: profile completeness + last-updated month + edit CTA."""
+    have = sum(1 for f in _COMPLETE_FIELDS if r.get(f) not in (None, "", []))
+    pct = round(100 * have / len(_COMPLETE_FIELDS))
+    parts = [f"<span class='muted'>{pct}% complete</span>"]
+    upd = r.get("updated_at")
+    if hasattr(upd, "strftime"):
+        parts.append(f"<span class='muted'>Updated {upd.strftime('%b %Y')}</span>")
+    parts.append("<a href='#suggest'>Suggest an edit</a>")
+    return "<p class='lmeta' style='font-size:13px'>" + " &nbsp;·&nbsp; ".join(parts) + "</p>"
+
+
+def _suggest_form(vertical: str, listing_id: int) -> str:
+    return (
+        f"<details id='suggest' style='margin-top:24px'>"
+        f"<summary style='cursor:pointer;font-weight:600;color:#c1440e'>✎ Suggest an edit</summary>"
+        f"<form class='rform' method='post' action='/listing/{vertical}/{listing_id}/suggest'>"
+        "<p class='muted' style='margin:6px 0 4px'>Spot something wrong or missing — wrong phone, "
+        "closed, moved, hours? Tell us and we'll review it.</p>"
+        "<input class='hp' type='text' name='website' tabindex='-1' autocomplete='off' aria-hidden='true'>"
+        "<label>What should we fix?</label>"
+        "<textarea name='body' rows='3' maxlength='2000' required "
+        "placeholder='e.g. The phone number is wrong; new hours are 11am-9pm.'></textarea>"
+        "<label>Your email <span style='font-weight:400;color:#6b7280'>(optional, if we need to follow up)</span></label>"
+        "<input type='text' name='email' maxlength='200' placeholder='you@example.com'>"
+        f"{captcha_field()}"
+        "<button type='submit'>Send suggestion</button></form></details>")
 
 
 def _features_html(r: dict) -> str:
@@ -189,6 +222,8 @@ def listing_page(request: Request) -> HTMLResponse:
         banner = f"<div class='banner ok'>✓ {html.escape(tr['review_live'])}</div>"
     elif ok == "pending":
         banner = f"<div class='banner'>✓ {html.escape(tr['review_pending'])}</div>"
+    elif ok == "suggest":
+        banner = "<div class='banner ok'>✓ Thanks — we'll review your suggestion.</div>"
 
     body = (
         _CSS
@@ -203,6 +238,7 @@ def listing_page(request: Request) -> HTMLResponse:
         + (f"<div class='lh'>{ratings}</div>" if ratings else "")
         + (f"<p class='lmeta'>📍 {html.escape(addr)}</p>" if addr else "")
         + (f"<p class='lmeta'>{links}</p>" if links else "")
+        + _trust_html(r)
         + (f"<p>{html.escape(ai.get('description') or r.get('description') or '')}</p>"
            if (ai.get("description") or r.get("description")) else "")
         + (f"<p class='langs'>🗣 {html.escape(tr['speaks'])}: {html.escape(', '.join(r['languages']))}</p>"
@@ -212,7 +248,8 @@ def listing_page(request: Request) -> HTMLResponse:
         + (f"<div class='banner'>💬 {html.escape(ai['review_summary'])}</div>"
            if ai.get("review_summary") else "")
         + _reviews_html(items, tr)
-        + _form_html(v, listing_id, tr))
+        + _form_html(v, listing_id, tr)
+        + _suggest_form(v, listing_id))
     desc = (f"{r['name']} — Indian {label} in {loc}. Read community reviews and ratings, contact "
             "details, and share your own experience.")
     return _page(f"{r['name']} · {label} · {settings.platform_name}", desc, body,
@@ -262,7 +299,43 @@ async def review_post(request: Request) -> HTMLResponse:
     return RedirectResponse(f"/listing/{v}/{listing_id}?ok={res['status']}", status_code=303)
 
 
+async def suggest_post(request: Request) -> HTMLResponse:
+    """Crowdsourced correction -> the admin inbox (Admin → Messages). Same honeypot + captcha as the
+    contact/review forms. Reuses inbox.create_message so it needs no new table or moderation flow."""
+    from .. import inbox
+    v = request.path_params["vertical"]
+    try:
+        listing_id = int(request.path_params["id"])
+    except (ValueError, TypeError):
+        return _page("Not found", "Unknown listing.", "<h1>Not found</h1>", status=404)
+    if v not in verticals.VERTICALS:
+        return _page("Not found", "Unknown category.", "<h1>Not found</h1>", status=404)
+    r = _fetch(v, listing_id)
+    if not r:
+        return _page("Listing not found", "This listing isn't available.",
+                     "<h1>Listing not found</h1>", status=404)
+
+    form = await request.form()
+    if (form.get("website") or "").strip():            # honeypot -> silently accept
+        return RedirectResponse(f"/listing/{v}/{listing_id}?ok=suggest", status_code=303)
+    body = (form.get("body") or "").strip()
+    if not body:
+        return _err(v, listing_id, "Please describe what should be fixed.")
+    if not verify_captcha(form):
+        return _err(v, listing_id, "The captcha answer was incorrect.")
+
+    base = settings.public_web_url.rstrip("/")
+    subject = f"Edit suggestion: {r['name']} [{base}/listing/{v}/{listing_id}]"
+    ip = request.client.host if request.client else None
+    try:
+        inbox.create_message("(edit suggestion)", form.get("email") or "", subject, body, ip)
+    except Exception:
+        pass
+    return RedirectResponse(f"/listing/{v}/{listing_id}?ok=suggest", status_code=303)
+
+
 routes = [
     Route("/listing/{vertical}/{id}", listing_page, methods=["GET"]),
     Route("/listing/{vertical}/{id}/review", review_post, methods=["POST"]),
+    Route("/listing/{vertical}/{id}/suggest", suggest_post, methods=["POST"]),
 ]

@@ -420,11 +420,18 @@ ARTICLES: list[dict[str, Any]] = [
 ]
 
 
+def _all_articles() -> list[dict[str, Any]]:
+    """Curated articles + the generated festival-timing article (refreshed yearly in festivals.py)."""
+    from . import festivals
+    return ARTICLES + [festivals.kb_article()]
+
+
 def seed() -> dict[str, Any]:
     """Upsert the curated articles into the knowledge base (idempotent)."""
     from . import knowledge
+    articles = _all_articles()
     added = unchanged = 0
-    for a in ARTICLES:
+    for a in articles:
         res = knowledge.upsert_document(
             source_type="article", source_ref=a["slug"], content=a["text"],
             vertical=a.get("vertical"), title=a["title"])
@@ -432,4 +439,4 @@ def seed() -> dict[str, Any]:
             unchanged += 1
         elif res.get("ok"):
             added += 1
-    return {"articles": len(ARTICLES), "indexed": added, "unchanged": unchanged}
+    return {"articles": len(articles), "indexed": added, "unchanged": unchanged}
