@@ -30,23 +30,40 @@ from ..finance import pipeline as finance
 from .base import Agent
 
 
+def _metro_of(lat: Any, lng: Any) -> str | None:
+    """Which metro bbox (if any) a coordinate falls in. METROS values are (south, west, north, east)."""
+    if lat is None or lng is None:
+        return None
+    try:
+        la, lo = float(lat), float(lng)
+    except (TypeError, ValueError):
+        return None
+    for m, (s, w, n, e) in METROS.items():
+        if s <= la <= n and w <= lo <= e:
+            return m
+    return None
+
+
 class DiscoveryAgent(Agent):
     name = "discovery"
     description = "Finds metros/sources needing coverage; proposes scrape targets."
     default_interval_s = 86400
 
     def run(self, **params: Any) -> dict[str, Any]:
-        # Coverage per metro from canonical data; flag thin/never-scraped metros.
+        # Coverage per metro from canonical data: bucket active listings by their coordinates into
+        # each metro's bbox, then flag thin/never-scraped metros.
         coverage = {m: 0 for m in METROS}
-        rows = db.query(
-            "SELECT city, state, count(*) AS n FROM restaurants "
-            "WHERE deleted_at IS NULL GROUP BY city, state"
-        )
-        total = sum(r["n"] for r in rows)
+        total = placed = 0
+        for r in db.query("SELECT lat, lng FROM restaurants WHERE deleted_at IS NULL AND is_active"):
+            total += 1
+            if (m := _metro_of(r.get("lat"), r.get("lng"))):
+                coverage[m] += 1
+                placed += 1
+        min_per = params.get("min_per_metro", 10)
         targets = [
             {"metro": m, "known": coverage[m], "sources": sorted(SCRAPERS)}
-            for m in METROS
-            if coverage[m] < params.get("min_per_metro", 10)
+            for m in sorted(METROS, key=lambda m: coverage[m])     # thinnest first
+            if coverage[m] < min_per
         ]
         # Demand-driven: surface the top zero-result searches so coverage follows real demand.
         try:
@@ -54,7 +71,8 @@ class DiscoveryAgent(Agent):
             unmet = analytics.top_misses(days=60, limit=15)
         except Exception:
             unmet = []
-        return {"total_restaurants": total, "metros": len(METROS),
+        return {"total_restaurants": total, "placed_in_metros": placed, "metros": len(METROS),
+                "covered_metros": sum(1 for n in coverage.values() if n >= min_per),
                 "suggested_targets": targets, "unmet_demand": unmet}
 
 

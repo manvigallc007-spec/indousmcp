@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import functools
+import json
 import time
 import traceback
 from typing import Any
@@ -10,6 +12,12 @@ from psycopg.types.json import Jsonb
 
 from .. import db
 from .registry import get_agent
+
+# Agents may return rows straight from the DB (datetime / Decimal / date), which the stdlib JSON
+# encoder can't serialize — that would make the audit write itself raise and mask the real result
+# (it's why the `discovery` agent was recorded as status='error'). Stringify any such value so the
+# audit row always persists, whatever the agent returns.
+_jsonb = functools.partial(Jsonb, dumps=functools.partial(json.dumps, default=str))
 
 
 def run_agent(name: str, **params: Any) -> dict[str, Any]:
@@ -21,7 +29,7 @@ def run_agent(name: str, **params: Any) -> dict[str, Any]:
     agent = get_agent(name)
     run = db.query_one(
         "INSERT INTO agent_runs (agent, status, params) VALUES (%s, 'running', %s) RETURNING id",
-        (name, Jsonb(params) if params else None),
+        (name, _jsonb(params) if params else None),
     )
     run_id = run["id"]
     started = time.monotonic()
@@ -32,7 +40,7 @@ def run_agent(name: str, **params: Any) -> dict[str, Any]:
         db.execute(
             "UPDATE agent_runs SET status='success', result=%s, finished_at=now(), "
             "duration_ms=%s WHERE id=%s",
-            (Jsonb(result), duration, run_id),
+            (_jsonb(result), duration, run_id),
         )
         return {"id": run_id, "agent": name, "status": "success",
                 "duration_ms": duration, "result": result}
