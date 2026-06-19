@@ -212,6 +212,14 @@ def cmd_dedupe(args: argparse.Namespace) -> None:
     _print(verticals.merge_duplicates(dry_run=not args.apply))
 
 
+def cmd_enrich_llm(args: argparse.Namespace) -> None:
+    from . import enrich_llm
+    if args.vertical:
+        _print(enrich_llm.run(args.vertical, limit=args.limit))
+    else:
+        _print(enrich_llm.run_all(limit_per=args.limit))
+
+
 def cmd_backfill_geo(args: argparse.Namespace) -> None:
     from . import verticals
     _print(verticals.backfill_coords(limit=args.limit))
@@ -682,6 +690,12 @@ def build_parser() -> argparse.ArgumentParser:
     dd.add_argument("--apply", action="store_true",
                     help="Actually merge + soft-delete losers (default: dry-run report)")
     dd.set_defaults(func=cmd_dedupe)
+
+    el = sub.add_parser("enrich-llm",
+                        help="LLM-polish grounded descriptions + review summaries (needs an LLM)")
+    el.add_argument("--vertical", help="One vertical (default: all)")
+    el.add_argument("--limit", type=int, default=30, help="Listings per vertical per run")
+    el.set_defaults(func=cmd_enrich_llm)
 
     bg = sub.add_parser("backfill-geo",
                         help="Forward-geocode address-only listings (Census/Nominatim) so they sort by distance")

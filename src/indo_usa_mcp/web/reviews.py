@@ -167,6 +167,11 @@ def listing_page(request: Request) -> HTMLResponse:
 
     items = reviews_mod.list_for_listing(v, listing_id, limit=30)
     tr = i18n.t(request)                                    # UI labels in the visitor's language
+    try:                                                   # LLM-polished description + review gist
+        from .. import enrich_llm
+        ai = enrich_llm.get(v, listing_id) or {}
+    except Exception:
+        ai = {}
     loc = ", ".join(x for x in (r.get("city"), (r["state"].upper() if r.get("state") else None)) if x)
     addr = r.get("address_full") or loc
     label = _label(v)
@@ -198,11 +203,14 @@ def listing_page(request: Request) -> HTMLResponse:
         + (f"<div class='lh'>{ratings}</div>" if ratings else "")
         + (f"<p class='lmeta'>📍 {html.escape(addr)}</p>" if addr else "")
         + (f"<p class='lmeta'>{links}</p>" if links else "")
-        + (f"<p>{html.escape(r.get('description') or '')}</p>" if r.get("description") else "")
+        + (f"<p>{html.escape(ai.get('description') or r.get('description') or '')}</p>"
+           if (ai.get("description") or r.get("description")) else "")
         + (f"<p class='langs'>🗣 {html.escape(tr['speaks'])}: {html.escape(', '.join(r['languages']))}</p>"
            if r.get("languages") else "")
         + _features_html(r)
         + f"<h2 style='margin-top:26px'>{html.escape(tr['community_reviews'])}</h2>"
+        + (f"<div class='banner'>💬 {html.escape(ai['review_summary'])}</div>"
+           if ai.get("review_summary") else "")
         + _reviews_html(items, tr)
         + _form_html(v, listing_id, tr))
     desc = (f"{r['name']} — Indian {label} in {loc}. Read community reviews and ratings, contact "
