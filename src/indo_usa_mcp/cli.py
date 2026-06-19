@@ -202,6 +202,11 @@ def cmd_purge_non_usa(args: argparse.Namespace) -> None:
     _print(verticals.purge_non_usa(dry_run=not args.apply))
 
 
+def cmd_telegram_bot(args: argparse.Namespace) -> None:
+    from . import telegram_bot
+    telegram_bot.poll_loop()
+
+
 def cmd_backfill_geo(args: argparse.Namespace) -> None:
     from . import verticals
     _print(verticals.backfill_coords(limit=args.limit))
@@ -662,6 +667,10 @@ def build_parser() -> argparse.ArgumentParser:
                      help="Soft-delete high-confidence matches (default: dry-run report). "
                           "'review' hints (non-US state, no coords) are never auto-removed")
     pnu.set_defaults(func=cmd_purge_non_usa)
+
+    sub.add_parser("telegram-bot",
+                   help="Run the Telegram bot front-end (long-poll; needs TELEGRAM_BOT_TOKEN)"
+                   ).set_defaults(func=cmd_telegram_bot)
 
     bg = sub.add_parser("backfill-geo",
                         help="Forward-geocode address-only listings (Census/Nominatim) so they sort by distance")

@@ -167,6 +167,10 @@ class Settings(BaseSettings):
     # INDEXNOW_KEY to a random 16-32 char hex string; we serve it at /{key}.txt and ping on updates.
     # Blank = disabled (all IndexNow calls are no-ops). NOT a secret — the key file is public.
     indexnow_key: str = ""
+    # Telegram bot front-end for Dost (the diaspora's highest-virality channel). Create a bot with
+    # @BotFather, put the token in TELEGRAM_BOT_TOKEN, and run `python -m indo_usa_mcp.telegram_bot`
+    # (or the `telegram` compose service). Blank = disabled. This IS a secret — keep it in .env only.
+    telegram_bot_token: str = ""
 
     # Payments (Stripe) — optional. Blank secret key = payments disabled (manual featuring).
     stripe_secret_key: str = ""

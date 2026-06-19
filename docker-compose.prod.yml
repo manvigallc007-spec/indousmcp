@@ -114,6 +114,34 @@ services:
     # Scheduler loop runs the agents (scrape -> clean -> monitor ...) on their intervals.
     command: python -m indo_usa_mcp.agents.scheduler
 
+  # Telegram bot front-end for Dost (optional). Idles unless TELEGRAM_BOT_TOKEN is set; uses
+  # long-polling, so no extra port/webhook. Same brain (LLM + embedder) as the web chat — keep
+  # LLM_* / EMBEDDING_* identical to the web service so search behaves the same.
+  telegram:
+    build: .
+    restart: unless-stopped
+    networks: [default]
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-diaspora}
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-https://namasteamerica.us}
+      PLATFORM_NAME: ${PLATFORM_NAME:-Namaste America}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-search}
+      LLM_API_KEY: ${LLM_API_KEY:-ollama}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_USE_TOOLS: ${LLM_USE_TOOLS:-false}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-fastembed}
+      FASTEMBED_MODEL: ${FASTEMBED_MODEL:-BAAI/bge-small-en-v1.5}
+    depends_on:
+      db:
+        condition: service_healthy
+      server:
+        condition: service_started
+    command: python -m indo_usa_mcp.telegram_bot
+
   # Owner-facing claim web page (blueprint §7), served on :8080.
   web:
     build: .
