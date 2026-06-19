@@ -4,6 +4,9 @@ Everything below is built and on `main`. The **code** ships with the next
 `git pull && docker compose -f docker-compose.prod.yml up -d --build`. The **actions** at the bottom
 are one-time things only you can do (accounts, keys, registry submissions).
 
+> For the full ordered deploy + data-curation pipeline (dedupe, purge-non-usa, enrich-llm,
+> backfill-embeddings, kb-seed), see the **Release runbook** in [DEPLOY.md](DEPLOY.md).
+
 ## What shipped (this round)
 
 | Feature | What it does | Where |

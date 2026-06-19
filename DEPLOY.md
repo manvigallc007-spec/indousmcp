@@ -165,6 +165,49 @@ docker compose -f docker-compose.prod.yml up -d --build web
 > ⚠️ Put the **Caddy HTTPS proxy** in front before exposing `/admin` publicly, and use a strong
 > `ADMIN_PASSWORD`. Admin over plain HTTP on a public IP is risky.
 
+## Release runbook (every deploy after the first)
+
+The ordered, idempotent steps to ship `main`. Run **on the VPS** (laptop only pushes; never commit on
+the VPS). Shorthand: `DC="docker compose -f docker-compose.prod.yml"`.
+
+**New optional `.env` settings** (blank = disabled):
+```ini
+INDEXNOW_KEY=            # random 16-32 hex; serves /<key>.txt, pings Bing/Copilot/Yandex on changes
+TELEGRAM_BOT_TOKEN=      # from @BotFather; enables the `telegram` bot service
+```
+Generate an IndexNow key: `python -c "import secrets;print(secrets.token_hex(16))"`. Keep these (and
+the critical `LLM_PROVIDER=groq`+`LLM_API_KEY`, `EMBEDDING_PROVIDER=fastembed`, `SECRET_KEY`,
+`ADMIN_PASSWORD`, `SESSION_HTTPS_ONLY=true`, `REVIEW_AUTO_PUBLISH`) set before deploying.
+
+```bash
+# 1) Pull + rebuild (server's init-db auto-applies new migrations, incl. 043_ai_content;
+#    also starts the optional `telegram` service — idle until TELEGRAM_BOT_TOKEN is set)
+cd /opt/diaspora && git pull && $DC up -d --build
+
+# 2) Curate the data (worker), in this order:
+$DC exec worker python -m indo_usa_mcp.cli dedupe              # review dupes (dry-run)
+$DC exec worker python -m indo_usa_mcp.cli dedupe --apply      # merge same-place duplicates
+$DC exec worker python -m indo_usa_mcp.cli purge-non-usa       # review non-USA / Indian-city (dry-run)
+$DC exec worker python -m indo_usa_mcp.cli purge-non-usa --apply   # remove high-confidence foreign
+$DC exec worker python -m indo_usa_mcp.cli enrich-llm          # LLM descriptions + review summaries (needs Groq)
+$DC exec worker python -m indo_usa_mcp.cli backfill-embeddings --all   # ONE consistent embedding pass
+$DC exec worker python -m indo_usa_mcp.cli kb-seed             # curated + newcomer + festival KB
+$DC exec worker python -m indo_usa_mcp.cli kb-index
+# optional, slow/off-peak — sharpens "near me" + the non-USA bbox check:
+$DC exec worker python -m indo_usa_mcp.cli backfill-geo --limit 500
+
+# 3) Verify
+$DC exec worker python -m indo_usa_mcp.cli agent discovery     # expect status: success
+```
+On the live site: English → Telugu chat works; a listing shows its photo + "% complete / Updated /
+Suggest an edit" + AI description; a `/best/<v>/<state>/<city>` page renders; **Admin → Messages**
+receives edit suggestions; **Admin → Agents** shows discovery = success. If `INDEXNOW_KEY` is set,
+`/<key>.txt` returns the key; if Telegram is set, the bot answers `/start`.
+
+**Off-platform (one-time, see [GROWTH.md](GROWTH.md)):** submit `sitemap.xml` to Google Search
+Console + Bing; list the MCP server (`/mcp`, `/.well-known/mcp.json`) in registries (mcp.so, Smithery,
+PulseMCP, Glama); validate `/faq`, a `/best/...`, and a `/listing/...` page in Google's Rich Results Test.
+
 ## Day-2 operations
 
 ```bash
