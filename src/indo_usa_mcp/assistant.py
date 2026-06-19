@@ -17,7 +17,7 @@ from typing import Any
 
 import httpx
 
-from . import analytics, tags as _tags, verticals
+from . import analytics, synonyms, tags as _tags, verticals
 from .config import settings
 
 _SYSTEM = (
@@ -139,8 +139,9 @@ def _run_search(args: dict, filters: dict | None = None, geo: dict | None = None
     `geo` enables proximity ranking ("near me")."""
     filters = filters or {}
     # The directory is English: translate a native-script (Hindi/Telugu) request to English first,
-    # so search works in every path (an English/LLM-supplied query passes through untouched).
-    query = _english((args.get("query") or "").strip(), filters)
+    # then expand aliases (mandir->temple, kirana->grocery, OBGYN->gynecologist) so varied/voice
+    # phrasing routes correctly and embeds with strong semantic signal.
+    query = synonyms.expand(_english((args.get("query") or "").strip(), filters))
     city = filters.get("city") or args.get("city") or None
     state = filters.get("state") or args.get("state") or None
     vertical = filters.get("vertical") or args.get("vertical") or None
@@ -513,7 +514,8 @@ _VERTICAL_HINTS = {
     "restaurants": ("restaurant", "food", "eat", "dinner", "lunch", "thali", "biryani", "dosa", "cafe"),
     "groceries": ("grocery", "spice", "vegetables", "atta", "lentil"),
     "temples": ("temple", "mandir", "gurdwara", "puja", "worship"),
-    "professionals": ("doctor", "dentist", "clinic", "physician", "healthcare", "pharmacy", "hospital"),
+    "professionals": ("doctor", "dentist", "clinic", "physician", "healthcare", "pharmacy", "hospital",
+                      "gynecologist", "pediatrician", "cardiologist", "dermatologist", "specialist"),
     "salons": ("salon", "threading", "henna", "mehndi", "beauty", "hairdresser", "bridal"),
     "sweets": ("sweets", "mithai", "bakery", "ladoo", "jalebi", "halwa"),
     "studios": ("yoga", "dance", "music", "studio", "bharatanatyam", "tabla", "kathak", "class"),

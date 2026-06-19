@@ -137,6 +137,11 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_USE_TOOLS: ${LLM_USE_TOOLS:-false}
+      # CRITICAL: the chat embeds the user's query here, and MUST use the SAME embedder the worker
+      # used to embed the listings — otherwise vector search compares mismatched spaces (semantic
+      # recall breaks, falling back to keyword-only). Keep this == the worker's EMBEDDING_PROVIDER.
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-fastembed}
+      FASTEMBED_MODEL: ${FASTEMBED_MODEL:-BAAI/bge-small-en-v1.5}
       # Admin dashboard + owner portal sessions (set these to enable /admin).
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}

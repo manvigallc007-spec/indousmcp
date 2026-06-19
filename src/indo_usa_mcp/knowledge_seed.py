@@ -337,6 +337,86 @@ ARTICLES: list[dict[str, Any]] = [
              "caterers/tiffin services. 'Pure veg' means no meat is cooked; halal meat is available "
              "at many. If you have dietary needs (Jain, vegan, gluten-free, nut allergy), call "
              "ahead — most kitchens can accommodate common Indian-diet requests."},
+
+    # --- newcomer / "new in <city>" guides (one of the most common diaspora questions) ---
+    {"slug": "newcomer-usa", "title": "New to the US: finding your Indian community", "vertical": None,
+     "text": "Just moved to the US from India? Most metros have a strong Indian community clustered in "
+             "particular suburbs, with Indian grocery stores, Hindu/Jain temples and gurdwaras, "
+             "restaurants and sweet shops, classical music/dance and language classes for kids, and "
+             "regional associations (Telugu, Tamil, Gujarati, Marathi, Bengali, Punjabi 'samaj' or "
+             "'sangam'). Indian grocers are the easiest first stop — they post flyers for events, "
+             "tutors, rentals, and priests. To get going, search this directory by your city or just "
+             "ask Dost ('Indian groceries near me', 'Telugu association in my area', 'Hindu temple "
+             "near me') in English, Hindi, or Telugu."},
+    {"slug": "newcomer-dfw", "title": "New in Dallas–Fort Worth (DFW): the Indian community", "vertical": None,
+     "text": "DFW has one of the fastest-growing Indian populations in the US, concentrated in the "
+             "northern suburbs: Irving/Las Colinas/Coppell, Plano, Frisco, Carrollton, Richardson, "
+             "McKinney, and Allen. You'll find many Indian grocery stores and restaurants, large Hindu "
+             "temples (in Irving and Frisco), and active Telugu, Tamil, and Gujarati associations. "
+             "Irving and Plano are popular first landing spots for renters. Use this directory for "
+             "DFW restaurants, groceries, temples, doctors, and classes, or ask Dost for any city like "
+             "Frisco or Plano."},
+    {"slug": "newcomer-bay-area", "title": "New in the Bay Area: the Indian community", "vertical": None,
+     "text": "The San Francisco Bay Area has a huge Indian-American (especially tech) community in the "
+             "South Bay and East Bay: Fremont, Milpitas, San Jose, Sunnyvale, Santa Clara, and "
+             "Cupertino, plus Dublin/Pleasanton and San Ramon. Fremont is a major hub with Indian "
+             "grocers, restaurants, temples, and jewelry stores. Expect strong Telugu, Tamil, and "
+             "Gujarati networks and many kids' Carnatic/Bharatanatyam classes. Search this directory "
+             "by city (Fremont, San Jose, Sunnyvale) or ask Dost what's near you."},
+    {"slug": "newcomer-nj-ny", "title": "New in New Jersey / New York: the Indian community", "vertical": None,
+     "text": "The NY–NJ metro has one of the oldest, densest Indian communities. In New Jersey, "
+             "Edison and Iselin (the famous Oak Tree Road corridor) are the heart — groceries, sari "
+             "and jewelry shops, sweets, and restaurants — with more in Jersey City (India Square on "
+             "Newark Avenue) and Parsippany. In New York, Jackson Heights (Queens) and Hicksville "
+             "(Long Island) are key hubs. These areas have many temples and regional associations. "
+             "Browse this directory by city or ask Dost."},
+    {"slug": "newcomer-chicago", "title": "New in Chicago: the Indian community", "vertical": None,
+     "text": "Chicagoland's Indian community is centered on Devon Avenue (Chicago's 'Little India') and "
+             "the western suburbs — Naperville, Schaumburg, Aurora, Bartlett, and Hoffman Estates — "
+             "which have Indian groceries, restaurants, temples, and active associations. Naperville "
+             "and Schaumburg are popular family suburbs. Use this directory for groceries, temples, "
+             "restaurants and classes by suburb, or ask Dost."},
+    {"slug": "newcomer-atlanta", "title": "New in Atlanta: the Indian community", "vertical": None,
+     "text": "Metro Atlanta's Indian community is concentrated north and northeast of the city — "
+             "Alpharetta, Johns Creek, Suwanee, and Duluth (the Global Mall area on Satellite Blvd) — "
+             "plus the large BAPS temple in Lilburn. You'll find Indian grocers, restaurants, sweet "
+             "shops, and Telugu/Tamil/Gujarati associations. Browse this directory by suburb or ask "
+             "Dost for temples, groceries, or doctors near you."},
+    {"slug": "newcomer-houston", "title": "New in Houston: the Indian community", "vertical": None,
+     "text": "Houston has a large Indian community, with the Hillcroft area (the 'Mahatma Gandhi "
+             "District,' or Little India) full of groceries, sari/jewelry shops, and restaurants, and "
+             "big family suburbs in Sugar Land, Katy, and Pearland. There are major temples (including "
+             "BAPS and the Meenakshi temple in Pearland) and active regional associations. Search this "
+             "directory by city or ask Dost."},
+    {"slug": "newcomer-seattle", "title": "New in Seattle: the Indian community", "vertical": None,
+     "text": "The Seattle area's Indian (largely tech) community is concentrated on the Eastside — "
+             "Bellevue, Redmond, Sammamish, Bothell, and Issaquah — with Indian grocery stores, "
+             "restaurants, temples, and kids' classical music/dance classes. Redmond and Sammamish are "
+             "popular with families. Browse this directory by city or ask Dost what's nearby."},
+
+    # --- practical newcomer Q&A ---
+    {"slug": "find-language-doctor", "title": "Finding a Telugu/Hindi/Tamil-speaking doctor or professional",
+     "vertical": "professionals",
+     "text": "Many Indian-American doctors, dentists, CPAs, and lawyers speak Hindi, Telugu, Tamil, "
+             "Gujarati, Punjabi, or other Indian languages, which helps when discussing health, taxes, "
+             "or immigration in your own language. In this directory you can look for the language a "
+             "provider speaks (where listed), or just ask Dost — for example, 'Telugu-speaking "
+             "gynecologist in Irving' or 'Hindi-speaking CPA near me.' If a provider hasn't listed "
+             "their languages yet, calling the office to ask is the surest way."},
+    {"slug": "newcomer-banking-credit", "title": "Banking, SSN & credit for new arrivals", "vertical": None,
+     "text": "New to the US, the practical first steps are usually: apply for an SSN (or an ITIN if "
+             "you're not yet SSN-eligible), open a checking/savings account, and start building a US "
+             "credit history — often with a secured credit card or a newcomer card, since you arrive "
+             "with no US credit score. Pay bills on time and keep card balances low to build credit. "
+             "Many Indian-American CPAs and financial advisors help newcomers; find one in this "
+             "directory or ask Dost." + _DISCLAIMER},
+    {"slug": "send-money-to-india", "title": "Sending money to India (remittances)", "vertical": "services",
+     "text": "To send money from the US to India, people use bank wire transfers and specialized "
+             "remittance services and apps (often with better exchange rates and lower fees than a "
+             "bank, and fast bank-to-bank deposits). Compare the all-in cost: the exchange rate margin "
+             "plus any transfer fee, and the delivery speed. Indian grocery stores and money-transfer "
+             "service shops in most metros also offer remittance. You can find money-transfer services "
+             "in this directory's services category or ask Dost." + _DISCLAIMER},
 ]
 
 
