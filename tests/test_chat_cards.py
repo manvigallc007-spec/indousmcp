@@ -41,3 +41,14 @@ def test_chat_homepage_renders_photo_card_code():
     assert r.status_code == 200
     assert "lc-photo" in r.text                 # the card photo CSS class
     assert "c.photo_url" in r.text              # card() draws the image when present
+
+
+def test_chat_homepage_decluttered():
+    r = TestClient(app).get("/")
+    assert r.status_code == 200
+    # the verbose legal paragraph + redundant disclaimer were moved to the static pages
+    assert "legal, tax, immigration, medical, or professional advice" not in r.text
+    assert "Not legal, tax, or medical advice; details may be out of date." not in r.text
+    # a concise caveat remains, pointing to /terms; the footer nav still links the static pages
+    assert "verify before relying" in r.text
+    assert 'href="/terms"' in r.text and 'href="/faq"' in r.text and 'href="/about"' in r.text

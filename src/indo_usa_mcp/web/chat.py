@@ -233,21 +233,16 @@ a{color:var(--brand);text-decoration:none}
  <section id="welcome" class="welcome">
   <div class="hero-avatar">🪷</div>
   <h1>Namaste! I'm __ANAME__ — that means “friend”.</h1>
-  <p class="heroSub">Think of me as your desi friend for finding Indian America — restaurants,
-   sweets, temples, events, classes, salons, doctors, jewelry and more across the USA. Tell me what
-   you're looking for and roughly where, and I'll find the closest ones.</p>
-  <p class="disclaimer-note">ℹ️ Information only — please <b>verify directly with the business</b>
-   before you rely on it. Not legal, tax, or medical advice; details may be out of date.</p>
+  <p class="heroSub">Your desi friend for finding Indian America — restaurants, groceries, temples,
+   events, classes, doctors and more across the USA. Tell me what you want and roughly where.</p>
   <div class="chips">__CHIPS__</div>
   <button class="voicecta" onclick="startConvo()">🎙️ <span class="voicebtn-t">Talk to Dost</span></button>
   <p class="voicetip">Hands-free voice — speak in English, हिंदी or తెలుగు</p>
   <a class="browsecat" href="/browse">🗂️ <span class="browselink-t">Browse by category</span></a>
   <p class="browselink" style="margin-top:4px"><a href="/for-business">🏪 <span>List your business free</span></a> · <a href="/about">About __PLAT__</a></p>
   <footer class="homefoot">
-   <p class="disclaim">ℹ️ <b>__PLAT__</b> is a free informational directory for the Indian-from-India
-    community in the USA. Information is provided “as is” for general purposes only and is <b>not
-    legal, tax, immigration, medical, or professional advice</b> — always verify details with the
-    business or a qualified professional. Listings may be incomplete or out of date.</p>
+   <p class="disclaim">Free directory for the Indian-from-India community in the USA · information
+    only — <a href="/terms">verify before relying</a>.</p>
    <nav class="footnav">
     <a href="/about">About us</a> · <a href="/for-business">List your business</a> ·
     <a href="/insights">Insights</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> ·
