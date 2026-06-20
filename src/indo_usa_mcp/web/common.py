@@ -15,6 +15,26 @@ def esc(value) -> str:
     return html.escape(str(value)) if value not in (None, "") else ""
 
 
+# US states + DC + the common territories, as (code, name) — for a consistent state dropdown so the
+# stored value is always a clean 2-letter USPS code (city stays free-text).
+from ..pipeline.clean import _US_STATES as _ST  # full-name -> code
+
+_STATES: list[tuple[str, str]] = sorted(
+    ((code, full.title()) for full, code in _ST.items()), key=lambda x: x[1]
+) + [("PR", "Puerto Rico"), ("GU", "Guam"), ("VI", "U.S. Virgin Islands"),
+     ("AS", "American Samoa"), ("MP", "Northern Mariana Islands")]
+
+
+def state_select(name: str = "state", selected: str = "", required: bool = False) -> str:
+    """A US-state <select>; value = 2-letter USPS code. `selected` may be a code or full name."""
+    from ..pipeline.clean import normalize_state
+    sel = (normalize_state(selected) or "").strip().upper()
+    opts = ["<option value=''>Select a state…</option>"]
+    opts += [f"<option value='{c}'{' selected' if c == sel else ''}>{html.escape(n)} ({c})</option>"
+             for c, n in _STATES]
+    return f"<select name='{html.escape(name)}'{' required' if required else ''}>{''.join(opts)}</select>"
+
+
 def captcha_field() -> str:
     """Captcha form fields: Cloudflare Turnstile widget if configured, else a signed math challenge.
     Shared by the registration form and the public contact form."""

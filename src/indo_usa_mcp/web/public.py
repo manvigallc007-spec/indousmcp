@@ -21,7 +21,7 @@ from ..pipeline import compliance, ingest, outreach
 from . import i18n
 from .auth import verify_captcha
 from .landing import CATEGORY_CSS, category_grid
-from .common import _page, captcha_field, esc as _esc
+from .common import _page, captcha_field, esc as _esc, state_select
 
 # Text fields shown on the owner edit form (label, restaurant field).
 _EDIT_FIELDS = [
@@ -250,7 +250,7 @@ def submit_get(request: Request) -> HTMLResponse:
         f"<label>{_esc(tr['business_name'])} *</label><input name='name' required>"
         f"<label>{_esc(tr['address'])}</label><input name='address_full'>"
         f"<label>{_esc(tr['city'])}</label><input name='city'>"
-        f"<label>{_esc(tr['state'])}</label><input name='state' placeholder='NJ'>"
+        f"<label>{_esc(tr['state'])}</label>{state_select('state')}"
         f"<label>{_esc(tr['phone'])}</label><input name='phone' type='tel'>"
         f"<label>{_esc(tr['your_email'])} *</label><input name='email' type='email' required>"
         f"<label>{_esc(tr['website'])}</label><input name='website' placeholder='https://'>"
