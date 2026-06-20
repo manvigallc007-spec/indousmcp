@@ -38,6 +38,25 @@ def list_pending(limit: int = 100) -> list[dict]:
         "WHERE status = 'pending' ORDER BY created_at LIMIT %s", (limit,))
 
 
+def list_for_owner(email: str, limit: int = 50) -> list[dict]:
+    """A signed-in owner's own submissions (any status), newest first."""
+    return db.query(
+        "SELECT id, vertical, payload, status, created_at, created_record_id FROM submissions "
+        "WHERE lower(contact_email) = lower(%s) ORDER BY created_at DESC LIMIT %s", (email, limit))
+
+
+def delete_for_owner(sub_id: int, email: str) -> dict:
+    """Let an owner delete their OWN still-pending submission (approved ones are live listings,
+    managed via the portal/claim instead)."""
+    row = db.query_one(
+        "SELECT id FROM submissions WHERE id = %s AND lower(contact_email) = lower(%s) "
+        "AND status = 'pending'", (sub_id, email))
+    if not row:
+        return {"ok": False}
+    db.execute("DELETE FROM submissions WHERE id = %s", (sub_id,))
+    return {"ok": True}
+
+
 def summary() -> dict[str, int]:
     rows = db.query("SELECT status, count(*) AS n FROM submissions GROUP BY status")
     out = {r["status"]: r["n"] for r in rows}

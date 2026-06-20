@@ -10,13 +10,13 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Route
 
-from .. import analytics, db, payments, verticals
+from .. import analytics, db, onboard, payments, submissions, verticals
 from ..config import settings
 from ..pipeline import outreach
 from .auth import (check_login, create_user, get_user, google_auth_url, google_exchange,
                    make_action_token, portal_email, set_password, set_verified,
                    verify_action_token, verify_captcha, verify_magic_token)
-from .common import _page, captcha_field, esc
+from .common import _page, captcha_field, esc, state_select
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -273,18 +273,45 @@ def google_callback(request: Request) -> HTMLResponse:
     return RedirectResponse("/portal", status_code=303)
 
 
+_ADD_BTN = ("<a href='/portal/add' style='display:inline-block;background:#e8772e;color:#fff;"
+            "border-radius:9px;padding:11px 20px;font-weight:600;text-decoration:none'>"
+            "➕ Add your business</a>")
+
+
+def _subs_html(email: str) -> str:
+    """An owner's still-pending submissions, with a delete button each."""
+    subs = [s for s in submissions.list_for_owner(email) if s.get("status") == "pending"]
+    if not subs:
+        return ""
+    rows = ""
+    for s in subs:
+        p = s.get("payload") or {}
+        loc = ", ".join(x for x in (p.get("city"), p.get("state")) if x)
+        rows += (f"<tr><td>{esc(p.get('name'))}</td><td class='muted'>{esc(s['vertical'])}</td>"
+                 f"<td class='muted'>{esc(loc)}</td><td><span class='muted'>pending review</span></td>"
+                 f"<td><form method='post' action='/portal/submission/{s['id']}/delete' "
+                 "style='display:inline' onsubmit=\"return confirm('Delete this submission?')\">"
+                 "<button type='submit' style='width:auto;background:#b91c1c;padding:7px 13px;"
+                 "font-size:13px'>Delete</button></form></td></tr>")
+    return ("<h3 style='margin-top:26px'>Pending submissions</h3>"
+            "<p class='muted'>Awaiting review before they go live — you can delete one you no longer "
+            f"want.</p><table style='width:100%'>{rows}</table>")
+
+
 def dashboard(request: Request) -> HTMLResponse:
     email = portal_email(request)
     if not email:
         return RedirectResponse("/portal/login", status_code=303)
+    banner = ("<div class='ok' style='background:#e7f6ec;border-radius:10px;padding:11px 14px;"
+              "margin-bottom:14px'>✓ Submitted for review — it'll go live once approved.</div>"
+              if request.query_params.get("added") else "")
+    subs = _subs_html(email)
     listings = _owned(email)
     if not listings:
-        return _page("Add your business", f"<h2>Welcome, {esc(email)}! 🙏</h2>"
-                     "<p class='muted'>You're signed in. You don't have any listings yet — add your "
-                     "business and it'll appear here once approved.</p>"
-                     "<p><a href='/submit' style='display:inline-block;background:#e8772e;color:#fff;"
-                     "border-radius:9px;padding:11px 20px;font-weight:600;text-decoration:none'>"
-                     "➕ Add your business</a></p>"
+        return _page("Add your business", banner + f"<h2>Welcome, {esc(email)}! 🙏</h2>"
+                     "<p class='muted'>You're signed in. Add your business and it'll appear here once "
+                     "approved — we'll auto-fill the details for you to verify.</p>"
+                     f"<p>{_ADD_BTN}</p>" + subs +
                      "<p class='muted' style='margin-top:14px'>Already listed? Claim it from its page "
                      "to link it to your account. · <a href='/portal/logout'>Sign out</a></p>"
                      + _engage_html())
@@ -301,10 +328,11 @@ def dashboard(request: Request) -> HTMLResponse:
                  f"<td>{esc(x['city'])}, {esc(x['state'])}</td>"
                  f"<td>{reach} <span class='muted'>shown (30d)</span></td>"
                  f"<td>{status}{upgrade}</td></tr>")
-    body = (f"<h2>Your listings</h2><p class='muted'>{esc(email)} · "
+    body = (banner + f"<h2>Your listings</h2><p class='muted'>{esc(email)} · "
             f"<a href='/portal/logout'>sign out</a></p>"
             "<p class='muted'>“Shown” = times an AI assistant or visitor surfaced your listing.</p>"
-            f"<table style='width:100%'>{rows}</table>" + _engage_html())
+            f"<table style='width:100%'>{rows}</table>"
+            f"<p style='margin-top:14px'>{_ADD_BTN}</p>" + subs + _engage_html())
     return _page("Your listings", body)
 
 
@@ -368,6 +396,94 @@ async def edit_post(request: Request) -> HTMLResponse:
                  f"<a href='/portal'>your listings</a></p>")
 
 
+# ------------------------------------------------------------------ guided "add a business" onboarding
+def add_get(request: Request) -> HTMLResponse:
+    if not portal_email(request):
+        return RedirectResponse("/portal/login", status_code=303)
+    opts = "".join(f"<option value='{v}'>{esc(verticals.VERTICALS[v]['label'])}</option>"
+                   for v in submissions.SUBMITTABLE)
+    return _page("Add your business",
+                 "<h2>Add your business</h2>"
+                 "<p class='muted'>Just tell us the name and where it is — we'll fill in the rest "
+                 "from public sources for you to check, then submit.</p>"
+                 "<form method='post' action='/portal/add'>"
+                 f"<label>Category</label><select name='vertical'>{opts}</select>"
+                 "<label>Business name</label><input name='name' required autofocus>"
+                 f"<label>State</label>{state_select('state', required=True)}"
+                 "<label>City</label><input name='city' required placeholder='e.g. Plano'>"
+                 "<button type='submit'>Find my business →</button></form>"
+                 "<p class='muted' style='margin-top:12px'><a href='/portal'>‹ back to your listings</a></p>")
+
+
+def _fld(label: str, key: str, cand: dict, ph: str = "") -> str:
+    return (f"<label>{esc(label)}</label>"
+            f"<input name='{key}' value='{esc(cand.get(key) or '')}' placeholder='{esc(ph)}'>")
+
+
+async def add_post(request: Request) -> HTMLResponse:
+    """Step 2: look the business up from public sources and show a prefilled form to verify."""
+    if not portal_email(request):
+        return RedirectResponse("/portal/login", status_code=303)
+    form = await request.form()
+    vertical = (form.get("vertical") or "").strip()
+    name = (form.get("name") or "").strip()
+    state = (form.get("state") or "").strip()
+    city = (form.get("city") or "").strip()
+    if vertical not in submissions.SUBMITTABLE or not name:
+        return _page("Add your business", "<h2 class='err'>Please enter a business name and category</h2>"
+                     "<p><a href='/portal/add'>‹ back</a></p>", status=400)
+    cand = onboard.lookup(name, city, state, vertical)
+    photo = (f"<img src='{esc(cand['photo_url'])}' alt='' onerror='this.remove()' style='width:100%;"
+             f"max-height:220px;object-fit:cover;border-radius:12px;margin:6px 0'>"
+             if cand.get("photo_url") else "")
+    body = (f"<h2>Verify {esc(name)}</h2>"
+            "<p class='muted'>We pre-filled what we found from public sources. Check it, fix anything, "
+            "then submit — your listing is reviewed before it goes live.</p>" + photo
+            + "<form method='post' action='/portal/add/confirm'>"
+            f"<input type='hidden' name='vertical' value='{esc(vertical)}'>"
+            f"<input type='hidden' name='photo_url' value='{esc(cand.get('photo_url') or '')}'>"
+            + _fld("Business name", "name", cand)
+            + _fld("Address", "address_full", cand)
+            + _fld("City", "city", cand)
+            + f"<label>State</label>{state_select('state', cand.get('state') or state)}"
+            + _fld("Phone", "phone", cand) + _fld("Email", "email", cand)
+            + _fld("Website", "website", cand)
+            + _fld("Opening hours", "hours", cand, "e.g. Mon-Sun 11am-9pm")
+            + _fld("Languages spoken", "languages", cand, "Telugu, Hindi, English")
+            + "<button type='submit'>Submit for review</button></form>"
+            "<p class='muted' style='margin-top:12px'><a href='/portal/add'>‹ start over</a></p>")
+    return _page(f"Verify {name}", body)
+
+
+async def add_confirm(request: Request) -> HTMLResponse:
+    email = portal_email(request)
+    if not email:
+        return RedirectResponse("/portal/login", status_code=303)
+    form = await request.form()
+    vertical = (form.get("vertical") or "").strip()
+    payload = {k: (form.get(k) or "").strip() for k in
+               ("name", "address_full", "city", "state", "phone", "email", "website", "languages")}
+    if (form.get("photo_url") or "").strip():
+        payload["photo_url"] = form.get("photo_url").strip()
+    if (form.get("hours") or "").strip():
+        payload["hours_json"] = {"raw": form.get("hours").strip()}
+    res = submissions.submit(vertical, payload, contact_email=email, note="owner onboarding")
+    if not res.get("ok"):
+        return _page("Couldn't submit", "<h2 class='err'>Please add a business name and category</h2>"
+                     "<p><a href='/portal/add'>‹ back</a></p>", status=400)
+    return RedirectResponse("/portal?added=1", status_code=303)
+
+
+async def submission_delete(request: Request) -> RedirectResponse:
+    email = portal_email(request)
+    if email:
+        try:
+            submissions.delete_for_owner(int(request.path_params["id"]), email)
+        except (ValueError, TypeError):
+            pass
+    return RedirectResponse("/portal", status_code=303)
+
+
 def logout(request: Request) -> RedirectResponse:
     request.session.pop("owner_email", None)
     return RedirectResponse("/portal/login", status_code=303)
@@ -387,6 +503,10 @@ routes = [
     Route("/portal/google", google_login, methods=["GET"]),
     Route("/portal/google/callback", google_callback, methods=["GET"]),
     Route("/portal", dashboard, methods=["GET"]),
+    Route("/portal/add", add_get, methods=["GET"]),
+    Route("/portal/add", add_post, methods=["POST"]),
+    Route("/portal/add/confirm", add_confirm, methods=["POST"]),
+    Route("/portal/submission/{id:int}/delete", submission_delete, methods=["POST"]),
     Route("/portal/edit/{vertical}/{id:int}", edit_get, methods=["GET"]),
     Route("/portal/edit/{vertical}/{id:int}", edit_post, methods=["POST"]),
     Route("/portal/logout", logout, methods=["GET"]),
