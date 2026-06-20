@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import html
 import json
+from urllib.parse import quote
 
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
@@ -125,6 +126,13 @@ def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200,
  a{{color:{_BRAND};text-decoration:none}}
  .chips{{display:flex;flex-wrap:wrap;gap:9px;margin:16px 0}}
  .chip{{background:#fff;border:1px solid #e2e0dd;border-radius:999px;padding:8px 13px;font-size:14px}}
+ .fbar{{background:#fff;border:1px solid #ececec;border-radius:14px;padding:12px 14px;margin:14px 0;
+   display:flex;flex-wrap:wrap;gap:14px;align-items:center}}
+ .fgrp{{display:flex;flex-wrap:wrap;gap:7px;align-items:center}}
+ .flabel{{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#98a2b3;font-weight:700;margin-right:2px}}
+ .fbar .chip{{padding:5px 11px;font-size:13px;cursor:pointer}}
+ .fsort{{display:inline-flex;align-items:center;gap:6px;margin:0}}
+ .fsort select{{border:1px solid #e2e0dd;border-radius:8px;padding:6px 9px;font:inherit;font-size:13px;background:#fff}}
  .lc{{background:#fff;border:1px solid #ececec;border-left:4px solid {_BRAND};border-radius:12px;
    padding:14px 16px;margin:10px 0}}
  .lc h3{{margin:0 0 4px;font-size:17px}} .lc p{{margin:5px 0;color:#4b5563;font-size:14px}}
@@ -195,15 +203,97 @@ def browse_state(request: Request) -> HTMLResponse:
                  f"Browse Indian {label} in {state.upper()} by city.", body)
 
 
-def _listings(v: str, state: str, city: str, limit: int = 200) -> list[dict]:
+_RATING_EXPR = "GREATEST(COALESCE(community_rating,0), COALESCE(rating,0))"
+_SORTS = {
+    "best": f"{_FEATURED} DESC, {_RATING_EXPR} DESC, confidence_score DESC",
+    "rating": f"{_RATING_EXPR} DESC, (COALESCE(community_rating_count,0)+COALESCE(rating_count,0)) DESC",
+    "name": "name ASC",
+    "new": "id DESC",
+}
+
+
+def _listings(v: str, state: str, city: str, *, region=None, lang=None, diet=None, min_rating=None,
+              q=None, sort: str = "best", limit: int = 200) -> list[dict]:
     table = verticals._table(v)
+    where = ["deleted_at IS NULL", "is_active", "LOWER(state) = LOWER(%s)", "LOWER(city) = LOWER(%s)"]
+    params: list = [state, city]
+    if region:
+        where.append("LOWER(region_tag) = LOWER(%s)"); params.append(region)
+    if lang:
+        where.append("%s = ANY(languages)"); params.append(lang)
+    if diet and verticals.VERTICALS[v].get("has_dietary"):
+        where.append("%s = ANY(dietary_tags)"); params.append(diet)
+    if min_rating:
+        where.append(f"{_RATING_EXPR} >= %s"); params.append(min_rating)
+    if q:
+        where.append("name ILIKE %s"); params.append(f"%{q}%")
+    order = _SORTS.get(sort, _SORTS["best"])
     return db.query(
         f"SELECT id, name, address_full, city, state, lat, lng, phone, website, description, tags, "
         f"languages, is_claimed, rating, rating_count, community_rating, community_rating_count, "
         f"photo_url, {_FEATURED} AS is_featured "
-        f"FROM {table} WHERE deleted_at IS NULL AND is_active "
-        f"AND LOWER(state) = LOWER(%s) AND LOWER(city) = LOWER(%s) "
-        f"ORDER BY {_FEATURED} DESC, confidence_score DESC LIMIT %s", (state, city, limit))
+        f"FROM {table} WHERE {' AND '.join(where)} "
+        f"ORDER BY {order} LIMIT %s", params + [limit])
+
+
+def _facets(v: str, state: str, city: str) -> dict[str, list]:
+    """Distinct region / language / dietary values present for this (vertical, city) — so the filter
+    bar only offers options that actually have matches."""
+    table = verticals._table(v)
+    base = (f"FROM {table} WHERE deleted_at IS NULL AND is_active "
+            f"AND LOWER(state)=LOWER(%s) AND LOWER(city)=LOWER(%s)")
+
+    def _q(sql: str) -> list:
+        try:
+            return [r["x"] for r in db.query(sql, (state, city)) if r["x"]]
+        except Exception:
+            return []
+    out = {
+        "region": _q(f"SELECT DISTINCT region_tag AS x {base} AND region_tag IS NOT NULL ORDER BY 1"),
+        "lang": _q(f"SELECT DISTINCT unnest(languages) AS x {base} ORDER BY 1"),
+        "diet": (_q(f"SELECT DISTINCT unnest(dietary_tags) AS x {base} ORDER BY 1")
+                 if verticals.VERTICALS[v].get("has_dietary") else []),
+    }
+    return out
+
+
+def _filter_qs(current: dict, **changes) -> str:
+    """Build a ?query-string from the active filters with some keys changed/cleared (None = clear)."""
+    params = {k: v for k, v in {**current, **changes}.items() if v}
+    return ("?" + "&".join(f"{k}={quote(str(v))}" for k, v in params.items())) if params else ""
+
+
+def _filter_bar(path: str, facets: dict, current: dict) -> str:
+    """Toggle chips (region / language / dietary) + a sort dropdown. Each chip preserves the other
+    active filters; clicking an active chip clears it."""
+    on = "background:#c1440e;color:#fff;border-color:#c1440e"
+
+    def group(key: str, label: str, values: list) -> str:
+        if not values:
+            return ""
+        chips = ""
+        for val in values:
+            active = (current.get(key) or "").lower() == val.lower()
+            href = path + _filter_qs(current, **{key: None if active else val})
+            chips += (f"<a class='chip' href='{html.escape(href)}'"
+                      + (f" style='{on}'" if active else "") + f">{html.escape(val)}</a>")
+        return f"<div class='fgrp'><span class='flabel'>{label}</span>{chips}</div>"
+
+    bar = group("region", "Cuisine/Region", facets["region"]) + group("diet", "Dietary", facets["diet"]) \
+        + group("lang", "Language", facets["lang"])
+    if not bar:
+        return ""
+    hidden = "".join(f"<input type='hidden' name='{k}' value='{html.escape(str(v))}'>"
+                     for k, v in current.items() if v and k != "sort")
+    opts = "".join(
+        f"<option value='{k}'" + (" selected" if current.get("sort", "best") == k else "") + f">{lbl}</option>"
+        for k, lbl in (("best", "Top picks"), ("rating", "Highest rated"), ("name", "A–Z"), ("new", "Newest")))
+    sort = (f"<form method='get' class='fsort'>{hidden}"
+            f"<label class='flabel'>Sort</label>"
+            f"<select name='sort' onchange='this.form.submit()'>{opts}</select></form>")
+    clear = (f" <a class='chip' href='{html.escape(path)}'>✕ Clear</a>"
+             if any(current.get(k) for k in ("region", "lang", "diet")) else "")
+    return (f"<div class='fbar'>{bar}<div class='fgrp'>{sort}{clear}</div></div>")
 
 
 def _listing_cards(v: str, rows: list[dict], tr: dict, *, numbered: bool = True) -> tuple[str, list]:
@@ -277,13 +367,31 @@ def browse_city(request: Request) -> HTMLResponse:
     if v not in verticals.VERTICALS:
         return _page("Not found", "Unknown category.", "<h1>Not found</h1>", status=404)
     tr = i18n.t(request)
-    rows = _listings(v, state, city)
+    qp = request.query_params
+    current = {"region": qp.get("region") or None, "lang": qp.get("lang") or None,
+               "diet": qp.get("diet") or None,
+               "sort": qp.get("sort") if qp.get("sort") in _SORTS else "best"}
+    filtered = any(current.get(k) for k in ("region", "lang", "diet"))
+    rows = _listings(v, state, city, region=current["region"], lang=current["lang"],
+                     diet=current["diet"], sort=current["sort"])
     label = _label(v)
     loc = f"{city.title()}, {state.upper()}"
     h1 = f"Indian {label} in {loc}"
     canon = f"{_base()}/browse/{v}/{_slug(state)}/{_slug(city)}"
+    path = f"/browse/{v}/{_slug(state)}/{_slug(city)}"
+    crumbs = (f"<nav class='crumbs'><a href='/browse'>{html.escape(tr['browse'])}</a> › "
+              f"<a href='/browse/{v}'>{html.escape(label)}</a> › "
+              f"<a href='/browse/{v}/{_slug(state)}'>{html.escape(state.upper())}</a> › "
+              f"{html.escape(city.title())}</nav>")
+    fbar = _filter_bar(path, _facets(v, state, city), current)
 
     if not rows:
+        if filtered:                                  # filters just didn't match -> keep the bar
+            body = (crumbs + _cathead(v) + f"<h1>{html.escape(h1)}</h1>" + fbar
+                    + f"<p class='muted'>No matches for these filters. "
+                    f"<a href='{html.escape(path)}'>Clear filters</a> or "
+                    f"<a href='/chat'>{html.escape(tr['ask_picks'])}</a>.</p>")
+            return _page(f"{h1} · {settings.platform_name}", f"Indian {label} in {loc}.", body, canonical=canon)
         body = (f"<h1>{html.escape(h1)}</h1><p class='muted'>{html.escape(tr['no_listings'])} "
                 f"<a href='/submit'>{html.escape(tr['add_business'])}</a> · "
                 f"<a href='/chat'>{html.escape(tr['ask_picks'])}</a></p>")
@@ -293,14 +401,11 @@ def browse_city(request: Request) -> HTMLResponse:
     jsonld = json.dumps({"@context": "https://schema.org", "@type": "ItemList",
                          "name": h1, "numberOfItems": len(rows), "itemListElement": ld_items})
     best_link = (f" · <a href='/best/{v}/{_slug(state)}/{_slug(city)}'>🏆 Best-rated</a>"
-                 if len(rows) >= 3 else "")
-    body = (f"<nav class='crumbs'><a href='/browse'>{html.escape(tr['browse'])}</a> › "
-            f"<a href='/browse/{v}'>{html.escape(label)}</a> › "
-            f"<a href='/browse/{v}/{_slug(state)}'>{html.escape(state.upper())}</a> › {html.escape(city.title())}</nav>"
-            f"{_cathead(v)}"
-            f"<h1>{html.escape(h1)}</h1>"
-            f"<p class='muted'>{len(rows)} · <a href='/chat'>{html.escape(tr['ask_picks'])}</a>{best_link}</p>"
-            f"{cards}<p><a class='cta' href='/chat'>{html.escape(tr['ask_picks'])} →</a></p>")
+                 if len(rows) >= 3 and not filtered else "")
+    body = (crumbs + _cathead(v) + f"<h1>{html.escape(h1)}</h1>"
+            f"<p class='muted'>{len(rows)} result{'s' if len(rows) != 1 else ''} · "
+            f"<a href='/chat'>{html.escape(tr['ask_picks'])}</a>{best_link}</p>"
+            f"{fbar}{cards}<p><a class='cta' href='/chat'>{html.escape(tr['ask_picks'])} →</a></p>")
     og_img = next((x.get("photo_url") for x in rows if x.get("photo_url")), "")
     return _page(f"{h1} · {settings.platform_name} ({len(rows)})",
                  f"Directory of {len(rows)} Indian {label} in {loc} — addresses, phone, websites.",
