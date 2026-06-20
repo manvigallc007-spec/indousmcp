@@ -25,6 +25,28 @@ from .config import settings
 # Fields that best characterise a restaurant for similarity.
 _TEXT_FIELDS = ("name", "cuisine_type", "region_tag", "city", "state", "dietary_tags")
 
+# Structured facets folded into EVERY embedding (on top of the prose) so faceted free-text queries
+# — "vegetarian andhra in plano", "telugu speaking dentist", "halal sweets near edison" — match on
+# the vector, not just keywords. Scalar type fields + list fields, across all verticals.
+_ATTR_SCALARS = ("cuisine_type", "region_tag", "city", "state", "price_range", "profession_type",
+                 "speciality", "store_type", "service_type", "studio_type", "salon_type",
+                 "religion", "denomination", "deity", "category", "org_type", "legal_type",
+                 "edu_type", "realestate_type", "finance_type")
+_ATTR_LISTS = ("dietary_tags", "languages", "tags")
+
+
+def _attributes(record: dict) -> str:
+    bits: list[str] = []
+    for field in _ATTR_SCALARS:
+        v = record.get(field)
+        if v:
+            bits.append(str(v).replace("_", " "))
+    for field in _ATTR_LISTS:
+        v = record.get(field)
+        if isinstance(v, (list, tuple)):
+            bits.extend(str(x).replace("_", " ") for x in v if x)
+    return " ".join(bits)
+
 
 # --------------------------------------------------------------------- providers
 class HashingEmbedder:
@@ -142,10 +164,16 @@ def embed(text: str) -> list[float]:
 
 
 def text_for(record: dict) -> str:
-    """Text to embed: the description (+ tags) if present, else a field blob."""
+    """Text to embed: the prose description plus the structured facets (cuisine, region, location,
+    price, dietary, languages, tags, and vertical-specific type fields), so semantic search matches
+    on all of them. Falls back to a field blob when there's no description."""
+    attrs = _attributes(record)
     if record.get("description"):
-        tags = record.get("tags") or []
-        return record["description"] + (" Tags: " + ", ".join(tags) if tags else "")
+        return (record["description"] + (" " + attrs if attrs else "")).strip()
+    name = str(record.get("name") or "").strip()
+    text = (name + (" " + attrs if attrs else "")).strip()
+    if text:
+        return text
     parts: list[str] = []
     for field in _TEXT_FIELDS:
         value = record.get(field)
