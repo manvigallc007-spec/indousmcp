@@ -317,6 +317,28 @@ def _english(text: str, filters: dict | None) -> str:
     return text
 
 
+def _attach_photos(cards: list[dict]) -> list[dict]:
+    """Search results don't carry photo_url, so batch-fetch it (one query per vertical present) and
+    attach — lets the chat show photo-forward cards. Resilient to any DB/column issue."""
+    from . import db, verticals
+    by_v: dict[str, list] = {}
+    for c in cards:
+        if c.get("id") and c.get("vertical") in verticals.VERTICALS:
+            by_v.setdefault(c["vertical"], []).append(c["id"])
+    photos: dict[tuple, str] = {}
+    for v, ids in by_v.items():
+        try:
+            for row in db.query(
+                    f"SELECT id, photo_url FROM {verticals._table(v)} WHERE id = ANY(%s)", (ids,)):
+                if row.get("photo_url"):
+                    photos[(v, row["id"])] = row["photo_url"]
+        except Exception:
+            pass
+    for c in cards:
+        c["photo_url"] = photos.get((c.get("vertical"), c.get("id")))
+    return cards
+
+
 def _cards(res: dict) -> list[dict]:
     # Return up to 12; the chat UI shows the top 6 and offers "show more" for the rest.
     out = []
@@ -343,7 +365,7 @@ def _cards(res: dict) -> list[dict]:
             "features": _tags.for_display(r.get("tags")),
             "languages": r.get("languages") or [],
         })
-    return out
+    return _attach_photos(out)
 
 
 def _results_for_llm(res: dict) -> str:

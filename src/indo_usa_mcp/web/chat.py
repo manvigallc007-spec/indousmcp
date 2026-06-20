@@ -175,7 +175,9 @@ a{color:var(--brand);text-decoration:none}
 @keyframes bl{0%,80%,100%{opacity:.3;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
 .cards{margin-top:12px;display:grid;gap:12px}
 .lc{background:var(--panel);border:1px solid var(--line);border-left:4px solid #777;border-radius:14px;
- padding:15px 17px;transition:.15s}.lc:hover{box-shadow:0 6px 20px rgba(16,24,40,.08)}
+ padding:15px 17px;transition:.15s;overflow:hidden}.lc:hover{box-shadow:0 6px 20px rgba(16,24,40,.08)}
+.lc-photo{display:block;width:calc(100% + 34px);height:160px;object-fit:cover;margin:-15px -17px 12px;
+ background:#f3efe9}
 .lc-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
 .badge{color:#fff;background:#777;border-radius:999px;font-size:12px;font-weight:600;padding:4px 11px;
  text-transform:capitalize;letter-spacing:.02em}
@@ -470,6 +472,7 @@ function lnk(href,label,blank){const a=el('a','lc-btn',label);a.href=href;if(bla
 function card(c){
   const v=c.vertical||'',color=COLOR[v]||'#777',icon=ICON[v]||'•';
   const d=el('div','lc');d.style.borderLeftColor=color;
+  if(c.photo_url){const im=el('img','lc-photo');im.src=c.photo_url;im.alt=c.name||'';im.loading='lazy';im.onerror=function(){im.remove();};d.appendChild(im);}
   const head=el('div','lc-head');
   const badge=el('span','badge',icon+' '+v);badge.style.background=color;head.appendChild(badge);
   if(c.is_featured)head.appendChild(el('span','pill feat','★ Featured'));
