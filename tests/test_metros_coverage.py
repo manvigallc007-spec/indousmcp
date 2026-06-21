@@ -5,12 +5,17 @@ from indo_usa_mcp.pipeline.scrapers import metros as M
 _NEW = ["northern_virginia", "suburban_maryland", "sacramento", "minneapolis", "san_diego",
         "denver", "tampa", "orlando", "charlotte", "columbus", "portland", "las_vegas", "hartford"]
 
+# Batch 4: Central Valley CA, university towns, and additional mid-size hubs.
+_BATCH4 = ["fresno", "stockton", "bakersfield", "ann_arbor", "champaign", "west_lafayette",
+           "college_station", "madison", "huntsville", "albuquerque", "greensboro", "buffalo",
+           "fort_myers"]
+
 
 def test_new_metros_present_and_state_mapped():
-    for m in _NEW:
+    for m in _NEW + _BATCH4:
         assert m in M.METROS, m
         assert M.state_for(m), m            # single-state, so state_for resolves without a point
-    assert len(M.METROS) >= 28              # 15 original + 13 new
+    assert len(M.METROS) >= 70              # original + batches
 
 
 def test_all_bboxes_well_formed():

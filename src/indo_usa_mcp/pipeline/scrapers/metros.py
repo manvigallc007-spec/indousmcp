@@ -58,6 +58,39 @@ METROS: dict[str, tuple[float, float, float, float]] = {
     "long_island": (40.60, -73.75, 40.95, -72.85),     # Nassau + Suffolk, NY
     "orange_county": (33.55, -118.10, 33.95, -117.60),  # Irvine/Anaheim, CA
     "inland_empire": (33.70, -117.85, 34.20, -117.05),  # + Chino Hills/Chino/Eastvale (W); Riverside/San Bernardino, CA
+    # Batch 4 — Central Valley (big Punjabi/Sikh community), university towns (large Indian grad
+    # populations), and additional mid-size diaspora/professional hubs.
+    "fresno": (36.65, -119.92, 36.92, -119.62),         # + Clovis, CA
+    "stockton": (37.85, -121.45, 38.05, -121.15),       # + Lodi/Manteca, CA (Sikh belt)
+    "modesto": (37.55, -121.10, 37.75, -120.85),        # CA
+    "bakersfield": (35.27, -119.18, 35.47, -118.85),    # CA
+    "ann_arbor": (42.20, -83.83, 42.34, -83.66),        # MI (U-Michigan)
+    "champaign": (40.05, -88.32, 40.17, -88.15),        # IL (UIUC)
+    "west_lafayette": (40.38, -86.96, 40.49, -86.83),   # IN (Purdue)
+    "college_station": (30.55, -96.40, 30.68, -96.23),  # TX (Texas A&M)
+    "gainesville": (29.58, -82.42, 29.72, -82.25),      # FL (UF)
+    "madison": (42.95, -89.56, 43.18, -89.24),          # WI (UW-Madison)
+    "louisville": (38.15, -85.92, 38.35, -85.55),       # KY
+    "memphis": (35.00, -90.20, 35.30, -89.75),          # TN
+    "knoxville": (35.85, -84.10, 36.10, -83.75),        # TN
+    "huntsville": (34.58, -86.75, 34.85, -86.45),       # AL (aerospace/engineering)
+    "birmingham": (33.35, -86.95, 33.65, -86.60),       # AL
+    "oklahoma_city": (35.30, -97.70, 35.65, -97.30),    # OK
+    "tulsa": (36.00, -96.15, 36.30, -95.75),            # OK
+    "albuquerque": (34.95, -106.80, 35.25, -106.45),    # NM
+    "tucson": (32.10, -111.10, 32.40, -110.75),         # AZ
+    "omaha": (41.15, -96.15, 41.40, -95.85),            # NE
+    "des_moines": (41.50, -93.80, 41.70, -93.50),       # IA
+    "new_orleans": (29.85, -90.25, 30.10, -89.90),      # LA
+    "greenville_sc": (34.75, -82.55, 34.95, -82.25),    # SC
+    "greensboro": (35.95, -80.40, 36.18, -79.70),       # NC (Triad: Greensboro/Winston-Salem)
+    "hampton_roads": (36.68, -76.42, 37.05, -75.95),    # VA (Norfolk/Virginia Beach)
+    "dayton": (39.65, -84.35, 39.90, -84.05),           # OH
+    "grand_rapids": (42.85, -85.82, 43.10, -85.50),     # MI
+    "buffalo": (42.80, -79.00, 43.05, -78.65),          # NY
+    "rochester_ny": (43.05, -77.80, 43.25, -77.45),     # NY
+    "fort_myers": (26.40, -82.02, 26.70, -81.65),       # FL (+ Cape Coral)
+    "wilmington_de": (39.65, -75.72, 39.85, -75.45),    # DE
 }
 
 
@@ -137,6 +170,15 @@ _METRO_STATE: dict[str, str] = {
     "long_island": "NY",
     "orange_county": "CA",
     "inland_empire": "CA",
+    # Batch 4
+    "fresno": "CA", "stockton": "CA", "modesto": "CA", "bakersfield": "CA",
+    "ann_arbor": "MI", "champaign": "IL", "west_lafayette": "IN", "college_station": "TX",
+    "gainesville": "FL", "madison": "WI", "louisville": "KY", "memphis": "TN", "knoxville": "TN",
+    "huntsville": "AL", "birmingham": "AL", "oklahoma_city": "OK", "tulsa": "OK",
+    "albuquerque": "NM", "tucson": "AZ", "omaha": "NE", "des_moines": "IA", "new_orleans": "LA",
+    "greenville_sc": "SC", "greensboro": "NC", "hampton_roads": "VA", "dayton": "OH",
+    "grand_rapids": "MI", "buffalo": "NY", "rochester_ny": "NY", "fort_myers": "FL",
+    "wilmington_de": "DE",
 }
 
 

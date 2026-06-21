@@ -16,30 +16,36 @@ from ...config import settings
 from .metros import bbox, state_for
 
 # Indian-cuisine match: the bare "indian" tag PLUS common India-specific regional/style values that
-# many places use instead (so a "cuisine=hyderabadi" or "cuisine=punjabi;biryani" place isn't missed).
+# many places use instead (so a "cuisine=hyderabadi" or "cuisine=udupi;dosa" place isn't missed).
 # Case-insensitive substring regex; the name guardrail (is_excluded_name) still filters homonyms.
-_CUISINE = "indian|punjabi|gujarati|hyderabadi|andhra|chettinad|mughlai|tandoori|biryani|desi"
+# (South/north_indian already match via the "indian" substring.)
+_CUISINE = ("indian|punjabi|gujarati|hyderabadi|andhra|chettinad|mughlai|tandoori|biryani|desi|"
+            "kerala|tamil|rajasthani|goan|marathi|udupi|dosa|chaat|malabar|thali")
 
-# Overpass QL: restaurants whose cuisine tag matches the Indian regex, as nodes, ways and relations
-# within the bbox. `out center` gives ways a point.
+# Also pick up Indian quick-serve + cafes (chaat/dosa spots, Indian cafes), not just sit-down
+# restaurants. The cuisine filter keeps it Indian; the name guardrail still filters homonyms.
+_AMENITY = "^(restaurant|fast_food|cafe)$"
+
+# Overpass QL: Indian-cuisine eateries as nodes, ways and relations within the bbox.
+# `out center` gives ways a point.
 _QUERY_TEMPLATE = """
 [out:json][timeout:{timeout}];
 (
-  node["amenity"="restaurant"]["cuisine"~"{cuisine}",i]({s},{w},{n},{e});
-  way["amenity"="restaurant"]["cuisine"~"{cuisine}",i]({s},{w},{n},{e});
-  relation["amenity"="restaurant"]["cuisine"~"{cuisine}",i]({s},{w},{n},{e});
+  node["amenity"~"{amenity}"]["cuisine"~"{cuisine}",i]({s},{w},{n},{e});
+  way["amenity"~"{amenity}"]["cuisine"~"{cuisine}",i]({s},{w},{n},{e});
+  relation["amenity"~"{amenity}"]["cuisine"~"{cuisine}",i]({s},{w},{n},{e});
 );
 out center tags;
 """
 
-# Nationwide: every Indian restaurant in the USA (admin area), no bbox. Larger + slower;
+# Nationwide: every Indian eatery in the USA (admin area), no bbox. Larger + slower;
 # meant for an occasional manual run, not the daily agent loop.
 _USA_QUERY = f"""
 [out:json][timeout:600];
 area["ISO3166-1"="US"][admin_level=2]->.usa;
 (
-  node["amenity"="restaurant"]["cuisine"~"{_CUISINE}",i](area.usa);
-  way["amenity"="restaurant"]["cuisine"~"{_CUISINE}",i](area.usa);
+  node["amenity"~"{_AMENITY}"]["cuisine"~"{_CUISINE}",i](area.usa);
+  way["amenity"~"{_AMENITY}"]["cuisine"~"{_CUISINE}",i](area.usa);
 );
 out center tags;
 """
@@ -55,7 +61,8 @@ class OverpassScraper:
         else:
             s, w, n, e = bbox(region)
             query = _QUERY_TEMPLATE.format(
-                cuisine=_CUISINE, timeout=settings.scraper_timeout_seconds, s=s, w=w, n=n, e=e
+                amenity=_AMENITY, cuisine=_CUISINE,
+                timeout=settings.scraper_timeout_seconds, s=s, w=w, n=n, e=e
             )
             read_timeout = settings.scraper_timeout_seconds + 30
         # Politeness: single rate-limited request; Overpass throttles heavy use.

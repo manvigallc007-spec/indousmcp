@@ -24,7 +24,7 @@ def test_collect_state_runs_all_verticals_and_nppes(monkeypatch):
     assert "scraper" in names and "temple_scraper" in names and "finance_scraper" in names
     assert "event_scraper" not in names                    # feed-based, skipped
     assert "nppes_scraper" in names                         # state-based, run for TX
-    tx = {"dallas", "houston", "austin", "san_antonio"}
+    tx = {"dallas", "houston", "austin", "san_antonio", "college_station"}
     assert set(dict(calls)["temple_scraper"]["metros"]) <= tx
     assert dict(calls)["nppes_scraper"]["states"] == ["TX"]
     assert "cleaner" in names and "temple_cleaner" in names  # processed after
