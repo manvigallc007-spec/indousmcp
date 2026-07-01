@@ -166,7 +166,8 @@ def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200,
  .fsort{{display:inline-flex;align-items:center;gap:6px;margin:0}}
  .fsort select{{border:1px solid #e2e0dd;border-radius:8px;padding:6px 9px;font:inherit;font-size:13px;background:#fff}}
  .lc{{background:#fff;border:1px solid #ececec;border-left:4px solid {_BRAND};border-radius:12px;
-   padding:14px 16px;margin:10px 0}}
+   padding:14px 16px;margin:10px 0;transition:.15s}}
+ .lc:hover{{transform:translateY(-2px);box-shadow:0 10px 24px rgba(16,24,40,.08);border-color:#e0dcd5}}
  .lc h3{{margin:0 0 4px;font-size:17px}} .lc p{{margin:5px 0;color:#4b5563;font-size:14px}}
  .lc .meta{{color:#6b7280;font-size:13px}} .lc .feat{{color:#b45309;font-weight:600}}
  .feats{{display:flex;flex-wrap:wrap;gap:5px;margin:7px 0 2px}}
@@ -549,9 +550,9 @@ def movies_page(request: Request) -> HTMLResponse:
         body = (f"<h1>{h1}</h1><p class='muted'>No Indian movies listed right now — check back soon. "
                 f"<a href='/chat'>Ask {html.escape(settings.assistant_name)}</a> what's on.</p>")
     else:
-        body = (_MOVIES_CSS + f"<h1>{h1}</h1>"
-                f"<p class='muted'>{len(rows)} now playing · pick a language, then find showtimes "
-                f"near you.</p><div class='chips'>{chips}</div><div class='movies'>{cards}</div>"
+        body = (_MOVIES_CSS + f"<div class='bhero'><h1>{h1}</h1>"
+                f"<p>{len(rows)} now playing · pick a language, then find showtimes near you.</p></div>"
+                f"<div class='chips'>{chips}</div><div class='movies'>{cards}</div>"
                 "<p class='muted' style='margin-top:22px;font-size:12px'>Movie data from "
                 "<a href='https://www.themoviedb.org' rel='nofollow'>TMDB</a> — this product uses the "
                 "TMDB API but is not endorsed or certified by TMDB.</p>")
@@ -584,9 +585,9 @@ def employers_page(request: Request) -> HTMLResponse:
                       + (f" · {html.escape(wage)}" if wage else "") + "</div>"
                       + (f"<div class='meta'>Roles: {html.escape(titles)}</div>" if titles else "")
                       + (f"<div class='meta'>📍 {html.escape(locs)}</div>" if locs else "") + "</div>")
-        body = (f"<h1>H-1B visa sponsors</h1><p class='muted'>US employers that sponsor H-1B visas "
-                f"(the visa most Indians from India use to work here), ranked by certified "
-                f"applications. {len(rows)} shown.</p>{form}{items}"
+        body = (f"<div class='bhero'><h1>H-1B visa sponsors</h1><p>US employers that sponsor H-1B "
+                f"visas (the visa most Indians from India use to work here), ranked by certified "
+                f"applications. {len(rows)} shown.</p></div>{form}{items}"
                 "<p class='muted' style='margin-top:18px;font-size:12px'>Aggregated public figures "
                 "from U.S. Department of Labor LCA disclosure data.</p>")
     else:
