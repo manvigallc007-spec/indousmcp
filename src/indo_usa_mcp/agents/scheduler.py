@@ -20,9 +20,9 @@ from .runner import run_agent
 # Sensible default cadence (seconds). Cleaner runs often; scrapers/outreach daily.
 DEFAULT_SCHEDULE = {name: agent.default_interval_s for name, agent in AGENTS.items()}
 
-# Order matters within a tick: scrape -> clean -> enrich -> monitor.
+# Order matters within a tick: scrape -> clean -> curate -> enrich/vectorize -> monitor.
 _RUN_ORDER = [
-    "scraper", "cleaner", "enrichment", "feedback", "approval_assistant",
+    "scraper", "socrata_scraper", "cleaner", "enrichment", "feedback", "approval_assistant",
     "temple_scraper", "temple_cleaner",
     "grocery_scraper", "grocery_cleaner",
     "professional_scraper", "nppes_scraper", "professional_cleaner",
@@ -37,8 +37,9 @@ _RUN_ORDER = [
     "realestate_scraper", "realestate_cleaner",
     "finance_scraper", "finance_cleaner",
     "event_feed_discovery", "event_scraper", "event_cleaner",
-    "web_enrichment", "link_check", "recommendation", "lifecycle", "learning", "knowledge_indexer",
-    "demographics", "h1b", "intelligence", "contact_reply", "submission_review",
+    "web_enrichment", "curation", "geo_backfill", "llm_enrichment", "embedding_backfill",
+    "link_check", "recommendation", "lifecycle", "learning", "knowledge_indexer",
+    "demographics", "h1b", "movies", "intelligence", "contact_reply", "submission_review",
     "review_moderation", "review_aggregator", "irs_eo",
     "discovery", "outreach", "reporting", "monitoring", "submission",
 ]

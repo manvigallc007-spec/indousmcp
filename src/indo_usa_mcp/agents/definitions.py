@@ -908,6 +908,69 @@ class MoviesAgent(Agent):
         return movies.refresh()
 
 
+class LlmEnrichmentAgent(Agent):
+    name = "llm_enrichment"
+    description = ("Writes grounded LLM descriptions + review summaries for listings that lack them "
+                   "and re-embeds each one — the richest signal Dost's chat and vector search read. "
+                   "No-op without an LLM key; skips rows whose facts are unchanged.")
+    default_interval_s = 86400  # daily — bounded batch, gentle on the free Groq tier
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from .. import enrich_llm
+        return enrich_llm.run_all(limit_per=params.get("limit_per", 30))
+
+
+class CurationAgent(Agent):
+    name = "curation"
+    description = ("Keeps the public directory clean: merges duplicate listings and retires non-USA "
+                   "records — both reversible soft-operations. (Low-quality suppression is handled by "
+                   "the lifecycle agent.)")
+    default_interval_s = 86400  # daily
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from .. import verticals
+        return {"duplicates": verticals.dedupe_listings(dry_run=False),
+                "non_usa": verticals.purge_non_usa(dry_run=False)}
+
+
+class GeoBackfillAgent(Agent):
+    name = "geo_backfill"
+    description = ("Geocodes address-only listings (free Nominatim, throttled and capped) so 'near me' "
+                   "distance search works across every vertical.")
+    default_interval_s = 86400  # daily
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from .. import verticals
+        return verticals.backfill_coords(limit=params.get("limit", 200))
+
+
+class EmbeddingBackfillAgent(Agent):
+    name = "embedding_backfill"
+    description = ("Embeds any listing left with a NULL vector (embeddings disabled at ingest, a failed "
+                   "embed, or a facet/model change) so nothing stays invisible to semantic search.")
+    default_interval_s = 86400  # daily
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        return ingest.backfill_embeddings(only_missing=True)
+
+
+class SocrataScraperAgent(Agent):
+    name = "socrata_scraper"
+    description = ("Pulls South-Asian restaurants from free city open-data (Socrata/SODA: NYC, Chicago, "
+                   "SF) into the raw layer; the cleaner promotes them to canonical listings.")
+    default_interval_s = 604800  # weekly
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from ..pipeline.scrapers.socrata import SOCRATA_SOURCES, import_source
+        out: dict[str, Any] = {}
+        for key in SOCRATA_SOURCES:
+            try:
+                out[key] = import_source(key)
+            except Exception as exc:                       # one bad dataset must not fail the rest
+                out[key] = {"error": str(exc)}
+        return out
+
+
 ALL_AGENTS = [
     DiscoveryAgent(),
     ScraperAgent(),
@@ -964,4 +1027,9 @@ ALL_AGENTS = [
     ReportingAgent(),
     MonitoringAgent(),
     MoviesAgent(),
+    LlmEnrichmentAgent(),
+    CurationAgent(),
+    GeoBackfillAgent(),
+    EmbeddingBackfillAgent(),
+    SocrataScraperAgent(),
 ]
