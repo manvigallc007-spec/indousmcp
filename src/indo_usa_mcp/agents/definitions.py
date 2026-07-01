@@ -898,6 +898,16 @@ def _alert(severity: str, kind: str, message: str) -> dict[str, str]:
     return {"severity": severity, "kind": kind, "message": message}
 
 
+class MoviesAgent(Agent):
+    name = "movies"
+    description = "Refreshes Indian-language movies now in US theaters (TMDB)."
+    default_interval_s = 86400
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from .. import movies
+        return movies.refresh()
+
+
 ALL_AGENTS = [
     DiscoveryAgent(),
     ScraperAgent(),
@@ -953,4 +963,5 @@ ALL_AGENTS = [
     DiasporaIntelligenceAgent(),
     ReportingAgent(),
     MonitoringAgent(),
+    MoviesAgent(),
 ]

@@ -159,7 +159,9 @@ def browse_root(request: Request) -> HTMLResponse:
     body = (f"<h1>{html.escape(tr['browse'])}</h1>"
             f"<p class='muted'>{html.escape(tr['browse_intro'])}</p>"
             f"{category_grid()}"
-            "<p style='margin-top:6px'><a class='cta' href='/events'>📅 Upcoming events &amp; festivals →</a></p>")
+            "<p style='margin-top:6px;display:flex;gap:10px;flex-wrap:wrap'>"
+            "<a class='cta' href='/events'>📅 Upcoming events &amp; festivals →</a>"
+            "<a class='cta' href='/movies'>🎬 Indian movies in theaters →</a></p>")
     return _page(f"Browse · {settings.platform_name}",
                  "Browse Indian-American businesses, temples and events by category and city.", body)
 
@@ -472,6 +474,60 @@ def best_city(request: Request) -> HTMLResponse:
                  body, jsonld=jsonld, canonical=canon, image=og_img)
 
 
+_MOVIES_CSS = """<style>
+.movies{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;margin-top:16px}
+.movie{background:#fff;border:1px solid #ececec;border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.movie img,.movie .noposter{width:100%;aspect-ratio:2/3;object-fit:cover;background:#f3efe9;display:grid;place-items:center;font-size:44px}
+.mbody{padding:11px 12px;display:flex;flex-direction:column;gap:6px;flex:1}
+.mbody h3{margin:0;font-size:15px;line-height:1.25}
+.mbody .mmeta{color:#6b7280;font-size:12.5px}
+.mbody p{margin:0;font-size:12.5px;color:#4b5563;flex:1}
+.mbody .mcta{margin-top:6px;background:#c1440e;color:#fff;text-align:center;padding:8px;border-radius:9px;font-size:13px;font-weight:600}
+.mbody .mcta:hover{background:#a83a0c}
+</style>"""
+
+
+def movies_page(request: Request) -> HTMLResponse:
+    """Indian-language movies currently in US theaters (TMDB). Links out to buy tickets."""
+    from .. import movies
+    lang = request.query_params.get("lang") or None
+    rows = movies.list_in_theaters(language=lang)
+    on = "background:#c1440e;color:#fff;border-color:#c1440e"
+    chips = (f"<a class='chip' href='/movies'" + ("" if lang else f" style='{on}'") + ">All</a>")
+    for L in movies.languages_in_theaters():
+        active = bool(lang) and lang.lower() == L.lower()
+        chips += (f"<a class='chip' href='/movies?lang={quote(L)}'"
+                  + (f" style='{on}'" if active else "") + f">{html.escape(L)}</a>")
+    cards = ""
+    for m in rows:
+        poster = (f"<img src='{html.escape(m['poster_url'])}' alt='{html.escape(m['title'])}' "
+                  f"loading='lazy' onerror=\"this.outerHTML='<div class=noposter>🎬</div>'\">"
+                  if m.get("poster_url") else "<div class='noposter'>🎬</div>")
+        yr = str(m["release_date"])[:4] if m.get("release_date") else None
+        meta = " · ".join(x for x in (m.get("language"), yr, ", ".join(m.get("genres") or [])) if x)
+        cards += (f"<div class='movie'>{poster}<div class='mbody'>"
+                  f"<h3>{html.escape(m['title'])}</h3>"
+                  f"<div class='mmeta'>{html.escape(meta)}</div>"
+                  + (f"<p>{html.escape((m.get('overview') or '')[:150])}</p>" if m.get("overview") else "")
+                  + f"<a class='mcta' href='{html.escape(m['ticket_url'])}' target='_blank' "
+                  f"rel='nofollow noopener'>🎟 Find showtimes</a></div></div>")
+    h1 = "Indian movies in US theaters"
+    if not rows:
+        body = (f"<h1>{h1}</h1><p class='muted'>No Indian movies listed right now — check back soon. "
+                f"<a href='/chat'>Ask {html.escape(settings.assistant_name)}</a> what's on.</p>")
+    else:
+        body = (_MOVIES_CSS + f"<h1>{h1}</h1>"
+                f"<p class='muted'>{len(rows)} now playing · pick a language, then find showtimes "
+                f"near you.</p><div class='chips'>{chips}</div><div class='movies'>{cards}</div>"
+                "<p class='muted' style='margin-top:22px;font-size:12px'>Movie data from "
+                "<a href='https://www.themoviedb.org' rel='nofollow'>TMDB</a> — this product uses the "
+                "TMDB API but is not endorsed or certified by TMDB.</p>")
+    return _page(f"{h1} · {settings.platform_name}",
+                 "Latest Hindi, Telugu, Tamil, Malayalam and other Indian movies now playing in US "
+                 "theaters — find showtimes and buy tickets near you.", body,
+                 canonical=f"{_base()}/movies")
+
+
 def _when(dt) -> str:
     if not hasattr(dt, "strftime"):
         return str(dt)[:16]
@@ -532,9 +588,9 @@ def events_page(request: Request) -> HTMLResponse:
 # -------------------------------------------------------------- crawler files
 def sitemap(request: Request) -> Response:
     base = _base()
-    urls = [f"{base}/", f"{base}/browse", f"{base}/explore", f"{base}/events", f"{base}/insights",
-            f"{base}/for-business", f"{base}/for-agents", f"{base}/submit", f"{base}/about",
-            f"{base}/privacy", f"{base}/terms", f"{base}/contact", f"{base}/faq"]
+    urls = [f"{base}/", f"{base}/browse", f"{base}/explore", f"{base}/events", f"{base}/movies",
+            f"{base}/insights", f"{base}/for-business", f"{base}/for-agents", f"{base}/submit",
+            f"{base}/about", f"{base}/privacy", f"{base}/terms", f"{base}/contact", f"{base}/faq"]
     urls += [f"{base}/browse/{v}" for v in verticals.VERTICALS]
     # All (vertical × city) pages that actually have active listings.
     for v in verticals.VERTICALS:
@@ -862,6 +918,7 @@ def mcp_well_known(request: Request) -> Response:
 routes = [
     Route("/browse", browse_root, methods=["GET"]),
     Route("/events", events_page, methods=["GET"]),
+    Route("/movies", movies_page, methods=["GET"]),
     Route("/insights", insights, methods=["GET"]),
     Route("/for-business", for_business, methods=["GET"]),
     Route("/for-agents", for_agents, methods=["GET"]),

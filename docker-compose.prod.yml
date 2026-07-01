@@ -56,6 +56,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-diaspora}
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-fastembed}
       EVENT_ICAL_FEEDS: ${EVENT_ICAL_FEEDS:-}
+      TMDB_API_KEY: ${TMDB_API_KEY:-}      # Indian-movies-in-theaters vertical (free TMDB key)
       # caterbid.co import (operator's own data, same VPS). Blank = disabled. CATERBID_QUERY blank
       # = use the built-in default SELECT; set it only if caterbid's schema differs (see config.py).
       CATERBID_DATABASE_URL: ${CATERBID_DATABASE_URL:-}

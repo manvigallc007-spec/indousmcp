@@ -61,6 +61,21 @@ def get_indian_restaurants(
 
 
 @mcp.tool()
+def get_indian_movies_in_theaters(language: str | None = None, limit: int = 40) -> dict[str, Any]:
+    """List Indian-language movies currently playing in US theaters (Hindi, Telugu, Tamil,
+    Malayalam, Kannada, Punjabi, Bengali, Marathi, Gujarati).
+
+    Optional `language` filters to one (e.g. "Telugu"). Each movie includes `title`, `language`,
+    `poster_url`, `overview`, `release_date`, `genres`, and a `ticket_url` — a "find showtimes / buy
+    tickets" search link (per-theater showtimes are not available via a free source). Data from TMDB.
+    """
+    from . import movies
+    rows = movies.list_in_theaters(language=language, limit=limit)
+    return {"results": rows, "count": len(rows), "languages": movies.languages_in_theaters(),
+            "attribution": "Movie data from TMDB (themoviedb.org); not endorsed or certified by TMDB."}
+
+
+@mcp.tool()
 def get_restaurant_details(restaurant_id: int) -> dict[str, Any]:
     """Fetch the full canonical record for one restaurant, plus its version history."""
     record = queries.get_restaurant_details(restaurant_id)

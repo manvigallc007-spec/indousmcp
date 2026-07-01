@@ -220,6 +220,11 @@ def cmd_enrich_llm(args: argparse.Namespace) -> None:
         _print(enrich_llm.run_all(limit_per=args.limit))
 
 
+def cmd_movies_refresh(args: argparse.Namespace) -> None:
+    from . import movies
+    _print(movies.refresh())
+
+
 def cmd_backfill_geo(args: argparse.Namespace) -> None:
     from . import verticals
     _print(verticals.backfill_coords(limit=args.limit))
@@ -696,6 +701,10 @@ def build_parser() -> argparse.ArgumentParser:
     el.add_argument("--vertical", help="One vertical (default: all)")
     el.add_argument("--limit", type=int, default=30, help="Listings per vertical per run")
     el.set_defaults(func=cmd_enrich_llm)
+
+    sub.add_parser("movies-refresh",
+                   help="Refresh Indian movies in US theaters from TMDB (needs TMDB_API_KEY)"
+                   ).set_defaults(func=cmd_movies_refresh)
 
     bg = sub.add_parser("backfill-geo",
                         help="Forward-geocode address-only listings (Census/Nominatim) so they sort by distance")

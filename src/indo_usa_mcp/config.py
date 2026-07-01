@@ -171,6 +171,9 @@ class Settings(BaseSettings):
     # @BotFather, put the token in TELEGRAM_BOT_TOKEN, and run `python -m indo_usa_mcp.telegram_bot`
     # (or the `telegram` compose service). Blank = disabled. This IS a secret — keep it in .env only.
     telegram_bot_token: str = ""
+    # The Movie Database (TMDB) API key — powers the "Indian movies in US theaters" vertical (free,
+    # non-commercial; get one at themoviedb.org -> Settings -> API). Blank = the movies agent idles.
+    tmdb_api_key: str = ""
 
     # Payments (Stripe) — optional. Blank secret key = payments disabled (manual featuring).
     stripe_secret_key: str = ""
