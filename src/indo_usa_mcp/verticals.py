@@ -701,12 +701,14 @@ def _to_float(v: Any) -> float | None:
         return None
 
 
-def create_record(vertical: str, data: dict) -> dict[str, Any]:
-    """Admin-create a canonical listing — the zero-noise way to add what OSM misses.
+def create_record(vertical: str, data: dict, *, source: str = "admin",
+                  confidence: float = 0.7) -> dict[str, Any]:
+    """Create a canonical listing — the zero-noise way to add what OSM misses.
 
-    Builds the same canonical shape scrapers produce (natural_key, description, tags,
-    embedding) with source_name='admin', active immediately. Events are excluded (they're
-    agent-managed: admin only approves). Returns {ok, id} or {ok: False, error}.
+    Builds the same canonical shape scrapers produce (natural_key, description, tags, embedding),
+    active immediately, tagged with its provenance (`source` -> source_name, e.g. 'admin',
+    'submission', 'irs', 'consulate') and `confidence`. Events are excluded (they're agent-managed:
+    admin only approves). Returns {ok, id} or {ok: False, error}.
     """
     cfg = get(vertical)
     if vertical == "events":
@@ -742,8 +744,8 @@ def create_record(vertical: str, data: dict) -> dict[str, Any]:
         "website": (data.get("website") or "").strip() or None,
         "region_tag": (data.get("region_tag") or "").strip() or None,
         "festival_specials": (data.get("festival_specials") or "").strip() or None,
-        "source_name": "admin", "source_id": f"admin/{uuid.uuid4().hex[:12]}",
-        "confidence_score": 0.7, "is_active": True,
+        "source_name": source, "source_id": f"{source}/{uuid.uuid4().hex[:12]}",
+        "confidence_score": confidence, "is_active": True,
     }
     if cfg["has_hours"]:
         raw = (data.get("hours") or "").strip()

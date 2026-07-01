@@ -48,7 +48,8 @@ def test_import_filters_then_creates(monkeypatch):
     created = []
     monkeypatch.setattr(irs, "_iter_rows", lambda url: iter(rows))
     monkeypatch.setattr(verticals, "create_record",
-                        lambda v, p: created.append((v, p["name"])) or {"ok": True, "id": len(created)})
+                        lambda v, p, **kw: created.append((v, p["name"], kw.get("source")))
+                        or {"ok": True, "id": len(created)})
     out = irs.import_eo(urls=["http://x"])
     assert out["added"] == 2 and out["by_vertical"] == {"temples": 1, "community": 1}
-    assert ("temples", "Sri Venkateswara Temple") in created
+    assert ("temples", "Sri Venkateswara Temple", "irs") in created   # provenance passed through

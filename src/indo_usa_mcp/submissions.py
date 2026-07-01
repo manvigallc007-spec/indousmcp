@@ -69,7 +69,7 @@ def approve(sub_id: int) -> dict[str, Any]:
     if sub is None:
         return {"ok": False, "error": "not_found_or_reviewed"}
     payload = sub["payload"] if isinstance(sub["payload"], dict) else {}
-    res = verticals.create_record(sub["vertical"], payload)
+    res = verticals.create_record(sub["vertical"], payload, source="submission")
     if not res.get("ok"):
         return {"ok": False, "error": res.get("error", "create_failed")}
     db.execute("UPDATE submissions SET status = 'approved', created_record_id = %s, "

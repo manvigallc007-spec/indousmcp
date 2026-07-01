@@ -22,8 +22,9 @@ def test_payload_targets_services_vertical():
 def test_seed_upserts_into_services(monkeypatch):
     created = []
     monkeypatch.setattr(verticals, "create_record",
-                        lambda v, p: created.append((v, p["name"])) or {"ok": True, "id": len(created)})
+                        lambda v, p, **kw: created.append((v, p["name"], kw.get("source")))
+                        or {"ok": True, "id": len(created)})
     out = consulates.seed()
     assert out["consulates"] == 7 and out["added"] == 7
-    assert all(v == "services" for v, _ in created)
-    assert ("services", "Embassy of India, Washington DC") in created
+    assert all(t[0] == "services" and t[2] == "consulate" for t in created)   # vertical + provenance
+    assert ("services", "Embassy of India, Washington DC", "consulate") in created

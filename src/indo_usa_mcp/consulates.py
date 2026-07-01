@@ -54,7 +54,7 @@ def seed() -> dict[str, Any]:
     from . import verticals
     added = dups = 0
     for c in CONSULATES:
-        res = verticals.create_record("services", _payload(c))
+        res = verticals.create_record("services", _payload(c), source="consulate", confidence=0.9)
         if res.get("ok"):
             added += 1
         elif res.get("error") == "duplicate":

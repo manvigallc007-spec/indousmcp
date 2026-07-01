@@ -99,7 +99,7 @@ def import_eo(urls: list[str] | None = None, limit: int | None = None) -> dict[s
                 p = _payload(row)
                 if not (p["name"] and p["city"] and p["state"]):
                     continue
-                res = verticals.create_record(vertical, p)
+                res = verticals.create_record(vertical, p, source="irs")
                 if res.get("ok"):
                     added += 1
                     by_vertical[vertical] = by_vertical.get(vertical, 0) + 1
