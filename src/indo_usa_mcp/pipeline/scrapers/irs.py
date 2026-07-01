@@ -20,19 +20,31 @@ from ...config import settings
 
 _DEFAULT_URLS = [f"https://www.irs.gov/pub/irs-soi/eo{n}.csv" for n in (1, 2, 3, 4)]
 
-# Tight, low-noise signals (mostly phrases). Order: religious first -> temples, else community.
+# Tight, low-noise signals (mostly multi-word phrases). Order: religious first -> temples, else
+# community. Keep phrases specific so "Indiana" / the surname "Jain" / "Indian" (Native American)
+# don't slip in; the admin can still moderate a rare false positive.
 _TEMPLE = (
     "hindu temple", "hindu mandir", " mandir", "shiva temple", "venkateswara", "balaji temple",
-    "swaminarayan", "iskcon", "sikh ", "gurdwara", "gurudwara", "khalsa", "jain temple",
-    "jain center", "jain society", "ganesh temple", "murugan temple", "ayyappa", "sanatan",
-    "hindu society", "vishwa hindu", "shirdi sai", "sai temple", "shri swaminarayan", "datta",
+    "swaminarayan", "iskcon", "hare krishna", "sikh ", "gurdwara", "gurudwara", "khalsa", "nanaksar",
+    "jain temple", "jain center", "jain society", "jain sangh", "jain samaj", "ganesh temple",
+    "murugan temple", "ayyappa", "sanatan", "hindu society", "vishwa hindu", "hindu swayamsevak",
+    "shirdi sai", "sai temple", "sathya sai", "shri swaminarayan", "baps", "datta", "durga temple",
+    "hanuman temple", "lakshmi temple", "meenakshi", "radha krishna", "chinmaya", "arya samaj",
+    "vedanta society", "ramakrishna", "sringeri", "hindu mandap", "brahma kumaris",
 )
 _COMMUNITY = (
     "india association", "indian association", "india community", "indian community",
-    "telugu association", "tamil sangam", "tamil association", "gujarati samaj", "kerala association",
-    "malayalee", "marathi mandal", "bengali association", "kannada", "punjabi cultural",
-    "india cultural", "indian cultural", "bharatiya", "indo american", "indo-american",
+    "telugu association", "telugu samajam", "tana ", "tamil sangam", "tamil association", "gujarati samaj",
+    "kerala association", "kerala samajam", "malayalee", "malayali", "marathi mandal", "maharashtra mandal",
+    "bengali association", "kannada koota", "kannada sangha", "punjabi cultural", "sindhi association",
+    "odia society", "india cultural", "indian cultural", "bharatiya", "indo american", "indo-american",
     "india house", "sewa international", "hindu american", "telugu cultural", "tamil cultural",
+    # students, professionals, chambers, heritage schools, seniors — all registered nonprofits.
+    "indian students association", "indian student association", "physicians of indian origin",
+    "association of physicians of indian", "indian medical association", "asian indian chamber",
+    "indo-american chamber", "india chamber of commerce", "us india chamber",
+    "hindu heritage", "balvihar", "telugu badi", "hindi vidyalaya", "india foundation",
+    "indian foundation", "indian american", "asian indian", "hindu students",
 )
 
 

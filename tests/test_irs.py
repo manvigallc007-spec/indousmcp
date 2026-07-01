@@ -16,6 +16,22 @@ def test_classifier_tight_no_false_positives():
     assert irs._classify("Smith Charitable Trust") is None
 
 
+def test_broadened_filters_catch_more_orgs():
+    for name in ("BAPS Swaminarayan Sanstha", "Chinmaya Mission West", "Jain Society of Houston",
+                 "Arya Samaj of Houston", "ISKCON of Dallas"):
+        assert irs._classify(name) == "temples", name
+    for name in ("Indian Students Association", "Asian Indian Chamber of Commerce",
+                 "American Association of Physicians of Indian Origin",
+                 "Maharashtra Mandal of Chicago", "Kerala Association of Dallas"):
+        assert irs._classify(name) == "community", name
+
+
+def test_broadened_filters_avoid_native_american_and_surnames():
+    for name in ("American Indian Heritage Center", "Indian Motorcycle Riders Club",
+                 "Jain Family Foundation"):
+        assert irs._classify(name) is None, name
+
+
 def test_payload_titlecases_and_builds_address():
     p = irs._payload({"NAME": "hindu temple", "STREET": "1 main st", "CITY": "edison",
                       "STATE": "NJ", "ZIP": "08820"})
