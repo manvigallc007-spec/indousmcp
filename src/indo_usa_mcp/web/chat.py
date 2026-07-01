@@ -140,6 +140,10 @@ a{color:var(--brand);text-decoration:none}
  place-items:center;font-size:38px;background:linear-gradient(135deg,#ffd9a0,#ffb56b);box-shadow:0 10px 30px #e8772e2e}
 .welcome h1{font-size:30px;line-height:1.2;margin:0 0 10px;letter-spacing:-.01em}
 .welcome p{color:var(--muted);font-size:17px;margin:0 0 22px;line-height:1.55}
+.herocard{background:linear-gradient(135deg,#fff4ea,#ffe7d3);border:1px solid #f2e2d0;
+ border-radius:24px;padding:28px 26px 24px;margin:0 0 20px}
+.herocard h1{margin:0 0 8px} .herocard .heroSub{color:#8a745e;margin:0}
+.herocard .hero-avatar{margin-bottom:16px}
 .disclaimer-note{background:#fff8ee;border:1px solid #f1dcc0;border-radius:12px;color:#7a5a2e !important;
  font-size:13.5px !important;line-height:1.5;padding:10px 14px;margin:0 auto 20px !important;max-width:560px}
 .chips{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
@@ -232,10 +236,12 @@ a{color:var(--brand);text-decoration:none}
 </header>
 <main id="log"><div class="wrap" id="thread">
  <section id="welcome" class="welcome">
-  <div class="hero-avatar">🪷</div>
-  <h1>Namaste! I'm __ANAME__ — that means “friend”.</h1>
-  <p class="heroSub">Your desi friend for finding Indian America — restaurants, groceries, temples,
-   events, classes, doctors and more across the USA. Tell me what you want and roughly where.</p>
+  <div class="herocard">
+   <div class="hero-avatar">🪷</div>
+   <h1>Namaste! I'm __ANAME__ — that means “friend”.</h1>
+   <p class="heroSub">Your desi friend for finding Indian America — restaurants, groceries, temples,
+    events, movies, doctors and more across the USA. Tell me what you want and roughly where.</p>
+  </div>
   <div class="chips">__CHIPS__</div>
   <button class="voicecta" onclick="startConvo()">🎙️ <span class="voicebtn-t">Talk to Dost</span></button>
   <p class="voicetip">Hands-free voice — speak in English, हिंदी or తెలుగు</p>

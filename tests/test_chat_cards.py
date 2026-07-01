@@ -51,4 +51,5 @@ def test_chat_homepage_decluttered():
     assert "Not legal, tax, or medical advice; details may be out of date." not in r.text
     # a concise caveat remains, pointing to /terms; the footer nav still links the static pages
     assert "verify before relying" in r.text
+    assert "herocard" in r.text                 # warm hero band applied to the homepage
     assert 'href="/terms"' in r.text and 'href="/faq"' in r.text and 'href="/about"' in r.text
