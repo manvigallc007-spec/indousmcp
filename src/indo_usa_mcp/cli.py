@@ -225,6 +225,11 @@ def cmd_movies_refresh(args: argparse.Namespace) -> None:
     _print(movies.refresh())
 
 
+def cmd_consulates_seed(args: argparse.Namespace) -> None:
+    from . import consulates
+    _print(consulates.seed())
+
+
 def cmd_backfill_geo(args: argparse.Namespace) -> None:
     from . import verticals
     _print(verticals.backfill_coords(limit=args.limit))
@@ -705,6 +710,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("movies-refresh",
                    help="Refresh Indian movies in US theaters from TMDB (needs TMDB_API_KEY)"
                    ).set_defaults(func=cmd_movies_refresh)
+
+    sub.add_parser("consulates-seed",
+                   help="Seed Indian consulates + embassy (services vertical, deduped)"
+                   ).set_defaults(func=cmd_consulates_seed)
 
     bg = sub.add_parser("backfill-geo",
                         help="Forward-geocode address-only listings (Census/Nominatim) so they sort by distance")
