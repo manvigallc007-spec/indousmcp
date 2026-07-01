@@ -23,6 +23,20 @@ def test_profession_type_mapping():
     assert nppes._profession_type("General Dentist") == "dentist"
     assert nppes._profession_type("Pharmacy") == "pharmacy"
     assert nppes._profession_type("Internal Medicine") == "doctor"
+    # broadened specialties
+    assert nppes._profession_type("Pediatric Medicine") == "pediatrician"
+    assert nppes._profession_type("Obstetrics & Gynecology") == "obgyn"
+    assert nppes._profession_type("Optometrist") == "eye_care"
+    assert nppes._profession_type("Podiatrist") == "podiatrist"
+    assert nppes._profession_type("Physical Therapist") == "physical_therapy"   # before counseling
+    assert nppes._profession_type("Registered Dietitian") == "dietitian"
+    assert nppes._profession_type("Clinical Psychologist") == "counseling"
+    assert nppes._profession_type(None) == "doctor"
+
+
+def test_surname_list_expanded():
+    assert len(nppes._SURNAMES) >= 90
+    assert {"Reddy", "Kulkarni", "Chowdhury"} <= set(nppes._SURNAMES)
 
 
 def test_nppes_maps_a_provider(monkeypatch):

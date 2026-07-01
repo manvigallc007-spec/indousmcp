@@ -26,10 +26,19 @@ _SURNAMES = [
     "Chopra", "Trivedi", "Parikh", "Amin", "Gandhi", "Goyal", "Bansal", "Jain", "Singh", "Sandhu",
     "Dhillon", "Chaudhary", "Subramanian", "Venkatesan", "Banerjee", "Mukherjee", "Chatterjee",
     "Pandey", "Mishra", "Tiwari", "Yadav", "Shetty", "Hegde", "Kaur", "Gill", "Prasad",
+    # broader coverage across regions (Telugu/Tamil/Kerala/Gujarati/Punjabi/Bengali/Marathi)
+    "Kumar", "Raman", "Suresh", "Ramesh", "Murthy", "Sastry", "Kulkarni", "Deshpande", "Gowda",
+    "Kamath", "Prabhu", "Das", "Ghosh", "Dutta", "Bose", "Chowdhury", "Saxena", "Srivastava",
+    "Khanna", "Grewal", "Sidhu", "Randhawa", "Brar", "Chauhan", "Rathore", "Solanki", "Vora",
+    "Modi", "Kothari", "Doshi", "Pandya", "Dave", "Nayak", "Panda", "Mohanty", "Acharya", "Raghavan",
+    "Sundaram", "Balakrishnan", "Natarajan", "Swaminathan", "Varma", "Kurup", "Sinha", "Rana",
+    "Bhattacharya", "Chandra",
 ]
 
 
 def _profession_type(desc: str | None) -> str:
+    """Map an NPPES taxonomy description to a coarse profession type used for search/filtering.
+    Order matters: 'physical therapy' must be caught before the generic 'therap' -> counseling."""
     d = (desc or "").lower()
     if "dent" in d or "orthodont" in d:
         return "dentist"
@@ -37,7 +46,19 @@ def _profession_type(desc: str | None) -> str:
         return "pharmacy"
     if "chiropract" in d:
         return "chiropractor"
-    if "psych" in d or "counsel" in d or "therap" in d:
+    if "optometr" in d or "ophthalmol" in d:
+        return "eye_care"
+    if "podiatr" in d:
+        return "podiatrist"
+    if "physical therap" in d or "physical medicine" in d:
+        return "physical_therapy"
+    if "diet" in d or "nutrition" in d:
+        return "dietitian"
+    if "pediatric" in d:
+        return "pediatrician"
+    if "obstetric" in d or "gynecolog" in d:
+        return "obgyn"
+    if "psych" in d or "counsel" in d or "therap" in d or "social work" in d or "mental health" in d:
         return "counseling"
     return "doctor"
 
