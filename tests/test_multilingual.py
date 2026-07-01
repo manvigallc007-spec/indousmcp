@@ -72,6 +72,7 @@ def test_reply_feeds_english_to_engine(monkeypatch):
     monkeypatch.setattr(a, "_english", lambda text, filters: "biryani in plano")
     monkeypatch.setattr(a, "_is_knowledge_question", lambda q, f: False)
     monkeypatch.setattr(a, "_thin_contribute", lambda *args, **k: None)
+    monkeypatch.setattr(a, "_localize", lambda t, lang: t)   # reply-language handled separately below
     captured = {}
 
     def fake_engine(messages, geo, filters):
@@ -81,3 +82,44 @@ def test_reply_feeds_english_to_engine(monkeypatch):
     monkeypatch.setattr(a, "_grounded_reply", fake_engine)
     a.reply([{"role": "user", "content": TEL}], filters={"lang": "te"})
     assert captured["text"] == "biryani in plano"            # engine got English, not Telugu
+
+
+# --- reply LANGUAGE: every branch is localized back to the user's choice (the reported bug) ---
+def test_localize_passthrough(monkeypatch):
+    # English target, empty text, or text already in native script -> unchanged (no translate call).
+    monkeypatch.setattr(a, "complete_text",
+                        lambda *x: (_ for _ in ()).throw(AssertionError("must not translate")))
+    assert a._localize("Here are 5 places.", "en") == "Here are 5 places."
+    assert a._localize("", "te") == ""
+    assert a._localize(TEL, "te") == TEL                     # already Telugu script -> left as-is
+
+
+def test_localize_translates_english_via_llm(monkeypatch):
+    monkeypatch.setattr(a, "complete_text", lambda system, user: chr(0x0C28) + user)  # -> Telugu script
+    a._XLATE_CACHE.clear()
+    out = a._localize("Top H-1B sponsors in TX.", "te")
+    assert a._has_indic(out)                                 # reply came back in Telugu script
+
+
+def test_localize_falls_back_to_mymemory_without_llm(monkeypatch):
+    monkeypatch.setattr(a, "complete_text", lambda *x: None)             # LLM inactive
+    monkeypatch.setattr(a, "_mymemory_from_en", lambda text, tgt: f"[{tgt}]{text}")
+    a._XLATE_CACHE.clear()
+    assert a._localize("No results found.", "hi") == "[hi]No results found."
+
+
+def test_reply_localizes_every_branch(monkeypatch):
+    # THE FIX: whatever branch built the (English) reply, reply() localizes the visible text.
+    monkeypatch.setattr(a, "_reply_impl",
+                        lambda m, g, f: {"reply": "Top H-1B sponsors in TX.", "cards": []})
+    monkeypatch.setattr(a, "_localize", lambda text, lang: f"<{lang}>{text}")
+    out = a.reply([{"role": "user", "content": "x"}], filters={"lang": "te"})
+    assert out["reply"] == "<te>Top H-1B sponsors in TX."
+
+
+def test_reply_does_not_localize_english(monkeypatch):
+    monkeypatch.setattr(a, "_reply_impl", lambda m, g, f: {"reply": "Hello", "cards": []})
+    called = []
+    monkeypatch.setattr(a, "_localize", lambda text, lang: called.append(1) or text)
+    out = a.reply([{"role": "user", "content": "x"}], filters={"lang": "en"})
+    assert out["reply"] == "Hello" and not called            # English selected -> never localized

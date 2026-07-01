@@ -317,6 +317,45 @@ def _english(text: str, filters: dict | None) -> str:
     return text
 
 
+def _mymemory_from_en(text: str, tgt: str) -> str | None:
+    """Key-less free fallback translation English -> target (used when no LLM is configured)."""
+    try:
+        r = httpx.get("https://api.mymemory.translated.net/get",
+                      params={"q": text[:480], "langpair": f"en|{tgt}"}, timeout=6.0)
+        out = (r.json().get("responseData") or {}).get("translatedText")
+        return out.strip() if out else None
+    except Exception:
+        return None
+
+
+def _localize(text: str, lang: str | None) -> str:
+    """Reverse of `_english`: make sure the assistant's reply text is in the user's chosen language.
+
+    LLM-authored replies already come back in native script (via `_lang_note`) and are left as-is;
+    only ENGLISH text that slipped through is translated — templated headers ("Top H-1B sponsors…"),
+    fixed prefixes/suffixes, the movies/clarify/decline branches, or an LLM that ignored the language
+    instruction. Proper nouns/business names/numbers stay as-is. Free + zero-budget: reuse the LLM,
+    with the key-less MyMemory fallback so this works even when no LLM is configured. This is what
+    guarantees an in-language reply on EVERY path, not only when the LLM happens to obey."""
+    if lang not in ("hi", "te") or not text or _has_indic(text):
+        return text                                     # already in native script (or nothing to do)
+    name = _LANG_NAMES.get(lang, lang)
+    key = f"->{lang}:{text}"
+    if key in _XLATE_CACHE:
+        return _XLATE_CACHE[key]
+    out = complete_text(                                # None when the LLM is inactive
+        f"You are a translator. Translate the message into {name}, in its native script, using warm, "
+        f"natural, everyday spoken {name}. Keep proper nouns (business names, cities, movie titles), "
+        f"numbers, prices, URLs and emoji exactly as they are. Output ONLY the translation — no "
+        f"quotes, no notes.", text)
+    out = (out.strip() if out else None) or _mymemory_from_en(text, lang)
+    if out:
+        if len(_XLATE_CACHE) > 500:
+            _XLATE_CACHE.clear()
+        _XLATE_CACHE[key] = out
+    return out or text
+
+
 def _attach_photos(cards: list[dict]) -> list[dict]:
     """Search results don't carry photo_url, so batch-fetch it (one query per vertical present) and
     attach — lets the chat show photo-forward cards. Resilient to any DB/column issue."""
@@ -947,6 +986,20 @@ def _h1b_reply(query: str, filters: dict | None) -> dict:
 
 
 def reply(messages: list[dict], geo: dict | None = None, filters: dict | None = None) -> dict:
+    """Produce an assistant reply, then guarantee it's in the user's chosen language.
+
+    Single choke-point: whatever branch produced the reply (movies, H-1B, clarify, knowledge, LLM,
+    grounded, plain search, discovery, decline, web fallback), the visible `reply` text is localized
+    to the selected language. `_localize` no-ops for English and for text already in native script,
+    so LLM-authored in-language replies are untouched and only stray English gets translated."""
+    out = _reply_impl(messages, geo, filters)
+    lang = (filters or {}).get("lang")
+    if lang in ("hi", "te") and out.get("reply"):
+        out["reply"] = _localize(out["reply"], lang)
+    return out
+
+
+def _reply_impl(messages: list[dict], geo: dict | None = None, filters: dict | None = None) -> dict:
     """Produce an assistant reply for a chat history. Never raises into the web layer."""
     messages = [m for m in (messages or []) if m.get("role") in ("user", "assistant")][-12:]
     raw = _search_query(messages)

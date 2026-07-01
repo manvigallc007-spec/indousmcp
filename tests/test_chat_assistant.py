@@ -152,6 +152,7 @@ def test_chat_has_language_selector_and_voice():
 
 def test_chat_api_accepts_lang(no_db, monkeypatch):
     monkeypatch.setattr(settings, "llm_provider", "search")
+    monkeypatch.setattr(assistant, "_localize", lambda t, lang: t)   # no network in the reply-localizer
     r = TestClient(app).post("/chat/api",
                              json={"messages": [{"role": "user", "content": "dosa"}], "lang": "hi"})
     assert r.status_code == 200
