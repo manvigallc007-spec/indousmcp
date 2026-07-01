@@ -58,3 +58,52 @@ def test_movies_page_empty(monkeypatch):
     r = TestClient(app).get("/movies")
     assert r.status_code == 200
     assert "No Indian movies listed" in r.text
+
+
+# --- chat integration: movie intent routes to the movies table (not the place directory) ---
+import indo_usa_mcp.assistant as a
+
+
+def test_is_movie_query():
+    assert a._is_movie_query("what telugu movies are playing")
+    assert a._is_movie_query("any new films in theaters?")
+    assert a._is_movie_query("cinema showtimes")
+    assert not a._is_movie_query("biryani near me")
+    assert not a._is_movie_query("indian grocery in plano")
+
+
+def test_movie_language_detection():
+    assert a._movie_language("new telugu movies") == "Telugu"
+    assert a._movie_language("bollywood films") == "Hindi"
+    assert a._movie_language("kollywood") == "Tamil"
+    assert a._movie_language("movies playing") is None
+
+
+def test_movies_reply_builds_cards(monkeypatch):
+    fake = [{"title": "RRR 2", "overview": "Epic.", "poster_url": "http://img/p.jpg",
+             "ticket_url": "http://tix", "language": "Telugu", "release_date": "2026-06-01",
+             "genres": ["Action"]}]
+    monkeypatch.setattr(movies, "list_in_theaters", lambda language=None, limit=12: fake)
+    out = a._movies_reply("telugu movies", {})
+    assert out["provider"] == "movies" and len(out["cards"]) == 1
+    c = out["cards"][0]
+    assert c["name"] == "RRR 2" and c["vertical"] == "movies"
+    assert c["photo_url"] == "http://img/p.jpg" and c["website"] == "http://tix"
+    assert "Telugu" in c["features"] and "2026" in c["features"]
+
+
+def test_movies_reply_empty(monkeypatch):
+    monkeypatch.setattr(movies, "list_in_theaters", lambda language=None, limit=12: [])
+    out = a._movies_reply("tamil movies", {})
+    assert out["cards"] == [] and "Tamil" in out["reply"]
+
+
+def test_reply_routes_movie_query(monkeypatch):
+    fake = [{"title": "Jawan 2", "overview": "", "poster_url": None, "ticket_url": "http://t",
+             "language": "Hindi", "release_date": None, "genres": []}]
+    monkeypatch.setattr(a, "_english", lambda text, filters: text)   # no translate/network
+    monkeypatch.setattr(movies, "list_in_theaters", lambda language=None, limit=12: fake)
+    out = a.reply([{"role": "user", "content": "what hindi movies are in theaters"}],
+                  filters={"lang": "en"})
+    assert out["provider"] == "movies"
+    assert out["cards"][0]["name"] == "Jawan 2"

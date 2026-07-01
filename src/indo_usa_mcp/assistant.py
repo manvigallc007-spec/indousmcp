@@ -858,18 +858,65 @@ def _replace_last_user(messages: list[dict], text: str) -> list[dict]:
     return out
 
 
+# --- movies: a non-geographic vertical (its own table), wired into the chat so "what Telugu movies
+# are playing" returns poster cards + a showtimes link instead of falling through to a place search.
+_MOVIE_WORDS = ("movie", "movies", "film", "films", "cinema", "theater", "theatre", "showtime",
+                "showtimes", "now showing", "in theaters", "in theatres", "box office")
+_MOVIE_LANGS = {"telugu": "Telugu", "tollywood": "Telugu", "hindi": "Hindi", "bollywood": "Hindi",
+                "tamil": "Tamil", "kollywood": "Tamil", "malayalam": "Malayalam", "mollywood": "Malayalam",
+                "kannada": "Kannada", "sandalwood": "Kannada", "punjabi": "Punjabi", "bengali": "Bengali",
+                "marathi": "Marathi", "gujarati": "Gujarati"}
+
+
+def _is_movie_query(query: str) -> bool:
+    ql = (query or "").lower()
+    return any(w in ql for w in _MOVIE_WORDS)
+
+
+def _movie_language(query: str) -> str | None:
+    ql = (query or "").lower()
+    return next((v for k, v in _MOVIE_LANGS.items() if k in ql), None)
+
+
+def _movies_reply(query: str, filters: dict | None) -> dict:
+    """Answer a movie query from the movies table with poster cards + showtimes links."""
+    from . import movies
+    lang = _movie_language(query)
+    rows = movies.list_in_theaters(language=lang, limit=12)
+    if not rows:
+        which = f"{lang} " if lang else "Indian "
+        return {"reply": f"I don't see any {which}movies listed in US theaters right now — check the "
+                "Movies page or try again soon.", "cards": [], "provider": "movies"}
+    cards = []
+    for m in rows:
+        yr = str(m.get("release_date"))[:4] if m.get("release_date") else None
+        cards.append({
+            "vertical": "movies", "name": m.get("title"), "id": None,
+            "description": (m.get("overview") or "")[:240], "photo_url": m.get("poster_url"),
+            "website": m.get("ticket_url"),                       # -> "Visit website" = find showtimes
+            "features": [x for x in ([m.get("language"), yr] + (m.get("genres") or [])) if x],
+        })
+    which = f"{lang} " if lang else "Indian "
+    return {"reply": f"Here are {which}movies now in US theaters — open a title to find showtimes and "
+            "buy tickets near you. 🎬", "cards": cards, "provider": "movies"}
+
+
 def reply(messages: list[dict], geo: dict | None = None, filters: dict | None = None) -> dict:
     """Produce an assistant reply for a chat history. Never raises into the web layer."""
     messages = [m for m in (messages or []) if m.get("role") in ("user", "assistant")][-12:]
-    if _needs_location(messages, geo, filters):
-        return {"reply": "Which city or area should I look in? For example: “Edison, NJ”, "
-                "“Jersey City”, or “Bay Area”.", "cards": [], "provider": "clarify"}
     raw = _search_query(messages)
     # The directory AND the LLM's tool search are English. Translate a Hindi/Telugu request to
     # English and feed the ENGLISH message to the engine — so the search is reliable instead of
     # depending on the model to translate its own tool query (the part that was failing). The reply
     # still goes back in the user's language via _lang_note.
     query = _english(raw, filters)
+    # Movies are national (their own table, not the place directory) -> answer directly, before any
+    # "which city?" prompt or place search.
+    if query and _is_movie_query(query):
+        return _movies_reply(query, filters)
+    if _needs_location(messages, geo, filters):
+        return {"reply": "Which city or area should I look in? For example: “Edison, NJ”, "
+                "“Jersey City”, or “Bay Area”.", "cards": [], "provider": "clarify"}
     eng_messages = _replace_last_user(messages, query) if (query and query != raw) else messages
     # Free-form knowledge question (explain/what/how, no place named) -> answer in prose from the
     # knowledge base (then the free web), instead of forcing listing cards.
