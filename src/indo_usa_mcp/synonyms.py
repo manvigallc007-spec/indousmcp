@@ -23,7 +23,8 @@ _ALIASES: dict[str, tuple[str, ...]] = {
                      "childrens doctor"),
     "dentist": ("dental clinic",),
     "pharmacy": ("chemist", "drug store", "drugstore", "medical store"),
-    "grocery": ("kirana", "kirana store", "provision store", "indian store", "desi store"),
+    "grocery": ("kirana", "kirana store", "provision store", "indian store", "desi store",
+                "indian groceries", "asian grocery"),
     "supermarket": ("cash and carry", "hypermarket"),
     "restaurant": ("eatery", "dhaba", "tiffin center", "tiffin centre"),
     "biryani": ("biriyani", "briyani", "dum biryani"),
@@ -42,8 +43,31 @@ _ALIASES: dict[str, tuple[str, ...]] = {
     "money transfer": ("remittance", "send money to india", "money2india"),
     "jewelry": ("jewellery", "jeweller", "gold shop"),
     "saree": ("sari", "saree shop", "sari shop"),
-    "priest": ("pandit", "pujari", "purohit"),
+    "priest": ("pandit", "pujari", "purohit", "panditji", "pandit ji"),
     "association": ("samaj", "sangam", "mandal", "sabha"),
+    # dishes & food (normalize spellings + map a specific dish to a searchable term)
+    "chaat": ("pani puri", "panipuri", "gol gappa", "golgappa", "puchka", "bhel puri", "bhelpuri",
+              "sev puri", "sevpuri", "dahi puri"),
+    "vada pav": ("vadapav", "wada pav"),
+    "idli": ("idly",),
+    "uttapam": ("uthappam", "uttappam"),
+    "paratha": ("parantha", "parotta", "porotta"),
+    "kebab": ("kabab", "seekh kebab", "kakori"),
+    "chai": ("masala chai", "masala tea", "cutting chai"),
+    "halal meat": ("zabiha", "halal butcher"),
+    "mehndi": ("henna", "mehendi", "heena"),
+    "langar": ("langar hall",),
+    # apparel
+    "lehenga": ("lehnga", "ghagra", "lehenga choli"),
+    "salwar kameez": ("salwar", "shalwar", "salwar suit", "punjabi suit"),
+    "kurta": ("kurti", "kurta pajama"),
+    # professionals (specific -> general)
+    "cardiologist": ("heart doctor", "heart specialist"),
+    "dermatologist": ("skin doctor", "skin specialist"),
+    "optometrist": ("eye doctor", "eye specialist", "optician"),
+    "orthopedic": ("bone doctor", "orthopaedic surgeon"),
+    # services
+    "travel agent": ("travel agency", "tours and travels"),
 }
 
 # alias -> canonical, longest alias first so multi-word phrases match before their parts.

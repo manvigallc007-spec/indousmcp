@@ -20,6 +20,16 @@ def test_expand_no_change_when_canonical_present_or_no_alias():
     assert synonyms.expand("") == "" and synonyms.expand(None) is None
 
 
+def test_expand_new_diaspora_aliases():
+    assert "chaat" in synonyms.expand("pani puri near me")
+    assert "cardiologist" in synonyms.expand("heart doctor in dallas")
+    assert "optometrist" in synonyms.expand("eye doctor")
+    assert "mehndi" in synonyms.expand("henna artist for wedding")
+    assert "lehenga" in synonyms.expand("ghagra shop")
+    assert "kurta" in synonyms.expand("kurti store")
+    assert "salwar kameez" in synonyms.expand("punjabi suit tailor")
+
+
 def test_expand_whole_word_only_and_capped():
     assert "accountant" not in synonyms.expand("cpasomething")      # not a whole word
     # never adds more than a handful of terms
