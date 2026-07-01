@@ -417,6 +417,90 @@ ARTICLES: list[dict[str, Any]] = [
              "plus any transfer fee, and the delivery speed. Indian grocery stores and money-transfer "
              "service shops in most metros also offer remittance. You can find money-transfer services "
              "in this directory's services category or ask Dost." + _DISCLAIMER},
+    {"slug": "oci-card", "title": "OCI card (Overseas Citizen of India) explained", "vertical": "services",
+     "text": "An OCI (Overseas Citizen of India) card is a lifelong document for people of Indian "
+             "origin, and their spouses, who have taken foreign citizenship — it lets you enter and "
+             "live, work and study in India without a separate visa. Former Indian citizens usually "
+             "must surrender their Indian passport and obtain a renunciation certificate before "
+             "applying. In the US, OCI, visa, passport and attestation services are handled through "
+             "VFS Global on behalf of the Indian embassy and consulates: you apply online, then submit "
+             "documents to the center serving your state. Confirm current fees, documents and "
+             "processing times on the official consulate / VFS website." + _DISCLAIMER},
+    {"slug": "indian-passport-renewal", "title": "Renewing an Indian passport in the USA",
+     "vertical": "services",
+     "text": "Indian citizens in the US renew or reissue their passport through VFS Global, which "
+             "processes applications for the Indian embassy and consulates. You apply online, submit "
+             "documents, and the new passport is printed in India and mailed back — so plan well ahead, "
+             "especially before travel. Common cases include normal renewal (expiry or pages full), "
+             "name/address changes, and lost or damaged passports (which need a police report). Minors "
+             "and first-time applicants have extra requirements. Always confirm the current process, "
+             "fees and your jurisdiction on the official VFS / consulate site." + _DISCLAIMER},
+    {"slug": "consulate-jurisdiction", "title": "Which Indian consulate serves your US state",
+     "vertical": "services",
+     "text": "Which Indian mission serves you depends on your US state. The Embassy of India is in "
+             "Washington DC; Consulates General are in New York (Northeast), San Francisco (West), "
+             "Chicago (Midwest), Houston (Texas and south-central), Atlanta (Southeast) and Seattle "
+             "(Pacific Northwest). Passport, visa, OCI and attestation applications for your "
+             "jurisdiction are processed through VFS Global. Jurisdictions occasionally change (for "
+             "example when the Seattle consulate opened), so confirm which mission covers your state "
+             "on the official website before applying. You can find the consulates in this directory."},
+    {"slug": "find-h1b-sponsor", "title": "How to find an H-1B visa sponsor", "vertical": None,
+     "text": "H-1B is the main work visa for skilled workers; most petitions need an employer to "
+             "sponsor you and, for new H-1Bs, selection in the annual lottery. To find a sponsor: "
+             "target employers that already file many H-1B petitions (large IT and consulting firms "
+             "and many tech companies), check public U.S. Department of Labor disclosure data for who "
+             "sponsors in your field and city, use your university career center if you are on F-1/OPT, "
+             "and network within your profession. Changing employers (an 'H-1B transfer') generally "
+             "does not require a new lottery. This directory's H-1B sponsors page lists top employers "
+             "by certified applications, wages and locations." + _DISCLAIMER},
+    {"slug": "find-a-pandit", "title": "Finding a pandit (priest) for a puja or ceremony",
+     "vertical": "temples",
+     "text": "For home ceremonies — griha pravesh (housewarming), weddings, satyanarayan puja, naming "
+             "ceremonies, or last rites — families usually book a pandit (Hindu priest / purohit) "
+             "through their local temple, which often keeps a list of priests for different traditions "
+             "and languages, or by referral from the community. The temple or priest can advise on the "
+             "muhurat (auspicious time), the samagri (materials) to arrange, and the specific rituals. "
+             "Sikh and Jain ceremonies are arranged through the local gurdwara or Jain center. Find "
+             "temples in this directory or ask Dost for one near you."},
+    {"slug": "cricket-in-usa", "title": "Playing cricket in the USA", "vertical": None,
+     "text": "Cricket is hugely popular in the Indian-American community, and the US scene is growing "
+             "fast — from local metro leagues and clubs up to the national setup under USA Cricket and "
+             "the professional Major League Cricket. Most big metros (Dallas, the Bay Area, New Jersey, "
+             "Atlanta, Chicago, Houston, Seattle) have weekend leagues playing tape-ball and hard-ball "
+             "cricket, with indoor cricket in winter and junior programs for kids. To get involved, "
+             "look for a local league or club in your area — many welcome new players. Community "
+             "associations and WhatsApp groups are the usual way people find a team."},
+    {"slug": "renting-apartment-usa", "title": "Renting your first apartment in the USA", "vertical": None,
+     "text": "Landlords typically check your credit and income, so newcomers with no US credit history "
+             "may be asked for a larger deposit, a US-based co-signer/guarantor, or a few months' rent "
+             "up front. Bring pay stubs or an offer letter, bank statements and ID. Read the lease for "
+             "the term, deposit, and which utilities are included. Many Indian families start in areas "
+             "with a strong desi community and good schools; Indian-American realtors can help you find "
+             "a place. Find realtors in this directory or ask Dost about a specific metro." + _DISCLAIMER},
+    {"slug": "bringing-parents-to-visit", "title": "Bringing your parents to visit the USA",
+     "vertical": None,
+     "text": "To bring parents from India to visit, they typically apply for a B-2 visitor (tourist) "
+             "visa at a US consulate in India — there is no special 'parent visa'. They show ties to "
+             "India and funds for the trip; you can support with an invitation letter and, if asked, an "
+             "affidavit of support and your financial documents. Visitor stays are usually up to six "
+             "months per entry. Because US healthcare is very expensive, most families buy visitor "
+             "travel-medical insurance for the trip. Confirm current requirements on the US embassy / "
+             "consulate in India and travel.state.gov." + _DISCLAIMER},
+    {"slug": "shipping-to-india", "title": "Shipping parcels & cargo to India", "vertical": "services",
+     "text": "To send parcels or cargo from the US to India, options range from international couriers "
+             "(fast, pricier) to Indian-American cargo/shipping services that consolidate shipments "
+             "(cheaper for boxes and bulk, slower by sea or air freight). For gifts and documents, a "
+             "courier is simplest; for household goods or large boxes, a desi cargo service is usually "
+             "cheaper. Compare per-kg cost, door-to-door vs pickup, insurance, and customs handling — "
+             "the recipient in India may owe customs duty on higher-value items. Find shipping/cargo "
+             "services in this directory's services category."},
+    {"slug": "buying-a-car-usa", "title": "Buying your first car in the USA", "vertical": None,
+     "text": "You can pay cash or finance, but auto loans need US credit history, so newcomers may face "
+             "higher rates or need a larger down payment — some banks and credit unions offer newcomer "
+             "auto loans. You'll need a driver's license (or learner's permit), auto insurance (required "
+             "in almost every state), and to handle the title and registration at the DMV. Certified "
+             "pre-owned cars add reliability and a warranty. Compare the full out-the-door price, not "
+             "just the monthly payment, and get pre-approved financing so you can negotiate." + _DISCLAIMER},
 ]
 
 

@@ -23,6 +23,17 @@ def test_key_new_topics_present():
         assert s in slugs, s
 
 
+def test_latest_diaspora_topics_present():
+    slugs = {a["slug"] for a in KS.ARTICLES}
+    for s in ("oci-card", "indian-passport-renewal", "consulate-jurisdiction", "find-h1b-sponsor",
+              "find-a-pandit", "cricket-in-usa", "renting-apartment-usa", "bringing-parents-to-visit",
+              "shipping-to-india", "buying-a-car-usa"):
+        assert s in slugs, s
+    by = {a["slug"]: a for a in KS.ARTICLES}
+    for s in ("oci-card", "find-h1b-sponsor", "bringing-parents-to-visit"):   # immigration -> disclaimer
+        assert "professional" in by[s]["text"].lower(), s
+
+
 def test_legal_and_tax_articles_carry_disclaimer():
     by = {a["slug"]: a for a in KS.ARTICLES}
     for s in ("h4-ead", "us-citizenship", "visa-stamping-india", "retirement-401k",
