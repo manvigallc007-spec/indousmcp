@@ -82,3 +82,39 @@ def test_verified_label():
     assert ranking.verified_label(_NOW) == "verified today"
     assert "days ago" in ranking.verified_label(_NOW - dt.timedelta(days=5))
     assert ranking.verified_label(None) is None
+
+
+def test_trust_score_rewards_above_baseline_only():
+    assert ranking.trust_score({"confidence_score": 0.5}) == 0.0        # baseline -> neutral
+    assert ranking.trust_score({"confidence_score": 1.0}) == 1.0
+    assert abs(ranking.trust_score({"confidence_score": 0.9}) - 0.8) < 1e-9
+    assert ranking.trust_score({"confidence_score": 0.2}) == 0.0        # below baseline -> neutral
+    assert ranking.trust_score({}) == 0.0                              # unknown -> neutral, never a penalty
+
+
+def test_higher_confidence_breaks_ties():
+    rows = [
+        _row(id=1, name="Spice", confidence_score=0.5),
+        _row(id=2, name="Spice", confidence_score=0.95),
+    ]
+    out = ranking.rerank(rows, "curry", point=None)
+    assert out[0]["id"] == 2  # equal relevance -> better-sourced (higher-confidence) wins
+
+
+def test_confidence_never_beats_relevance():
+    rows = [
+        _row(id=1, name="Mughlai Express", match_score=0.4, confidence_score=0.5),  # exact, low conf
+        _row(id=2, name="Spice Garden", match_score=0.95, confidence_score=1.0),    # max conf, not exact
+    ]
+    out = ranking.rerank(rows, "mughlai express", point=None)
+    assert out[0]["id"] == 1  # exact-name relevance still dominates the trust nudge
+
+
+def test_featured_outranks_confidence_nudge():
+    # Hierarchy: Featured (W=1.0) is a stronger tiebreak than the trust nudge (max 0.6).
+    rows = [
+        _row(id=1, name="Spice", is_featured=True),          # +1.0
+        _row(id=2, name="Spice", confidence_score=1.0),      # +0.6
+    ]
+    out = ranking.rerank(rows, "curry", point=None)
+    assert out[0]["id"] == 1

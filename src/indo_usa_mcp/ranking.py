@@ -1,9 +1,10 @@
 """Hybrid search ranking shared by every vertical, search_all, and the chatbot.
 
 Combines exact-name match + keyword/tag overlap + vector similarity + proximity decay +
-freshness into one score, so:
+freshness + a source-trust (provenance confidence) nudge into one score, so:
   * an exact listing name ranks #1 — even above a paid Featured listing (W_EXACT >> W_FEATURED),
   * nearby and recently-verified listings rank higher,
+  * among similarly-relevant results, better-sourced (higher-confidence) rows surface first,
   * Featured is only a tiebreak among similarly-relevant results.
 
 No PostGIS: distance is Python haversine, freshness uses `last_seen_at` (when the scraper last
@@ -28,6 +29,8 @@ W_PROXIMITY = 1.5
 W_FRESHNESS = 1.0
 W_FEATURED = 1.0
 W_RATING = 1.3     # star-rating signal (confidence-weighted; community rating preferred over web)
+W_CONFIDENCE = 0.6  # provenance/source-trust nudge: breaks near-ties toward better-sourced rows
+CONF_BASELINE = 0.5  # only confidence ABOVE this rewards; unknown/low -> neutral (never a penalty)
 STALE_HALFLIFE_DAYS = 45.0
 PROX_HALFLIFE_MI = 5.0
 _CANDIDATES = 100  # how many relevance candidates to rerank
@@ -60,6 +63,21 @@ def rating_score(row: dict) -> float:
     quality = max(0.0, min((float(val) - 3.0) / 2.0, 1.0))   # 3★ -> 0.0, 5★ -> 1.0
     confidence = min(cnt / RATING_CONF_FULL, 1.0)
     return quality * confidence
+
+
+def trust_score(row: dict) -> float:
+    """Source-trust signal in [0,1] from the recorded provenance confidence (`confidence_score`).
+    Rewards above-baseline confidence only — an unknown or low value returns 0.0 (no reward AND no
+    penalty), so a listing is never demoted for its source; higher-confidence rows just win near-ties.
+    e.g. 0.5 -> 0.0, 0.7 -> 0.4, 0.9 -> 0.8, 1.0 -> 1.0."""
+    val = row.get("confidence_score")
+    if val is None:
+        return 0.0
+    try:
+        c = float(val)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, min((c - CONF_BASELINE) / (1.0 - CONF_BASELINE), 1.0))
 
 # category-ish columns to treat as an exact/keyword match target, across verticals
 _CAT_FIELDS = ("cuisine_type", "store_type", "salon_type", "studio_type", "service_type",
@@ -150,6 +168,7 @@ def score_row(row: dict, q_norm: str, q_terms: set[str],
         + W_FRESHNESS * freshness_score(row.get("last_seen_at"))
         + W_FEATURED * featured
         + rating_weight * rating_score(row)
+        + W_CONFIDENCE * trust_score(row)
     )
 
 
