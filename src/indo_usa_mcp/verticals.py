@@ -501,7 +501,7 @@ def _table_columns(table: str) -> set[str]:
         return set()
 
 
-def merge_duplicates(dry_run: bool = True) -> dict[str, Any]:
+def dedupe_listings(dry_run: bool = True) -> dict[str, Any]:
     """Merge duplicate listings (same name+city AND same physical place) into one: keep the best
     record, gap-fill its empty fields + union tags/languages from the rest, and soft-delete the
     others (reversible). dry_run=True only reports what would merge. Events are skipped."""

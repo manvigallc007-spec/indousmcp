@@ -209,7 +209,7 @@ def cmd_telegram_bot(args: argparse.Namespace) -> None:
 
 def cmd_dedupe(args: argparse.Namespace) -> None:
     from . import verticals
-    _print(verticals.merge_duplicates(dry_run=not args.apply))
+    _print(verticals.dedupe_listings(dry_run=not args.apply))
 
 
 def cmd_enrich_llm(args: argparse.Namespace) -> None:
@@ -228,6 +228,11 @@ def cmd_movies_refresh(args: argparse.Namespace) -> None:
 def cmd_consulates_seed(args: argparse.Namespace) -> None:
     from . import consulates
     _print(consulates.seed())
+
+
+def cmd_curate(args: argparse.Namespace) -> None:
+    from . import curation
+    _print(curation.run(apply=args.apply))
 
 
 def cmd_backfill_geo(args: argparse.Namespace) -> None:
@@ -714,6 +719,12 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("consulates-seed",
                    help="Seed Indian consulates + embassy (services vertical, deduped)"
                    ).set_defaults(func=cmd_consulates_seed)
+
+    cu = sub.add_parser("curate",
+                        help="Cleanup sweep for acquired data: merge dupes + remove non-USA + "
+                             "suppress unusable, then a quality snapshot (dry-run unless --apply)")
+    cu.add_argument("--apply", action="store_true", help="Actually run the cleanup (reversible)")
+    cu.set_defaults(func=cmd_curate)
 
     bg = sub.add_parser("backfill-geo",
                         help="Forward-geocode address-only listings (Census/Nominatim) so they sort by distance")
