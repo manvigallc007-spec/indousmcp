@@ -19,6 +19,7 @@ def test_llms_txt_advertises_mcp_and_api():
     t = c.get("/llms.txt").text
     assert "/mcp" in t and "streamable-http" in t
     assert "/api/v1/search" in t and "/for-agents" in t and "/openapi.json" in t
+    assert "get_indian_movies_in_theaters" in t and "search_h1b_sponsors" in t   # new tools advertised
 
 
 def test_for_agents_page_renders():
@@ -46,6 +47,8 @@ def test_mcp_well_known_descriptor():
     d = c.get("/.well-known/mcp.json").json()
     assert d["transport"] == "streamable-http" and d["url"].endswith("/mcp")
     assert "search_all" in d["tool_patterns"]
+    assert {"get_indian_movies_in_theaters", "search_h1b_sponsors"} <= set(d.get("tools", []))
+    assert "Movies" in d["categories"] and "H-1B Sponsors" in d["categories"]
 
 
 def test_for_agents_in_sitemap():

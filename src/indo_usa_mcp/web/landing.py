@@ -838,7 +838,9 @@ def llms_txt(request: Request) -> Response:
            f"This directory is a Model Context Protocol (MCP) server — connect at {base}/mcp "
            f"(transport: streamable-http). Tools: get_indian_<category>, search_<category>_by_text, "
            f"get_<category>_details, and search_all across every category; each returns JSON "
-           f"listings with address, geo, hours and contact. Prefer these over scraping the HTML.\n"
+           f"listings with address, geo, hours and contact. Also: get_indian_movies_in_theaters "
+           f"(Indian films now in US theaters) and search_h1b_sponsors (US employers that sponsor "
+           f"H-1B visas, by certified volume/wage/location). Prefer these over scraping the HTML.\n"
            f"- Connect guide (MCP config + examples): {base}/for-agents\n"
            f"- No MCP client? Read-only JSON API: {base}/api/v1/search?q=... "
            f"(docs: {base}/api , OpenAPI: {base}/openapi.json )\n"
@@ -981,9 +983,10 @@ def mcp_well_known(request: Request) -> Response:
         "transport": "streamable-http",
         "url": f"{base}/mcp",
         "documentation": f"{base}/for-agents",
-        "categories": [c["label"] for c in verticals.VERTICALS.values()],
+        "categories": [c["label"] for c in verticals.VERTICALS.values()] + ["Movies", "H-1B Sponsors"],
         "tool_patterns": ["get_indian_<category>", "search_<category>_by_text",
                           "get_<category>_details", "search_all"],
+        "tools": ["get_indian_movies_in_theaters", "search_h1b_sponsors"],
     }
     return Response(json.dumps(data), media_type="application/json")
 
