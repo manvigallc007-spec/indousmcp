@@ -31,10 +31,12 @@ _FEATURED = "(is_featured AND (featured_until IS NULL OR featured_until > now())
 CATEGORY_CSS = """
 .catgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(225px,1fr));gap:12px;margin:16px 0}
 .catcard{display:flex;align-items:center;gap:13px;background:#fff;border:1px solid #ececec;
- border-radius:14px;padding:15px;color:#1f2430;transition:.15s}
-.catcard:hover{border-color:var(--c);transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.07)}
-.catcard .cc-ic{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;font-size:24px;
- background:#f4f2f0;background:color-mix(in srgb,var(--c) 16%,#fff);flex:0 0 auto}
+ border-top:3px solid var(--c);border-radius:14px;padding:15px;color:#1f2430;transition:.15s}
+.catcard:hover{border-color:var(--c);border-top-color:var(--c);transform:translateY(-2px);
+ box-shadow:0 10px 24px rgba(0,0,0,.09)}
+.catcard .cc-ic{width:48px;height:48px;border-radius:13px;display:grid;place-items:center;font-size:25px;
+ background:#f4f2f0;background:linear-gradient(135deg,color-mix(in srgb,var(--c) 26%,#fff),
+ color-mix(in srgb,var(--c) 9%,#fff));flex:0 0 auto}
 .catcard .cc-tx{display:flex;flex-direction:column;line-height:1.3;min-width:0}
 .catcard .cc-tx b{font-size:15px} .catcard .cc-n{color:var(--c);font-size:12px;font-weight:700}
 .catcard .cc-bl{color:#6b7280;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -42,6 +44,10 @@ CATEGORY_CSS = """
  background:color-mix(in srgb,var(--c) 8%,#fff);border-radius:14px;padding:14px 16px;margin:6px 0 18px}
 .cathead .ch-ic{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;font-size:25px;background:#fff}
 .cathead b{font-size:21px;line-height:1.15}
+.bhero{background:linear-gradient(135deg,#fff4ea,#ffe7d3);border:1px solid #f2e2d0;border-radius:20px;
+ padding:30px 26px;margin:4px 0 6px;text-align:center}
+.bhero h1{margin:0 0 6px;font-size:29px;letter-spacing:-.01em}
+.bhero p{margin:0 auto;max-width:560px;color:#8a745e;font-size:15.5px}
 """
 
 
@@ -57,19 +63,45 @@ def _counts() -> dict[str, int]:
     return out
 
 
+def _tile(icon: str, color: str, label: str, href: str, count: str, blurb: str) -> str:
+    return (f"<a class='catcard' href='{href}' style='--c:{color}'>"
+            f"<span class='cc-ic'>{icon}</span>"
+            f"<span class='cc-tx'><b>{html.escape(label)}</b>"
+            f"<span class='cc-n'>{html.escape(count)}</span>"
+            f"<span class='cc-bl'>{html.escape(blurb)}</span></span></a>")
+
+
+def _extra_categories() -> list[str]:
+    """Tiles for the non-directory verticals (movies, H-1B sponsors) so they're discoverable too."""
+    tiles = []
+    try:
+        from .. import movies
+        nm = len(movies.list_in_theaters(limit=200))
+    except Exception:
+        nm = 0
+    tiles.append(_tile(_CAT_ICON.get("movies", "🎬"), _CAT_COLOR.get("movies", "#7b1fa2"),
+                       "Movies", "/movies", f"{nm} now playing" if nm else "In theaters",
+                       "Indian films now in US theaters"))
+    try:
+        from .. import h1b
+        ne = h1b.count()
+    except Exception:
+        ne = 0
+    tiles.append(_tile(_CAT_ICON.get("employers", "💼"), _CAT_COLOR.get("employers", "#455a64"),
+                       "H-1B Sponsors", "/employers", f"{ne:,} employers" if ne else "Visa sponsors",
+                       "US employers that sponsor visas"))
+    return tiles
+
+
 def category_grid() -> str:
-    """Rich category cards (icon + name + live count + blurb) — used on home and /browse."""
+    """Rich category tiles (icon + name + live count + blurb) — used on home and /browse."""
     counts = _counts()
-    cells = []
-    for v, cfg in verticals.VERTICALS.items():
-        href = "/events" if v == "events" else f"/browse/{v}"
-        n = counts.get(v, 0)
-        cells.append(
-            f"<a class='catcard' href='{href}' style='--c:{_CAT_COLOR.get(v, '#777')}'>"
-            f"<span class='cc-ic'>{_CAT_ICON.get(v, '•')}</span>"
-            f"<span class='cc-tx'><b>{html.escape(cfg['label'])}</b>"
-            f"<span class='cc-n'>{n} listing{'s' if n != 1 else ''}</span>"
-            f"<span class='cc-bl'>{html.escape(_CAT_BLURB.get(v, ''))}</span></span></a>")
+    cells = [_tile(_CAT_ICON.get(v, "•"), _CAT_COLOR.get(v, "#777"), cfg["label"],
+                   "/events" if v == "events" else f"/browse/{v}",
+                   f"{counts.get(v, 0)} listing{'s' if counts.get(v, 0) != 1 else ''}",
+                   _CAT_BLURB.get(v, ""))
+             for v, cfg in verticals.VERTICALS.items()]
+    cells += _extra_categories()
     return f"<div class='catgrid'>{''.join(cells)}</div>"
 
 
@@ -156,8 +188,8 @@ def _label(v: str) -> str:
 # ---------------------------------------------------------------- browse indexes
 def browse_root(request: Request) -> HTMLResponse:
     tr = i18n.t(request)
-    body = (f"<h1>{html.escape(tr['browse'])}</h1>"
-            f"<p class='muted'>{html.escape(tr['browse_intro'])}</p>"
+    body = (f"<div class='bhero'><h1>{html.escape(tr['browse'])}</h1>"
+            f"<p>{html.escape(tr['browse_intro'])}</p></div>"
             f"{category_grid()}"
             "<p style='margin-top:6px;display:flex;gap:10px;flex-wrap:wrap'>"
             "<a class='cta' href='/events'>📅 Upcoming events &amp; festivals →</a>"
