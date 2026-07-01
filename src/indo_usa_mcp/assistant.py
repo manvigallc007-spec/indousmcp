@@ -901,6 +901,49 @@ def _movies_reply(query: str, filters: dict | None) -> dict:
             "buy tickets near you. 🎬", "cards": cards, "provider": "movies"}
 
 
+# --- H-1B visa sponsors: another non-geographic vertical (its own table), wired into the chat.
+_H1B_WORDS = ("h-1b", "h1b", "h 1b", "visa sponsor", "sponsor visa", "sponsors visa",
+              "visa sponsorship", "sponsoring employer", "who sponsors", "companies that sponsor")
+# Words to drop when guessing a company name from the query (word-based, so 'infosys' is preserved).
+_H1B_STOP = {"visa", "sponsor", "sponsors", "sponsoring", "sponsorship", "employer", "employers",
+             "company", "companies", "hire", "hires", "hiring", "who", "that", "which", "for", "the",
+             "top", "best", "list", "show", "find", "near", "indians", "indian", "people", "jobs",
+             "job", "and", "are", "any"}
+
+
+def _is_h1b_query(query: str) -> bool:
+    return any(w in (query or "").lower() for w in _H1B_WORDS)
+
+
+def _h1b_reply(query: str, filters: dict | None) -> dict:
+    """Answer an H-1B sponsor query from the h1b_sponsors table."""
+    from . import h1b
+    _city, st = _extract_location(query)                   # robust "...in TX / in New Jersey" parsing
+    words = [w for w in re.findall(r"[a-z][a-z&.]{2,}", (query or "").lower())
+             if w not in _H1B_STOP]
+    name = " ".join(words).strip() or None
+    rows = h1b.search_sponsors(q=name, state=st, limit=12)
+    if not rows and name and st:                           # too narrow -> widen
+        rows = h1b.search_sponsors(state=st, limit=12)
+    if not rows and name:
+        rows = h1b.search_sponsors(q=name, limit=12)
+    if not rows:
+        return {"reply": "I don't have H-1B sponsor data loaded yet (or nothing matched). Try the "
+                "Employers page.", "cards": [], "provider": "h1b"}
+    cards = []
+    for r in rows:
+        wage = f" · ~${r['median_wage']:,}/yr median" if r.get("median_wage") else ""
+        roles = ", ".join((r.get("top_titles") or [])[:3])
+        cards.append({"vertical": "employers", "id": None,
+                      "name": r.get("display_name") or r["employer"],
+                      "description": f"{r['certified']:,} certified H-1B applications{wage}."
+                      + (f" Roles: {roles}." if roles else ""),
+                      "features": list((r.get("top_states") or [])[:5])})
+    where = f" in {st}" if st else ""
+    return {"reply": f"Top H-1B visa sponsors{where}, by certified applications. 💼",
+            "cards": cards, "provider": "h1b"}
+
+
 def reply(messages: list[dict], geo: dict | None = None, filters: dict | None = None) -> dict:
     """Produce an assistant reply for a chat history. Never raises into the web layer."""
     messages = [m for m in (messages or []) if m.get("role") in ("user", "assistant")][-12:]
@@ -910,10 +953,12 @@ def reply(messages: list[dict], geo: dict | None = None, filters: dict | None = 
     # depending on the model to translate its own tool query (the part that was failing). The reply
     # still goes back in the user's language via _lang_note.
     query = _english(raw, filters)
-    # Movies are national (their own table, not the place directory) -> answer directly, before any
-    # "which city?" prompt or place search.
+    # Movies + H-1B sponsors are national (their own tables, not the place directory) -> answer
+    # directly, before any "which city?" prompt or place search.
     if query and _is_movie_query(query):
         return _movies_reply(query, filters)
+    if query and _is_h1b_query(query):
+        return _h1b_reply(query, filters)
     if _needs_location(messages, geo, filters):
         return {"reply": "Which city or area should I look in? For example: “Edison, NJ”, "
                 "“Jersey City”, or “Bay Area”.", "cards": [], "provider": "clarify"}

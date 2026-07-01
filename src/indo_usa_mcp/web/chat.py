@@ -46,13 +46,13 @@ _SUGGESTIONS = [
 _CAT_ICON = {"restaurants": "🍛", "temples": "🛕", "groceries": "🛒", "professionals": "🩺",
              "salons": "💇", "events": "🎉", "apparel": "👗", "sweets": "🍬", "studios": "🧘",
              "services": "💸", "community": "🤝", "legal": "⚖️", "education": "📚",
-             "realestate": "🏡", "finance": "🧾", "movies": "🎬"}
+             "realestate": "🏡", "finance": "🧾", "movies": "🎬", "employers": "💼"}
 _CAT_COLOR = {"restaurants": "#c1440e", "temples": "#b8860b", "groceries": "#2e7d32",
               "professionals": "#1565c0", "salons": "#ad1457", "events": "#6a1b9a",
               "apparel": "#c2185b", "sweets": "#e65100", "studios": "#00838f",
               "services": "#37474f", "community": "#5d4037", "legal": "#3949ab",
               "education": "#00897b", "realestate": "#8d6e63", "finance": "#546e7a",
-              "movies": "#7b1fa2"}
+              "movies": "#7b1fa2", "employers": "#455a64"}
 # One-line descriptor per category — the shared "identity" used on cards/headers everywhere.
 _CAT_BLURB = {"restaurants": "Dosa, biryani, thali & more", "temples": "Hindu · Sikh · Jain",
               "groceries": "Spices, produce, frozen", "professionals": "Doctors, dentists, clinics",

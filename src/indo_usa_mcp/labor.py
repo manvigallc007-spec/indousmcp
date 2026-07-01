@@ -108,10 +108,15 @@ def _resolve(source: str) -> tuple[str, bool]:
     return tmp, True
 
 
+def _new_detail() -> dict:
+    return {"wages": [], "titles": Counter(), "states": Counter(), "cities": Counter()}
+
+
 def _aggregate(path: str, max_rows: int | None = None) -> dict[str, Any]:
     employers: Counter = Counter()
     occ_wages: dict[str, list[float]] = defaultdict(list)
     states: Counter = Counter()
+    emp_detail: dict[str, dict] = {}          # per-employer: wages(capped)/titles/states/cities
     total = 0
     for row in _iter_rows(path):
         if _norm_key(_pick(row, "VISA_CLASS")) != "H-1B":          # exclude H-1B1 / E-3
@@ -119,20 +124,57 @@ def _aggregate(path: str, max_rows: int | None = None) -> dict[str, Any]:
         if not _is_certified(_pick(row, "CASE_STATUS")):
             continue
         total += 1
-        emp = (str(_pick(row, "EMPLOYER_NAME") or "")).strip()
-        if emp:
-            employers[" ".join(emp.upper().split())] += 1
+        emp = " ".join((str(_pick(row, "EMPLOYER_NAME") or "")).strip().upper().split())
         wage = _annual_wage(_pick(row, "WAGE_RATE_OF_PAY_FROM", "WAGE_RATE_OF_PAY"),
                             _pick(row, "WAGE_UNIT_OF_PAY", "WAGE_UNIT"))
-        occ = (str(_pick(row, "SOC_TITLE", "JOB_TITLE") or "")).strip()
-        if occ and wage:
-            occ_wages[" ".join(occ.title().split())].append(wage)
+        occ = " ".join((str(_pick(row, "SOC_TITLE", "JOB_TITLE") or "")).strip().title().split())
         st = _norm_key(_pick(row, "WORKSITE_STATE", "WORKSITE_STATE_1", "EMPLOYER_STATE"))
+        city = " ".join((str(_pick(row, "WORKSITE_CITY", "WORKSITE_CITY_1", "EMPLOYER_CITY")
+                             or "")).strip().title().split())
+        if occ and wage:
+            occ_wages[occ].append(wage)
         if st:
             states[st] += 1
+        if emp:
+            employers[emp] += 1
+            d = emp_detail.get(emp) or emp_detail.setdefault(emp, _new_detail())
+            if wage and len(d["wages"]) < 100:       # cap per-employer wage sample (bound memory)
+                d["wages"].append(wage)
+            if occ:
+                d["titles"][occ] += 1
+            if st:
+                d["states"][st] += 1
+            if city:
+                d["cities"][city] += 1
         if max_rows and total >= max_rows:
             break
-    return {"total": total, "employers": employers, "occ_wages": occ_wages, "states": states}
+    return {"total": total, "employers": employers, "occ_wages": occ_wages, "states": states,
+            "emp_detail": emp_detail}
+
+
+def _to_sponsors(agg: dict, fiscal_year: str, top_n: int = 5000) -> int:
+    """Upsert the top sponsoring employers into the searchable h1b_sponsors table."""
+    from . import db
+    employers, detail = agg["employers"], agg.get("emp_detail", {})
+    n = 0
+    for emp, count in employers.most_common(top_n):
+        d = detail.get(emp) or {}
+        wages = d.get("wages") or []
+        med = int(statistics.median(wages)) if wages else None
+        titles = [t for t, _ in (d.get("titles") or Counter()).most_common(5)]
+        st = [s for s, _ in (d.get("states") or Counter()).most_common(5)]
+        cities = [c for c, _ in (d.get("cities") or Counter()).most_common(5)]
+        db.execute(
+            "INSERT INTO h1b_sponsors (employer, display_name, certified, median_wage, top_titles, "
+            "top_states, top_cities, fiscal_year, updated_at) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,now()) "
+            "ON CONFLICT (employer) DO UPDATE SET display_name=EXCLUDED.display_name, "
+            "certified=EXCLUDED.certified, median_wage=EXCLUDED.median_wage, "
+            "top_titles=EXCLUDED.top_titles, top_states=EXCLUDED.top_states, "
+            "top_cities=EXCLUDED.top_cities, fiscal_year=EXCLUDED.fiscal_year, updated_at=now()",
+            (emp, emp.title(), count, med, titles, st, cities, fiscal_year or None))
+        n += 1
+    return n
 
 
 def _to_knowledge(agg: dict, fiscal_year: str, top_n: int) -> int:
@@ -200,5 +242,10 @@ def import_disclosure(source: str | None = None, fiscal_year: str | None = None,
                 pass
     fy = (fiscal_year or settings.dol_h1b_fiscal_year or "").strip()
     kb = _to_knowledge(agg, fy, top_n)
+    try:
+        sponsors = _to_sponsors(agg, fy)
+    except Exception:
+        sponsors = 0
     return {"ok": True, "certified_h1b": agg["total"], "employers": len(agg["employers"]),
-            "occupations": len(agg["occ_wages"]), "kb_documents": kb, "fiscal_year": fy or None}
+            "occupations": len(agg["occ_wages"]), "kb_documents": kb, "sponsors": sponsors,
+            "fiscal_year": fy or None}

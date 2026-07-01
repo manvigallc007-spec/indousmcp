@@ -161,7 +161,8 @@ def browse_root(request: Request) -> HTMLResponse:
             f"{category_grid()}"
             "<p style='margin-top:6px;display:flex;gap:10px;flex-wrap:wrap'>"
             "<a class='cta' href='/events'>📅 Upcoming events &amp; festivals →</a>"
-            "<a class='cta' href='/movies'>🎬 Indian movies in theaters →</a></p>")
+            "<a class='cta' href='/movies'>🎬 Indian movies in theaters →</a>"
+            "<a class='cta' href='/employers'>💼 H-1B visa sponsors →</a></p>")
     return _page(f"Browse · {settings.platform_name}",
                  "Browse Indian-American businesses, temples and events by category and city.", body)
 
@@ -528,6 +529,44 @@ def movies_page(request: Request) -> HTMLResponse:
                  canonical=f"{_base()}/movies")
 
 
+def employers_page(request: Request) -> HTMLResponse:
+    """Searchable H-1B sponsors directory (from DOL disclosure data)."""
+    from .. import h1b
+    q = (request.query_params.get("q") or "").strip() or None
+    state = (request.query_params.get("state") or "").strip() or None
+    rows = h1b.search_sponsors(q=q, state=state, limit=60)
+    form = (f"<form method='get' style='display:flex;gap:8px;flex-wrap:wrap;margin:14px 0'>"
+            f"<input name='q' value='{html.escape(q or '')}' placeholder='Employer (e.g. Infosys)' "
+            f"style='flex:1 1 220px;padding:9px 12px;border:1px solid #e2e0dd;border-radius:9px'>"
+            f"<input name='state' value='{html.escape(state or '')}' placeholder='State (e.g. TX)' "
+            f"maxlength='2' style='width:90px;padding:9px 12px;border:1px solid #e2e0dd;border-radius:9px'>"
+            f"<button class='cta' type='submit'>Search</button></form>")
+    if rows:
+        items = ""
+        for r in rows:
+            wage = f"~${r['median_wage']:,}/yr median" if r.get("median_wage") else ""
+            titles = ", ".join((r.get("top_titles") or [])[:3])
+            locs = ", ".join((r.get("top_states") or [])[:5])
+            items += (f"<div class='lc'><h3>{html.escape(r.get('display_name') or r['employer'])}</h3>"
+                      f"<div class='meta'>{r['certified']:,} certified H-1B applications"
+                      + (f" · {html.escape(wage)}" if wage else "") + "</div>"
+                      + (f"<div class='meta'>Roles: {html.escape(titles)}</div>" if titles else "")
+                      + (f"<div class='meta'>📍 {html.escape(locs)}</div>" if locs else "") + "</div>")
+        body = (f"<h1>H-1B visa sponsors</h1><p class='muted'>US employers that sponsor H-1B visas "
+                f"(the visa most Indians from India use to work here), ranked by certified "
+                f"applications. {len(rows)} shown.</p>{form}{items}"
+                "<p class='muted' style='margin-top:18px;font-size:12px'>Aggregated public figures "
+                "from U.S. Department of Labor LCA disclosure data.</p>")
+    else:
+        empty = ("No sponsors loaded yet — run the H-1B import." if not (q or state)
+                 else "No sponsors match that search.")
+        body = f"<h1>H-1B visa sponsors</h1>{form}<p class='muted'>{empty}</p>"
+    return _page(f"H-1B visa sponsors · {settings.platform_name}",
+                 "Search US employers that sponsor H-1B visas — certified application counts, median "
+                 "wages, top roles and locations, from U.S. Department of Labor data.",
+                 body, canonical=f"{_base()}/employers")
+
+
 def _when(dt) -> str:
     if not hasattr(dt, "strftime"):
         return str(dt)[:16]
@@ -589,8 +628,9 @@ def events_page(request: Request) -> HTMLResponse:
 def sitemap(request: Request) -> Response:
     base = _base()
     urls = [f"{base}/", f"{base}/browse", f"{base}/explore", f"{base}/events", f"{base}/movies",
-            f"{base}/insights", f"{base}/for-business", f"{base}/for-agents", f"{base}/submit",
-            f"{base}/about", f"{base}/privacy", f"{base}/terms", f"{base}/contact", f"{base}/faq"]
+            f"{base}/employers", f"{base}/insights", f"{base}/for-business", f"{base}/for-agents",
+            f"{base}/submit", f"{base}/about", f"{base}/privacy", f"{base}/terms", f"{base}/contact",
+            f"{base}/faq"]
     urls += [f"{base}/browse/{v}" for v in verticals.VERTICALS]
     # All (vertical × city) pages that actually have active listings.
     for v in verticals.VERTICALS:
@@ -919,6 +959,7 @@ routes = [
     Route("/browse", browse_root, methods=["GET"]),
     Route("/events", events_page, methods=["GET"]),
     Route("/movies", movies_page, methods=["GET"]),
+    Route("/employers", employers_page, methods=["GET"]),
     Route("/insights", insights, methods=["GET"]),
     Route("/for-business", for_business, methods=["GET"]),
     Route("/for-agents", for_agents, methods=["GET"]),

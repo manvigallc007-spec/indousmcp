@@ -76,6 +76,19 @@ def get_indian_movies_in_theaters(language: str | None = None, limit: int = 40) 
 
 
 @mcp.tool()
+def search_h1b_sponsors(query: str | None = None, state: str | None = None,
+                        limit: int = 25) -> dict[str, Any]:
+    """Search US employers that sponsor H-1B visas — the visa most Indians-from-India use to work in
+    the USA. Filter by employer name (`query`) and/or worksite `state` (2-letter). Ranked by number
+    of certified Labor Condition Applications. Each result has `certified` (count), `median_wage`,
+    `top_titles`, `top_states`, `top_cities`. Aggregated public figures from U.S. DOL disclosure data.
+    """
+    from . import h1b
+    rows = h1b.search_sponsors(q=query, state=state, limit=limit)
+    return {"results": rows, "count": len(rows), "source": "U.S. DOL H-1B LCA disclosure data"}
+
+
+@mcp.tool()
 def get_restaurant_details(restaurant_id: int) -> dict[str, Any]:
     """Fetch the full canonical record for one restaurant, plus its version history."""
     record = queries.get_restaurant_details(restaurant_id)
