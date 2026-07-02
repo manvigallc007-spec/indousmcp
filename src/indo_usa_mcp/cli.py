@@ -225,6 +225,11 @@ def cmd_movies_refresh(args: argparse.Namespace) -> None:
     _print(movies.refresh())
 
 
+def cmd_llm_check(args: argparse.Namespace) -> None:
+    from . import assistant
+    _print(assistant.diagnose())
+
+
 def cmd_consulates_seed(args: argparse.Namespace) -> None:
     from . import consulates
     _print(consulates.seed())
@@ -719,6 +724,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("consulates-seed",
                    help="Seed Indian consulates + embassy (services vertical, deduped)"
                    ).set_defaults(func=cmd_consulates_seed)
+
+    sub.add_parser("llm-check",
+                   help="Diagnose the live assistant: prints LLM config + a real ping to the "
+                        "provider with the exact failure reason (never prints the key)"
+                   ).set_defaults(func=cmd_llm_check)
 
     cu = sub.add_parser("curate",
                         help="Cleanup sweep for acquired data: merge dupes + remove non-USA + "

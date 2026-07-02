@@ -797,6 +797,51 @@ def complete_text(system: str, user: str) -> str | None:
         return None
 
 
+def _explain_http(code: int) -> str:
+    return {
+        401: "API key rejected (401). LLM_API_KEY is missing or invalid for this provider.",
+        403: "Forbidden (403). The key may lack access, or the model/region is restricted.",
+        404: "Not found (404). The base URL or model is wrong for this provider.",
+        429: "Rate-limited (429). The free tier is momentarily exhausted — retry shortly.",
+    }.get(code, f"Provider returned HTTP {code} — see 'error' (a common cause is a decommissioned "
+                f"model name in LLM_MODEL).")
+
+
+def diagnose() -> dict[str, Any]:
+    """Explain whether the LIVE assistant (LLM) is usable. Safe to run in prod: it NEVER prints the
+    key — only whether one is set — and makes one tiny 'ping' call to the configured LLM so the exact
+    failure (401 bad key / 400 decommissioned model / connect timeout) is visible instead of the
+    generic 'live assistant unavailable' the chat shows. Run in the web container's environment."""
+    key_set = bool(settings.llm_api_key and settings.llm_api_key != "ollama")
+    info: dict[str, Any] = {
+        "provider": settings.llm_provider, "llm_enabled": settings.llm_enabled,
+        "base_url": settings.effective_llm_base_url, "model": settings.effective_llm_model,
+        "use_tools": settings.effective_llm_use_tools, "api_key_set": key_set,
+        "llm_active": llm_active(),
+    }
+    if not settings.llm_enabled:
+        info["status"] = "off"
+        info["reason"] = ("LLM_PROVIDER is 'search' — there is no live assistant, only templated "
+                          "search. Set LLM_PROVIDER=groq and LLM_API_KEY=<free Groq key> in .env, "
+                          "then redeploy.")
+        return info
+    hosted = info["base_url"].startswith("http") and "localhost" not in info["base_url"]
+    if hosted and not key_set:
+        info["hint"] = "LLM_API_KEY looks unset (still the default) — a hosted provider will reject calls."
+    try:
+        msg = _chat([{"role": "user", "content": "ping"}], use_tools=False)
+        info["status"] = "ok"
+        info["sample"] = (msg.get("content") or "")[:80]
+    except httpx.HTTPStatusError as exc:
+        info.update(status="error", http_status=exc.response.status_code,
+                    error=exc.response.text[:300], reason=_explain_http(exc.response.status_code))
+    except Exception as exc:
+        info.update(status="error", error=f"{type(exc).__name__}: {exc}",
+                    reason=(f"Could not reach the LLM at {info['base_url']} — check the VPS can "
+                            "egress there (DNS/firewall) and the URL is correct."))
+    return info
+
+
 # Local-intent words that benefit from a location; and a crude "did they name a place" check.
 _LOCAL_WORDS = ("restaurant", "food", "eat", "dinner", "lunch", "thali", "temple", "mandir",
                 "grocery", "store", "salon", "threading", "doctor", "clinic", "dentist",
