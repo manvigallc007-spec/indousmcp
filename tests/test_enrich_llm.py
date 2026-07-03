@@ -54,6 +54,30 @@ def test_enrich_listing_generates_grounded_content(monkeypatch):
     assert any("INSERT INTO ai_content" in sql for sql, _ in executed)
 
 
+def test_enrich_listing_folds_review_summary_into_embedding(monkeypatch):
+    # Regression: only `desc` used to reach the embedded text; `rsum` (real customer language) was
+    # generated + stored but never embedded, silently losing that signal for semantic search.
+    monkeypatch.setattr(el.assistant, "llm_active", lambda: True)
+
+    def fake_complete(system, user):
+        return "Polished description." if "editor" in system else "Diners praise the dosa."
+    monkeypatch.setattr(el.assistant, "complete_text", fake_complete)
+    monkeypatch.setattr(el.db, "query_one", lambda *a, **k: None)
+    import indo_usa_mcp.embeddings as emb
+    monkeypatch.setattr(emb, "enabled", lambda: True)
+    monkeypatch.setattr(emb, "text_for", lambda row: "base facts")
+    captured = {}
+    monkeypatch.setattr(emb, "embed", lambda text: captured.setdefault("text", text) or [0.0])
+    monkeypatch.setattr(emb, "to_vector_literal", lambda vec: "[0]")
+    executed = []
+    monkeypatch.setattr(el.db, "execute", lambda sql, params=None: executed.append((sql, params)))
+
+    el.enrich_listing("restaurants", _row(),
+                      [{"body": "Great dosa"}, {"body": "Good filter coffee"}])
+    assert "Polished description." in captured["text"]
+    assert "Diners praise the dosa." in captured["text"]     # review summary now reaches the vector
+
+
 def test_enrich_listing_skips_unchanged(monkeypatch):
     from indo_usa_mcp import describe
     monkeypatch.setattr(el.assistant, "llm_active", lambda: True)

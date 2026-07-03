@@ -184,6 +184,63 @@ def text_for(record: dict) -> str:
     return " ".join(parts)
 
 
+def diagnose() -> dict:
+    """Explain what's ACTUALLY vectorized right now: which provider is configured, whether it loads
+    and returns the expected dimension, and per-vertical counts of active listings with no embedding.
+    Safe to run in prod (no secrets involved) — mirrors assistant.diagnose() (the `llm-check` CLI),
+    which resolved the same kind of "is this actually configured the way I think?" question."""
+    info: dict = {"provider": settings.embedding_provider, "expected_dim": settings.embedding_dim,
+                 "enabled": enabled()}
+    if not info["enabled"]:
+        info["status"] = "off"
+        info["reason"] = "EMBEDDING_PROVIDER=none — search falls back to trigram/keyword only."
+        return info
+    try:
+        vec = embed("ping")
+    except Exception as exc:
+        info["status"] = "error"
+        info["error"] = f"{type(exc).__name__}: {exc}"
+        info["reason"] = "The embedder failed to load or run — see error."
+        return info
+    info["actual_dim"] = len(vec)
+    if len(vec) != settings.embedding_dim:
+        info["status"] = "error"
+        info["reason"] = (f"The embedder returns {len(vec)} dims but EMBEDDING_DIM="
+                          f"{settings.embedding_dim} — stored and query vectors would be in "
+                          "DIFFERENT spaces; search would be broken. Fix EMBEDDING_DIM to match.")
+        return info
+    info["status"] = "ok"
+
+    from . import db as _db
+    from . import verticals as _v
+    coverage: dict = {}
+    for vname in _v.VERTICALS:
+        table = _v._table(vname)
+        try:
+            row = _db.query_one(
+                f"SELECT count(*) FILTER (WHERE deleted_at IS NULL AND is_active) AS active, "
+                f"count(*) FILTER (WHERE deleted_at IS NULL AND is_active AND embedding IS NULL) "
+                f"AS missing FROM {table}")
+        except Exception:
+            continue
+        if row and row["active"]:
+            coverage[vname] = {"active": row["active"], "missing": row["missing"]}
+    info["coverage"] = coverage
+    total_missing = sum(c["missing"] for c in coverage.values())
+    if total_missing:
+        info["hint"] = (f"{total_missing} active listing(s) have no embedding — run "
+                        "`embedding-backfill` (or wait for the daily agent).")
+    return info
+
+
 def to_vector_literal(vec: list[float]) -> str:
-    """pgvector text form: '[0.1,0.2,...]' (bind with ::vector)."""
+    """pgvector text form: '[0.1,0.2,...]' (bind with ::vector).
+
+    Validates the vector is the configured dimension first: pgvector's `::vector` cast doesn't check
+    this itself, so a mismatched-dimension vector (e.g. a stray call after EMBEDDING_DIM or the
+    provider changed) would otherwise silently store a corrupt vector rather than fail loudly."""
+    if len(vec) != settings.embedding_dim:
+        raise ValueError(
+            f"embedding has {len(vec)} dims, expected {settings.embedding_dim} "
+            f"(EMBEDDING_DIM/provider mismatch?)")
     return "[" + ",".join(f"{x:.6f}" for x in vec) + "]"

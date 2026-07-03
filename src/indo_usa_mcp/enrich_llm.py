@@ -75,9 +75,14 @@ def enrich_listing(vertical: str, row: dict, reviews: list[dict]) -> dict | None
         "review_summary = EXCLUDED.review_summary, source_hash = EXCLUDED.source_hash, "
         "updated_at = now()", (vertical, row["id"], desc, rsum, src))
 
-    if desc and embeddings.enabled():                 # richer text -> better semantic recall
+    if (desc or rsum) and embeddings.enabled():        # richer text -> better semantic recall
         try:
-            text = embeddings.text_for(row) + " " + desc
+            # Fold BOTH the polished description AND the review summary in — the review summary is
+            # genuine customer language ("great biryani, friendly staff") that the templated
+            # description never carries, and is real signal for phrase-style queries ("authentic
+            # dosa place", "good service"). Previously only `desc` reached the vector; `rsum` was
+            # generated and stored in ai_content but silently never embedded.
+            text = " ".join(t for t in (embeddings.text_for(row), desc, rsum) if t)
             db.execute(f"UPDATE {verticals._table(vertical)} SET embedding = %s::vector WHERE id = %s",
                        (embeddings.to_vector_literal(embeddings.embed(text)), row["id"]))
         except Exception:

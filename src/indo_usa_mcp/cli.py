@@ -235,6 +235,11 @@ def cmd_osm_verify(args: argparse.Namespace) -> None:
     _print(osm_verify.verify_listings(limit_per_vertical=args.limit))
 
 
+def cmd_embedding_check(args: argparse.Namespace) -> None:
+    from . import embeddings
+    _print(embeddings.diagnose())
+
+
 def cmd_consulates_seed(args: argparse.Namespace) -> None:
     from . import consulates
     _print(consulates.seed())
@@ -740,6 +745,11 @@ def build_parser() -> argparse.ArgumentParser:
                              "missing phone/website/tags + raise confidence (reward-only)")
     ov.add_argument("--limit", type=int, default=30, help="Rows to check per vertical (default 30)")
     ov.set_defaults(func=cmd_osm_verify)
+
+    sub.add_parser("embedding-check",
+                   help="Diagnose vectorization: which provider is configured, whether it loads and "
+                        "returns the right dimension, and per-vertical missing-embedding counts"
+                   ).set_defaults(func=cmd_embedding_check)
 
     cu = sub.add_parser("curate",
                         help="Cleanup sweep for acquired data: merge dupes + remove non-USA + "

@@ -1,8 +1,9 @@
 """Auto-discover iCalendar feeds on the websites of orgs already in our database.
 
-An agent scans org websites (temples, restaurants, …) for public calendar (.ics / webcal /
-Google-Calendar) links and records them, so the event scraper picks them up automatically —
-no manual feed configuration. Polite: rate-limited, capped batch per run, re-scans monthly.
+An agent scans org websites (temples, community associations, restaurants, …) for public calendar
+(.ics / webcal / Google-Calendar) links — on the homepage, then a couple common calendar sub-paths
+if needed — and records them, so the event scraper picks them up automatically. No manual feed
+configuration. Polite: rate-limited, capped batch per run, re-scans monthly.
 """
 
 from __future__ import annotations
@@ -19,12 +20,14 @@ from ..config import settings
 
 _HREF = re.compile(r"""(?:href|content)\s*=\s*["']([^"']+)["']""", re.IGNORECASE)
 
-# Websites to scan, drawn from every vertical — temples first (most likely to publish a
-# community event calendar), then the rest.
+# Websites to scan, drawn from every vertical — temples and community associations (sangams,
+# mandals, cultural centers: the orgs that actually RUN diaspora community events) come first as the
+# highest-yield sources, then the rest.
 _SITES_SQL = """
 SELECT website FROM (
     SELECT website, min(pri) AS pri FROM (
         SELECT website, 1 AS pri FROM temples       WHERE website IS NOT NULL AND deleted_at IS NULL
+        UNION ALL SELECT website, 1 FROM community     WHERE website IS NOT NULL AND deleted_at IS NULL
         UNION ALL SELECT website, 2 FROM restaurants   WHERE website IS NOT NULL AND deleted_at IS NULL
         UNION ALL SELECT website, 2 FROM groceries     WHERE website IS NOT NULL AND deleted_at IS NULL
         UNION ALL SELECT website, 3 FROM professionals WHERE website IS NOT NULL AND deleted_at IS NULL
@@ -52,20 +55,47 @@ def extract_ics_links(html: str, base_url: str) -> list[str]:
     return list(dict.fromkeys(out))[:3]
 
 
+# Common paths for an org's events/calendar page, tried when the homepage itself has no direct
+# .ics link. Many WordPress ("The Events Calendar" plugin) / Squarespace sites link their calendar
+# only from a nav item, not the homepage body, so the link never appears in `extract_ics_links` on
+# the homepage HTML alone. One extra polite GET, only when the homepage came up empty.
+_CALENDAR_PATHS = ("events", "calendar", "events-calendar")
+
+
+def _find_ics(site: str) -> str | None:
+    """The first iCal feed for a site: check the homepage, then a couple common calendar sub-paths
+    if the homepage has none. Returns None (not an error) if nothing is found — most sites simply
+    don't publish one, which is expected and not penalized."""
+    try:
+        resp = httpx.get(site, timeout=15, follow_redirects=True,
+                         headers={"User-Agent": settings.scraper_user_agent})
+    except Exception:
+        return None
+    if resp.status_code != 200 or "text/html" not in resp.headers.get("content-type", ""):
+        return None
+    links = extract_ics_links(resp.text, str(resp.url))
+    if links:
+        return links[0]
+    for path in _CALENDAR_PATHS:
+        try:
+            sub = httpx.get(urljoin(str(resp.url), path), timeout=15, follow_redirects=True,
+                            headers={"User-Agent": settings.scraper_user_agent})
+        except Exception:
+            continue
+        if sub.status_code == 200 and "text/html" in sub.headers.get("content-type", ""):
+            links = extract_ics_links(sub.text, str(sub.url))
+            if links:
+                return links[0]
+        time.sleep(0.3)  # politeness between sub-page probes on the SAME site
+    return None
+
+
 def discover_feeds(limit: int = 30) -> dict[str, Any]:
     """Scan a batch of un-checked org websites for calendar feeds; record what's found."""
     scanned = found = 0
     for row in db.query(_SITES_SQL, (limit,)):
         site = row["website"]
-        ics = None
-        try:
-            resp = httpx.get(site, timeout=15, follow_redirects=True,
-                             headers={"User-Agent": settings.scraper_user_agent})
-            if resp.status_code == 200 and "text/html" in resp.headers.get("content-type", ""):
-                links = extract_ics_links(resp.text, str(resp.url))
-                ics = links[0] if links else None
-        except Exception:
-            pass
+        ics = _find_ics(site)
         db.execute(
             "INSERT INTO event_feed_sources (site_url, ics_url, found, last_scanned) "
             "VALUES (%s, %s, %s, now()) ON CONFLICT (site_url) DO UPDATE "
