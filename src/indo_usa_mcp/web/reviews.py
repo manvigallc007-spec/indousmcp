@@ -20,7 +20,7 @@ from starlette.routing import Route
 
 from .. import db, reviews as reviews_mod, tags as tagsmod, verticals
 from ..config import settings
-from . import i18n
+from . import i18n, seo
 from .auth import verify_captcha
 from .common import captcha_field
 from .landing import _FEATURED, _cathead, _label, _page
@@ -54,10 +54,14 @@ _CSS = """<style>
 
 def _fetch(vertical: str, listing_id: int) -> dict | None:
     table = verticals._table(vertical)
+    # Vertical-specific facet columns (cuisine_type, religion, ...) if present -- needed for the
+    # data-derived meta-description clause (seo.primary_facet); not in the base generic column list.
+    facet_cols = seo.facet_select_cols(verticals._table_columns(table))
+    facet_sel = ("," + ",".join(facet_cols)) if facet_cols else ""
     return db.query_one(
         f"SELECT id, name, address_full, city, state, lat, lng, phone, email, website, description, "
         f"tags, languages, is_claimed, rating, rating_count, community_rating, community_rating_count, "
-        f"photo_url, updated_at, {_FEATURED} AS is_featured FROM {table} "
+        f"photo_url{facet_sel}, updated_at, {_FEATURED} AS is_featured FROM {table} "
         f"WHERE id = %s AND deleted_at IS NULL AND is_active", [listing_id])
 
 
@@ -155,7 +159,7 @@ def _form_html(vertical: str, listing_id: int, tr: dict) -> str:
 
 
 def _jsonld(vertical: str, r: dict, items: list[dict]) -> str:
-    biz: dict = {"@context": "https://schema.org", "@type": "LocalBusiness", "name": r["name"],
+    biz: dict = {"@context": "https://schema.org", "@type": seo.schema_type(vertical), "name": r["name"],
                  "address": {"@type": "PostalAddress", "addressLocality": r.get("city"),
                              "addressRegion": r.get("state"), "streetAddress": r.get("address_full")}}
     if r.get("phone"):
@@ -250,8 +254,11 @@ def listing_page(request: Request) -> HTMLResponse:
         + _reviews_html(items, tr)
         + _form_html(v, listing_id, tr)
         + _suggest_form(v, listing_id))
-    desc = (f"{r['name']} — Indian {label} in {loc}. Read community reviews and ratings, contact "
-            "details, and share your own experience.")
+    facet = seo.primary_facet(r)
+    # NOT pre-escaped: _page() html.escape()s the whole `desc` string once, same as the rest of it.
+    facet_clause = f" {facet}." if facet else ""
+    desc = (f"{r['name']} — Indian {label} in {loc}.{facet_clause} Read community reviews and ratings, "
+            "contact details, and share your own experience.")
     return _page(f"{r['name']} · {label} · {settings.platform_name}", desc, body,
                  jsonld=_jsonld(v, r, items), canonical=f"{settings.public_web_url.rstrip('/')}/listing/{v}/{listing_id}",
                  image=r.get("photo_url") or "")

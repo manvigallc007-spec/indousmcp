@@ -8,6 +8,7 @@ the f-string SQL below is safe.
 
 from __future__ import annotations
 
+import functools
 import uuid
 from typing import Any, Callable
 from urllib.parse import urlparse
@@ -493,10 +494,20 @@ def _pick_survivor(cluster: list[dict]) -> dict:
         r["id"]))[0]
 
 
+@functools.lru_cache(maxsize=None)
+def _table_columns_cached(table: str) -> frozenset[str]:
+    return frozenset(row["column_name"] for row in db.query(
+        "SELECT column_name FROM information_schema.columns WHERE table_name = %s", (table,)))
+
+
 def _table_columns(table: str) -> set[str]:
+    """Cached forever per process: schema is static for the life of a running process (migrations
+    apply before startup, not against a live server), and now that this is called on every page view
+    (web/landing.py _listings, web/reviews.py _fetch — not just batch/agent code) an uncached
+    information_schema hit per request would be wasteful. A transient DB error is NOT cached (lru_cache
+    doesn't memoize a raised exception), so a retry can still succeed once the DB is back."""
     try:
-        return {row["column_name"] for row in db.query(
-            "SELECT column_name FROM information_schema.columns WHERE table_name = %s", (table,))}
+        return set(_table_columns_cached(table))
     except Exception:
         return set()
 

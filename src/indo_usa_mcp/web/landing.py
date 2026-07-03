@@ -125,7 +125,7 @@ def _base() -> str:
 
 
 def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200,
-          canonical: str = "", image: str = "") -> HTMLResponse:
+          canonical: str = "", image: str = "", noindex: bool = False) -> HTMLResponse:
     plat = html.escape(settings.platform_name)
     # Escape "<" so a listing name containing "</script>" can't break out of the JSON-LD block.
     ld = (f'<script type="application/ld+json">{jsonld.replace("<", chr(92) + "u003c")}</script>'
@@ -135,10 +135,14 @@ def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200,
     img_meta = (f'<meta property="og:image" content="{html.escape(image)}">'
                 f'<meta name="twitter:card" content="summary_large_image">'
                 f'<meta name="twitter:image" content="{html.escape(image)}">' if image else "")
+    # "follow" (not "nofollow") -- keep internal crawl paths (breadcrumbs/filter bar) open even on a
+    # page whose own content is too thin to index, e.g. a browse_city view with zero listings.
+    robots_meta = '<meta name="robots" content="noindex,follow">' if noindex else ""
     doc = f"""<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)}</title>
 <meta name="description" content="{html.escape(desc)}">
+{robots_meta}
 {can}<meta property="og:title" content="{html.escape(title)}">
 <meta property="og:description" content="{html.escape(desc)}">
 <meta property="og:type" content="website">{img_meta}
@@ -267,10 +271,15 @@ def _listings(v: str, state: str, city: str, *, region=None, lang=None, diet=Non
     if q:
         where.append("name ILIKE %s"); params.append(f"%{q}%")
     order = _SORTS.get(sort, _SORTS["best"])
+    # Vertical-specific facet columns (cuisine_type, religion, ...) if this table has them -- needed
+    # for the data-derived meta-description clause (seo.top_facets); the base column list is generic
+    # across every vertical, so these aren't in it otherwise.
+    facet_cols = seo.facet_select_cols(verticals._table_columns(table))
+    facet_sel = ("," + ",".join(facet_cols)) if facet_cols else ""
     return db.query(
         f"SELECT id, name, address_full, city, state, lat, lng, phone, website, description, tags, "
         f"languages, is_claimed, rating, rating_count, community_rating, community_rating_count, "
-        f"photo_url, {_FEATURED} AS is_featured "
+        f"photo_url{facet_sel}, {_FEATURED} AS is_featured "
         f"FROM {table} WHERE {' AND '.join(where)} "
         f"ORDER BY {order} LIMIT %s", params + [limit])
 
@@ -376,7 +385,7 @@ def _listing_cards(v: str, rows: list[dict], tr: dict, *, numbered: bool = True)
                   + (f"<div class='meta'>{links} · <a href='/listing/{v}/{r['id']}'>{dr}</a></div>"
                      if links else f"<div class='meta'><a href='/listing/{v}/{r['id']}'>{dr}</a></div>")
                   + "</div>")
-        biz = {"@type": "LocalBusiness", "name": r["name"],
+        biz = {"@type": seo.schema_type(v), "name": r["name"],
                "address": {"@type": "PostalAddress", "addressLocality": r.get("city"),
                            "addressRegion": r.get("state"), "streetAddress": r.get("address_full")}}
         if r.get("photo_url"):
@@ -434,7 +443,10 @@ def browse_city(request: Request) -> HTMLResponse:
         body = (f"<h1>{html.escape(h1)}</h1><p class='muted'>{html.escape(tr['no_listings'])} "
                 f"<a href='/submit'>{html.escape(tr['add_business'])}</a> · "
                 f"<a href='/chat'>{html.escape(tr['ask_picks'])}</a></p>")
-        return _page(f"{h1} · {settings.platform_name}", f"Indian {label} in {loc}.", body, canonical=canon)
+        # Genuinely thin (no listings at all, no filters applied) -- keep it reachable/linkable (the
+        # CTA to add a business matters) but tell Google not to index a near-duplicate "no results" page.
+        return _page(f"{h1} · {settings.platform_name}", f"Indian {label} in {loc}.", body,
+                    canonical=canon, noindex=True)
 
     cards, ld_items = _listing_cards(v, rows, tr)
     jsonld = json.dumps({"@context": "https://schema.org", "@type": "ItemList",
@@ -446,8 +458,11 @@ def browse_city(request: Request) -> HTMLResponse:
             f"<a href='/chat'>{html.escape(tr['ask_picks'])}</a>{best_link}</p>"
             f"{fbar}{cards}<p><a class='cta' href='/chat'>{html.escape(tr['ask_picks'])} →</a></p>")
     og_img = next((x.get("photo_url") for x in rows if x.get("photo_url")), "")
+    facets = seo.top_facets(rows)
+    facet_clause = f" Including {', '.join(facets)}." if facets else ""
     return _page(f"{h1} · {settings.platform_name} ({len(rows)})",
-                 f"Directory of {len(rows)} Indian {label} in {loc} — addresses, phone, websites.",
+                 f"Directory of {len(rows)} Indian {label} in {loc} — addresses, phone, websites."
+                 f"{facet_clause}",
                  body, jsonld=jsonld, canonical=canon, image=og_img)
 
 
