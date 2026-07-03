@@ -27,7 +27,10 @@ from .pipeline.clean import normalize_name
 
 # Events are time-bound and agent-managed — not stable POIs to verify against OSM.
 _VERTICALS = [v for v in verticals.VERTICALS if v != "events"]
-_CONF_BUMP = 0.15   # an independent OSM confirmation is a real trust signal (capped at 1.0)
+_CONF_BUMP = 0.15        # an independent OSM confirmation is a real trust signal (capped at 1.0)
+_SPACING_S = 1.0         # polite gap between Overpass calls on success
+_BACKOFF_S = 5.0         # extra wait after a throttled/failed call before trying the next row
+_MAX_FAILS = 4           # consecutive Overpass failures => it's really down; stop and retry next run
 
 
 def _name_match(a: str, b: str) -> bool:
@@ -55,8 +58,13 @@ def _match_element(name: str, elements: list[dict]) -> dict | None:
 
 
 def verify_listings(limit_per_vertical: int = 30, max_age_days: int = 45) -> dict[str, Any]:
-    """Verify a batch of non-OSM listings per vertical against OSM. Returns per-vertical counts."""
+    """Verify a batch of non-OSM listings per vertical against OSM. Returns per-vertical counts.
+
+    Tolerant of a busy public Overpass: a single throttle/timeout is skipped (that row keeps its
+    cursor and is retried next run), and we only stop the whole run after `_MAX_FAILS` failures IN A
+    ROW — i.e. Overpass is genuinely down — instead of giving up after the first hiccup."""
     out: dict[str, Any] = {}
+    fails = 0                                       # consecutive Overpass failures across the run
     for v in _VERTICALS:
         t = verticals._table(v)
         cols = verticals._table_columns(t)
@@ -72,10 +80,15 @@ def verify_listings(limit_per_vertical: int = 30, max_age_days: int = 45) -> dic
         for r in rows:
             try:
                 elements = osm.nearby_named(r["lat"], r["lng"])
+                fails = 0                           # a success clears the failure streak
             except OverpassError:
-                out[v] = {"checked": checked, "verified": verified, "enriched": enriched,
-                          "stopped": "overpass_unavailable"}
-                return _finish(out)                 # Overpass is down -> stop politely, retry later
+                fails += 1
+                if fails >= _MAX_FAILS:             # Overpass really is down -> stop, retry next run
+                    out[v] = {"checked": checked, "verified": verified, "enriched": enriched,
+                              "stopped": "overpass_unavailable"}
+                    return _finish(out)
+                time.sleep(_BACKOFF_S)              # throttled -> back off; leave cursor, retry later
+                continue
             except Exception:
                 continue                            # transient row-level issue -> leave cursor, retry
 
@@ -83,7 +96,7 @@ def verify_listings(limit_per_vertical: int = 30, max_age_days: int = 45) -> dic
             if el is None:                          # reward-only: a miss just advances the cursor
                 db.execute(f"UPDATE {t} SET osm_checked_at = now() WHERE id = %s", (r["id"],))
                 checked += 1
-                time.sleep(1.0)
+                time.sleep(_SPACING_S)
                 continue
 
             info = osm.contact_from_tags(el.get("tags") or {})
@@ -91,7 +104,7 @@ def verify_listings(limit_per_vertical: int = 30, max_age_days: int = 45) -> dic
             verified += 1
             enriched += 1 if changed else 0
             checked += 1
-            time.sleep(1.0)                         # Overpass is heavy — space calls out
+            time.sleep(_SPACING_S)                  # Overpass is heavy — space calls out
         out[v] = {"checked": checked, "verified": verified, "enriched": enriched}
     return _finish(out)
 

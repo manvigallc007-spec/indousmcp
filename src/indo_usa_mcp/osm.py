@@ -98,15 +98,21 @@ def attribute_tags(tags: dict) -> list[str]:
 
 
 # --- verification: look up OSM near an EXISTING listing's coordinates -----------------------
+# Only these POI keys — a plain named `around:` query pulls in every bench/address/tree in a dense
+# city, which is slow and gets the public Overpass to throttle us. Every vertical we verify carries
+# one of these (amenity for restaurants/temples, shop for groceries/salons, office/healthcare for
+# professionals, etc.), so filtering keeps the result small without losing real matches.
+_POI_KEYS = ("amenity", "shop", "office", "healthcare", "leisure", "tourism", "craft", "club")
+
+
 def nearby_named(lat: float, lng: float, radius_m: int = 300, timeout: float = 25.0) -> list[dict]:
     """Named OSM POIs within `radius_m` of a point — used to VERIFY a listing we got from another
     source (IRS/NPPES/submissions) against OpenStreetMap. Returns raw Overpass elements (each carries
-    `tags` and `lat`/`lon` or `center`). Reuses `overpass_post` (retry/backoff). Raises OverpassError
-    if Overpass stays down, so the caller can stop politely."""
-    q = (f"[out:json][timeout:{int(timeout)}];\n"
-         f'nwr(around:{int(radius_m)},{lat},{lng})["name"];\n'
-         f"out center tags;")
-    return overpass_post(q, timeout=timeout + 5).get("elements", []) or []
+    `tags` and `lat`/`lon` or `center`). POI-filtered + fail-fast retries so a busy public Overpass
+    throttles us less; raises OverpassError when it stays unavailable so the caller can back off."""
+    parts = "".join(f'nwr(around:{int(radius_m)},{lat},{lng})["name"]["{k}"];' for k in _POI_KEYS)
+    q = f"[out:json][timeout:{int(timeout)}];\n({parts});\nout center tags;"
+    return overpass_post(q, timeout=timeout + 5, retries=1, base_delay=2.0).get("elements", []) or []
 
 
 def contact_from_tags(tags: dict) -> dict:

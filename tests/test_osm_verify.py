@@ -19,6 +19,7 @@ def test_nearby_named_builds_around_query(monkeypatch):
     els = osm.nearby_named(40.5, -74.2, radius_m=300)
     assert els == [{"tags": {"name": "X"}}]
     assert "around:300,40.5,-74.2" in cap["q"] and "[out:json]" in cap["q"]
+    assert '["amenity"]' in cap["q"] and '["shop"]' in cap["q"]   # POI-filtered, not every named node
 
 
 def test_contact_from_tags_extracts():
@@ -89,12 +90,32 @@ def test_verify_miss_sets_cursor_only(monkeypatch):
     assert execs == ["UPDATE services SET osm_checked_at = now() WHERE id = %s"]  # cursor only
 
 
-def test_verify_stops_on_overpass_down(monkeypatch):
+def test_verify_stops_after_consecutive_failures(monkeypatch):
     row = {"id": 3, "name": "X", "lat": 1.0, "lng": 2.0, "phone": None, "website": None,
-           "tags": [], "confidence_score": 0.7}
+           "tags": [], "hours_json": None, "confidence_score": 0.7}
     _mock_scan(monkeypatch, row, raise_overpass=True)
+    # A single hiccup must NOT stop the run — only _MAX_FAILS in a row does.
+    monkeypatch.setattr(osm_verify.db, "query", lambda *a, **k: [row] * osm_verify._MAX_FAILS)
     out = osm_verify.verify_listings(limit_per_vertical=10)
     assert out["services"]["stopped"] == "overpass_unavailable"
+
+
+def test_verify_tolerates_a_single_overpass_hiccup(monkeypatch):
+    # One failure then progress: the run keeps going, doesn't stop.
+    row = {"id": 4, "name": "X", "lat": 1.0, "lng": 2.0, "phone": None, "website": None,
+           "tags": [], "hours_json": None, "confidence_score": 0.7}
+    _mock_scan(monkeypatch, row, elements=[{"tags": {"name": "Nope"}}])  # miss (no match)
+    calls = {"n": 0}
+
+    def _near(lat, lng, **k):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OverpassError("throttled")        # first row hiccups
+        return [{"tags": {"name": "Nope"}}]         # rest succeed (miss)
+    monkeypatch.setattr(osm_verify.osm, "nearby_named", _near)
+    monkeypatch.setattr(osm_verify.db, "query", lambda *a, **k: [row, row])
+    out = osm_verify.verify_listings(limit_per_vertical=10)
+    assert "stopped" not in out["services"] and out["services"]["checked"] == 1  # 2nd row processed
 
 
 def test_verify_skips_when_migration_missing(monkeypatch):
