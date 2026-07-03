@@ -260,6 +260,40 @@ def _mymemory_en(text: str, src: str) -> str | None:
         return None
 
 
+# Short transliterated food/culture/business words are easy for a generic translator to mistake for
+# an unrelated English word with no domain context (observed in production: Telugu "దోసె" = dosa, the
+# food, was translated as "dosage", the medical term — a total zero-result miss for a common cuisine
+# search). A GENERIC "translate this" prompt has nothing to disambiguate with; grounding it in what
+# this app IS fixes the common case. Seeded from a real, logged search miss — see
+# analytics.top_misses() / the admin recommendations queue — and meant to grow the same way.
+_XLATE_DOMAIN_HINT = (
+    "You are translating a search query for an Indian-American community business directory "
+    "(restaurants, temples, groceries, salons, professionals, and similar). Short or ambiguous "
+    "words are almost always South Asian cuisine, culture, or business terms (e.g. a dish, a "
+    "deity, a service) — NOT their nearest unrelated English homophone (for example, a word "
+    "that sounds like 'dose' is almost certainly the dish 'dosa', not a medical dosage). ")
+
+# Known corrections for terms observed (from real zero-result misses) to survive translation wrong
+# regardless of path (LLM or the key-less MyMemory fallback, which has no domain context at all and
+# can't be prompt-engineered). Native substring -> the canonical English term it must resolve to.
+_KNOWN_CORRECTIONS: dict[str, str] = {
+    "దోసె": "dosa",   # Telugu — observed translated as "dosage" (38 zero-result searches)
+}
+
+
+def _apply_known_corrections(original: str, translated: str) -> str:
+    """Make sure a term we KNOW trips up generic translation resolves correctly, regardless of which
+    translation path ran. Prepends (doesn't replace) so other translated content — a city name, a
+    second clause — survives. Uses a WORD-boundary check (not a bare substring test): "dosa" is
+    itself a substring of the very mistranslation it's meant to catch ("dosage"), so a naive `in`
+    check would wrongly conclude the correction was already applied."""
+    out = translated
+    for native, correct in _KNOWN_CORRECTIONS.items():
+        if native in original and not re.search(rf"\b{re.escape(correct)}\b", out, re.IGNORECASE):
+            out = f"{correct} {out}".strip()
+    return out
+
+
 def _translate_to_english(text: str, src: str) -> str | None:
     key = f"{src}:{text}"
     if key in _XLATE_CACHE:
@@ -267,12 +301,13 @@ def _translate_to_english(text: str, src: str) -> str | None:
     out = None
     if llm_active():
         out = complete_text(
-            "You are a translator. Translate the user's message to English. Output ONLY the English "
+            _XLATE_DOMAIN_HINT + "Translate the user's message to English. Output ONLY the English "
             "translation — no quotes, no notes, no extra text.", text)
         out = out.strip() if out else None
     if not out:
         out = _mymemory_en(text, src if src in ("hi", "te") else "autodetect")
     if out:
+        out = _apply_known_corrections(text, out)
         if len(_XLATE_CACHE) > 500:
             _XLATE_CACHE.clear()
         _XLATE_CACHE[key] = out
@@ -296,6 +331,7 @@ def _interpret_to_english(text: str, src: str) -> str | None:
         "clear English, return it unchanged. Output ONLY the query, nothing else.", text)
     out = out.strip() if out else None
     if out:
+        out = _apply_known_corrections(text, out)
         if len(_XLATE_CACHE) > 500:
             _XLATE_CACHE.clear()
         _XLATE_CACHE[key] = out

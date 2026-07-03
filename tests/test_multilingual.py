@@ -2,11 +2,20 @@
 in-language via the LLM). Telugu/Hindi strings are built from codepoints so the test source is
 pure ASCII and immune to console/encoding mangling. No live DB or network."""
 
+import re
+
 import indo_usa_mcp.assistant as a
 
 # Telugu "నాకు బిర్యానీ" (~"I want biryani") and Hindi "मुझे मंदिर" (~"I want a temple").
 TEL = "".join(chr(c) for c in (0x0C28, 0x0C3E, 0x0C15, 0x0C41, 0x20, 0x0C2C, 0x0C3F))
 HIN = "".join(chr(c) for c in (0x092E, 0x0941, 0x091D, 0x0947))
+# Telugu "దోసె" (dosa) and the real query "నాకు దోసె కావాలి" (~"I want dosa") that was observed, in
+# production, mistranslated to "I need a dosage" by BOTH the LLM and the key-less MyMemory fallback
+# -- a total zero-result miss (38 occurrences in analytics.top_misses). See _KNOWN_CORRECTIONS.
+DOSA_TE = "".join(chr(c) for c in (0x0C26, 0x0C4B, 0x0C38, 0x0C46))
+DOSA_QUERY_TE = "".join(chr(c) for c in (
+    0x0C28, 0x0C3E, 0x0C15, 0x0C41, 0x20, 0x0C26, 0x0C4B, 0x0C38, 0x0C46, 0x20,
+    0x0C15, 0x0C3E, 0x0C35, 0x0C3E, 0x0C32, 0x0C3F))
 
 
 def test_has_indic_detects_script():
@@ -123,3 +132,56 @@ def test_reply_does_not_localize_english(monkeypatch):
     monkeypatch.setattr(a, "_localize", lambda text, lang: called.append(1) or text)
     out = a.reply([{"role": "user", "content": "x"}], filters={"lang": "en"})
     assert out["reply"] == "Hello" and not called            # English selected -> never localized
+
+
+# --- known-translation-error correction (a real observed miss: దోసె "dosa" -> "dosage") ---
+def test_apply_known_corrections_fixes_the_observed_mistranslation():
+    out = a._apply_known_corrections(DOSA_QUERY_TE, "I need a dosage")
+    assert re.search(r"\bdosa\b", out)                       # "dosa" now present as its own word
+
+
+def test_apply_known_corrections_word_boundary_not_fooled_by_dosage():
+    # "dosa" is literally a SUBSTRING of "dosage" -- a naive `in` check would wrongly conclude the
+    # correction was already applied and skip it. This is the exact bug caught during verification.
+    out = a._apply_known_corrections(DOSA_QUERY_TE, "I need a dosage")
+    assert out.lower().count("dosa") >= 1 and out != "I need a dosage"   # correction WAS applied
+
+
+def test_apply_known_corrections_noop_when_already_correct():
+    out = a._apply_known_corrections(DOSA_QUERY_TE, "I want a dosa restaurant")
+    assert out == "I want a dosa restaurant"                 # already right -> untouched
+
+
+def test_apply_known_corrections_noop_when_term_absent():
+    out = a._apply_known_corrections(TEL, "I need a dosage")  # unrelated Telugu text (biryani)
+    assert out == "I need a dosage"                          # no dosa token in the original -> no-op
+
+
+def test_translate_to_english_applies_correction_llm_path(monkeypatch):
+    monkeypatch.setattr(a, "llm_active", lambda: True)
+    monkeypatch.setattr(a, "complete_text", lambda system, user: "I need a dosage")
+    a._XLATE_CACHE.clear()
+    out = a._translate_to_english(DOSA_QUERY_TE, "te")
+    assert re.search(r"\bdosa\b", out)
+
+
+def test_translate_to_english_applies_correction_mymemory_path(monkeypatch):
+    monkeypatch.setattr(a, "llm_active", lambda: False)
+    monkeypatch.setattr(a, "_mymemory_en", lambda text, src: "I need a dosage")
+    a._XLATE_CACHE.clear()
+    out = a._translate_to_english(DOSA_QUERY_TE, "te")
+    assert re.search(r"\bdosa\b", out)
+
+
+def test_interpret_to_english_applies_correction(monkeypatch):
+    monkeypatch.setattr(a, "complete_text", lambda system, user: "I need a dosage")
+    a._XLATE_CACHE.clear()
+    out = a._interpret_to_english(DOSA_QUERY_TE, "te")
+    assert re.search(r"\bdosa\b", out)
+
+
+def test_translate_prompt_is_domain_grounded():
+    # The bare "You are a translator" prompt had no domain context -- the actual bug. Assert the
+    # LLM system prompt now grounds ambiguous short words in the directory's own domain.
+    assert "directory" in a._XLATE_DOMAIN_HINT.lower()
+    assert "dosa" in a._XLATE_DOMAIN_HINT.lower()
