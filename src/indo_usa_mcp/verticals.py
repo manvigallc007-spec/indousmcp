@@ -545,7 +545,9 @@ def dedupe_listings(dry_run: bool = True) -> dict[str, Any]:
                         val = next((r.get(c) for r in losers if r.get(c) not in (None, "")), None)
                         if val is not None:
                             sets.append(f"{c} = %s")
-                            params.append(val)
+                            params.append(_adapt(val))  # defensive: _MERGE_FILL is scalar-only by
+                            # design, but this guards against a JSONB column ever sneaking in (as
+                            # happened once via a name collision) crashing the whole agent run.
                 for c in union:
                     merged: list = []
                     for r in cluster:
@@ -808,8 +810,13 @@ def enhance_existing(vertical: str) -> dict[str, Any]:
     return {"vertical": vertical, "changed": changed, "embedded": embedded}
 
 
-_MERGE_FILL = ["phone", "email", "website", "address_full", "region_tag",
-               "hours_json", "description"]
+# Admin's manual "merge these two into one" (below) — distinct from the auto-dedupe _MERGE_FILL
+# above (line 428). Kept separate on purpose: this one goes through the vertical's `update` fn
+# (which knows how to adapt JSONB columns like hours_json), while auto-dedupe writes raw SQL and
+# must stick to plain scalar columns. A same-named constant here previously SHADOWED the one above,
+# silently making auto-dedupe try (and fail) to gap-fill the JSONB hours_json column.
+_ADMIN_MERGE_FILL = ["phone", "email", "website", "address_full", "region_tag",
+                     "hours_json", "description"]
 
 
 def merge_duplicates(vertical: str, keep_id: int, drop_ids: list[int]) -> dict[str, Any]:
@@ -823,7 +830,7 @@ def merge_duplicates(vertical: str, keep_id: int, drop_ids: list[int]) -> dict[s
         d = get_record(vertical, did)
         if d is None:
             continue
-        for f in _MERGE_FILL:
+        for f in _ADMIN_MERGE_FILL:
             if keeper.get(f) in (None, "", {}) and d.get(f) not in (None, "", {}) and f not in diff:
                 diff[f] = d.get(f)
     if diff:

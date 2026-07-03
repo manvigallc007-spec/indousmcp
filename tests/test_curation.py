@@ -41,3 +41,13 @@ def test_curate_apply_runs_all_and_points_to_enrichment(monkeypatch):
     assert out["mode"] == "apply"
     assert calls == {"dedupe": False, "nonusa": False, "lowq": False}   # actually applied
     assert "backfill-embeddings" in out["next"]
+
+
+def test_curate_apply_executes_against_db():
+    # No monkeypatch, apply=True: exercises the REAL dry_run=False code paths (the UPDATEs), not just
+    # the SELECTs dry-run covers. Regression: dedupe_listings' apply path used to crash on a shadowed
+    # _MERGE_FILL trying to bind a JSONB dict -- dry-run-only coverage never reached that line.
+    out = curation.run(apply=True)
+    assert out["mode"] == "apply"
+    for k in ("duplicates", "non_usa", "low_quality", "quality"):
+        assert k in out
