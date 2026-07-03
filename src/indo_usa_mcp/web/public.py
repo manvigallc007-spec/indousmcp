@@ -132,6 +132,7 @@ _LANDING_HTML = """<!doctype html><html lang="en"><head>
 <meta property="og:url" content="__OGURL__">
 <meta property="og:image" content="__OGIMG__">
 <meta name="twitter:card" content="summary">
+<link rel="canonical" href="__OGURL__">
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
 <link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#c1440e">
 <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}</script>
@@ -210,7 +211,11 @@ def home(request: Request) -> HTMLResponse:
         "__PLAT__": plat, "__ANAME__": aname,
         "__TAGLINE__": html.escape(settings.platform_tagline),
         "__SUB__": html.escape(desc), "__TILES__": category_grid(), "__CATCSS__": CATEGORY_CSS,
-        "__OGURL__": html.escape(settings.public_web_url.rstrip("/") + "/"),
+        # Self-reference /explore (its OWN url) -- not "/" (the chatbot homepage). They're different
+        # pages with different content; pointing this page's canonical/og:url at a different page's
+        # URL is what caused Search Console's "Duplicate without user-selected canonical" (no
+        # canonical tag was present at all before) confusion between them.
+        "__OGURL__": html.escape(settings.public_web_url.rstrip("/") + "/explore"),
         "__OGIMG__": html.escape(settings.public_web_url.rstrip("/") + "/icon.svg"),
         "__OGDESC__": html.escape(desc),
     }

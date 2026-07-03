@@ -197,7 +197,8 @@ def browse_root(request: Request) -> HTMLResponse:
             "<a class='cta' href='/movies'>🎬 Indian movies in theaters →</a>"
             "<a class='cta' href='/employers'>💼 H-1B visa sponsors →</a></p>")
     return _page(f"Browse · {settings.platform_name}",
-                 "Browse Indian-American businesses, temples and events by category and city.", body)
+                 "Browse Indian-American businesses, temples and events by category and city.", body,
+                 canonical=f"{_base()}/browse")
 
 
 def browse_vertical(request: Request) -> HTMLResponse:
@@ -216,7 +217,8 @@ def browse_vertical(request: Request) -> HTMLResponse:
             f"<p class='muted'>{html.escape(tr['pick_state'])}</p>"
             f"<div class='chips'>{items}</div>")
     return _page(f"Indian {_label(v)} in the USA · {settings.platform_name}",
-                 f"Browse Indian {_label(v)} across the USA by state and city.", body)
+                 f"Browse Indian {_label(v)} across the USA by state and city.", body,
+                 canonical=f"{_base()}/browse/{v}")
 
 
 def browse_state(request: Request) -> HTMLResponse:
@@ -236,7 +238,8 @@ def browse_state(request: Request) -> HTMLResponse:
             f"<p class='muted'>{html.escape(tr['pick_city'])}</p>"
             f"<div class='chips'>{items or ('<span class=muted>' + html.escape(tr['no_listings']) + '</span>')}</div>")
     return _page(f"Indian {label} in {state.upper()} · {settings.platform_name}",
-                 f"Browse Indian {label} in {state.upper()} by city.", body)
+                 f"Browse Indian {label} in {state.upper()} by city.", body,
+                 canonical=f"{_base()}/browse/{v}/{_slug(state)}")
 
 
 _RATING_EXPR = "GREATEST(COALESCE(community_rating,0), COALESCE(rating,0))"
@@ -616,12 +619,17 @@ def events_page(request: Request) -> HTMLResponse:
     rows = res.get("results", [])
     where = ", ".join(x for x in (city, (state.upper() if state else None)) if x) or "the USA"
     h1 = f"Upcoming Indian-American events in {where}"
+    # Filter (?state=/?city=/?category=) variants always canonicalize to the base URL -- same
+    # facet-navigation pattern as browse_city -- so query-string variants never compete with it as
+    # separate "duplicate" pages in Search Console.
+    canon = f"{_base()}/events"
 
     if not rows:
         body = (f"<h1>{html.escape(h1)}</h1><p class='muted'>No upcoming events listed yet — "
                 f"<a href='/chat'>ask the assistant</a> or check back soon. Organizers: publish a "
                 f"public calendar (.ics) and our agents pick it up automatically.</p>")
-        return _page(f"{h1} · {settings.platform_name}", "Upcoming Indian-American festivals and events.", body)
+        return _page(f"{h1} · {settings.platform_name}", "Upcoming Indian-American festivals and events.",
+                    body, canonical=canon)
 
     cards, graph = "", []
     for r in rows:
@@ -654,7 +662,7 @@ def events_page(request: Request) -> HTMLResponse:
             f"{cards}")
     return _page(f"{h1} · {settings.platform_name}",
                  f"Upcoming Indian-American festivals & events in {where} — dates, venues, details.",
-                 body, jsonld=jsonld)
+                 body, jsonld=jsonld, canonical=canon)
 
 
 # -------------------------------------------------------------- crawler files
@@ -760,7 +768,7 @@ def insights(request: Request) -> HTMLResponse:
         body = (f"<h1>{title}</h1><p class='muted'>Population insights are being prepared — "
                 "check back soon. Meanwhile, <a href='/chat'>Ask Dost</a> or "
                 "<a href='/browse'>browse the directory</a>.</p>")
-        return _page(title, desc, body)
+        return _page(title, desc, body, canonical=f"{_base()}/insights")
     th = "padding:8px 12px;border-bottom:2px solid #e7c3b6;text-align:left"
     td = "padding:7px 12px;border-bottom:1px solid #efe9e1"
     tdr = td + ";text-align:right"
@@ -824,7 +832,7 @@ def insights(request: Request) -> HTMLResponse:
         f"<p class='muted' style='margin-top:18px'>Source: U.S. Census Bureau, ACS 5-year "
         f"(aggregated, public data).</p>"
         f"<p><a href='/chat'>Ask Dost to find Indian places near you →</a></p>")
-    return _page(title, desc, body)
+    return _page(title, desc, body, canonical=f"{_base()}/insights")
 
 
 def llms_txt(request: Request) -> Response:
@@ -932,7 +940,7 @@ def for_business(request: Request) -> HTMLResponse:
         f"{cta}"
         f"<p class='muted' style='margin-top:18px'>{html.escape(plat)} is an informational directory. "
         "Listing is free; we never sell your personal data.</p>")
-    return _page(title, desc, body)
+    return _page(title, desc, body, canonical=f"{_base()}/for-business")
 
 
 def for_agents(request: Request) -> HTMLResponse:
@@ -968,7 +976,7 @@ def for_agents(request: Request) -> HTMLResponse:
         "<p class='muted' style='margin-top:16px'>Free and read-only. Please identify your client "
         "(MCP <code>clientInfo</code>, or an <code>X-Agent-Id</code> header on the API) so we can "
         "keep access free as usage grows.</p>")
-    return _page(title, desc, body)
+    return _page(title, desc, body, canonical=f"{_base()}/for-agents")
 
 
 def mcp_well_known(request: Request) -> Response:
