@@ -5,7 +5,7 @@ IRS nonprofits, NPPES professionals, owner submissions, Socrata, the consulates 
 cross-checks each of those against OSM near its coordinates: when a same-named POI sits within a
 short radius, it's a second independent confirmation, so we
 
-  * fill missing phone / website / attribute-tags from OSM (never overwriting existing values),
+  * fill missing phone / website / hours / attribute-tags from OSM (never overwriting existing values),
   * bump `confidence_score` (feeds ranking via ranking.trust_score),
   * refresh `last_seen_at` (so the LifecycleAgent doesn't archive a good, real listing),
   * stamp `osm_verified_at`.
@@ -17,6 +17,7 @@ by a cursor column, act, write the cursor, be polite. Free + zero-budget (public
 
 from __future__ import annotations
 
+import json
 import time
 from typing import Any
 
@@ -62,7 +63,7 @@ def verify_listings(limit_per_vertical: int = 30, max_age_days: int = 45) -> dic
         if "osm_checked_at" not in cols:            # migration not applied yet -> skip safely
             continue
         rows = db.query(
-            f"SELECT id, name, lat, lng, phone, website, tags, confidence_score FROM {t} "
+            f"SELECT id, name, lat, lng, phone, website, tags, hours_json, confidence_score FROM {t} "
             f"WHERE deleted_at IS NULL AND is_active AND lat IS NOT NULL "
             f"AND coalesce(source_name,'') NOT LIKE 'osm%%' "
             f"AND (osm_checked_at IS NULL OR osm_checked_at < now() - (%s || ' days')::interval) "
@@ -96,8 +97,8 @@ def verify_listings(limit_per_vertical: int = 30, max_age_days: int = 45) -> dic
 
 
 def _apply_match(table: str, cols: set[str], row: dict, info: dict) -> bool:
-    """Fill-missing phone/website + merge tags from OSM, bump confidence + freshness, stamp verified.
-    Returns True if any listing content (phone/website/tags) actually changed."""
+    """Fill-missing phone/website/hours + merge tags from OSM, bump confidence + freshness, stamp
+    verified. Returns True if any listing content (phone/website/hours/tags) actually changed."""
     sets: list[str] = []
     params: list[Any] = []
     content_changed = False
@@ -106,6 +107,10 @@ def _apply_match(table: str, cols: set[str], row: dict, info: dict) -> bool:
         sets.append("phone = %s"); params.append(info["phone"]); content_changed = True
     if "website" in cols and not (row.get("website") or "").strip() and info.get("website"):
         sets.append("website = %s"); params.append(info["website"]); content_changed = True
+    if "hours_json" in cols and info.get("hours") and not row.get("hours_json"):
+        # hours_json is JSONB everywhere; scrapers store the raw OSM opening_hours as {"raw": ...}
+        sets.append("hours_json = %s::jsonb")
+        params.append(json.dumps({"raw": info["hours"]})); content_changed = True
     if "tags" in cols and info.get("tags"):
         new = [tag for tag in info["tags"] if tag not in set(row.get("tags") or [])]
         if new:

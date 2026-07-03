@@ -50,7 +50,7 @@ def _mock_scan(monkeypatch, row, elements=None, raise_overpass=False):
     monkeypatch.setattr(osm_verify, "_VERTICALS", ["services"])
     monkeypatch.setattr(osm_verify.verticals, "_table_columns",
                         lambda t: {"osm_checked_at", "osm_verified_at", "phone", "website", "tags",
-                                   "updated_at"})
+                                   "hours_json", "updated_at"})
     monkeypatch.setattr(osm_verify.db, "query", lambda *a, **k: [row])
     monkeypatch.setattr(osm_verify.db, "query_one", lambda *a, **k: None)
     monkeypatch.setattr(osm_verify.embeddings, "enabled", lambda: False)
@@ -67,16 +67,17 @@ def _mock_scan(monkeypatch, row, elements=None, raise_overpass=False):
 
 
 def test_verify_verifies_a_match(monkeypatch):
-    row = {"id": 1, "name": "Sri Ganesha Temple", "lat": 40.0, "lng": -74.0,
-           "phone": None, "website": None, "tags": [], "confidence_score": 0.7}
+    row = {"id": 1, "name": "Sri Ganesha Temple", "lat": 40.0, "lng": -74.0, "phone": None,
+           "website": None, "tags": [], "hours_json": None, "confidence_score": 0.7}
     execs = _mock_scan(monkeypatch, row, elements=[{"tags": {
         "name": "Sri Ganesha Temple", "contact:phone": "+1 555 0100",
-        "website": "https://ganesha.example"}}])
+        "website": "https://ganesha.example", "opening_hours": "Mo-Su 08:00-20:00"}}])
     out = osm_verify.verify_listings(limit_per_vertical=10)
     assert out["services"] == {"checked": 1, "verified": 1, "enriched": 1}
     assert out["_total"]["verified"] == 1
     upd = " ".join(execs)
-    assert "phone = %s" in upd and "website = %s" in upd and "osm_verified_at = now()" in upd
+    assert "phone = %s" in upd and "website = %s" in upd and "hours_json = %s::jsonb" in upd
+    assert "osm_verified_at = now()" in upd
 
 
 def test_verify_miss_sets_cursor_only(monkeypatch):
@@ -120,16 +121,18 @@ def test_apply_match_fills_bumps_and_stamps(monkeypatch):
     try:
         res = _seed(monkeypatch, name)
         assert res.get("ok"), res
-        row = _db.query_one("SELECT id, name, phone, website, tags, confidence_score FROM services "
-                            "WHERE id = %s", (res["id"],))
+        row = _db.query_one("SELECT id, name, phone, website, tags, hours_json, confidence_score "
+                            "FROM services WHERE id = %s", (res["id"],))
         monkeypatch.setattr(osm_verify.embeddings, "enabled", lambda: False)
         changed = osm_verify._apply_match(
             "services", verticals._table_columns("services"), row,
-            {"phone": "+1 555 0100", "website": "https://x.example", "tags": ["vegetarian"]})
+            {"phone": "+1 555 0100", "website": "https://x.example", "hours": "Mo-Su 08:00-20:00",
+             "tags": ["vegetarian"]})
         assert changed is True
-        a = _db.query_one("SELECT phone, website, tags, confidence_score, osm_verified_at, "
+        a = _db.query_one("SELECT phone, website, tags, hours_json, confidence_score, osm_verified_at, "
                           "osm_checked_at, last_seen_at FROM services WHERE id = %s", (res["id"],))
         assert a["phone"] == "+1 555 0100" and a["website"] == "https://x.example"
+        assert a["hours_json"] == {"raw": "Mo-Su 08:00-20:00"}    # OSM opening_hours stored as JSONB
         assert "vegetarian" in (a["tags"] or [])
         assert float(a["confidence_score"]) > 0.7            # independent OSM confirmation -> bump
         assert a["osm_verified_at"] is not None and a["osm_checked_at"] is not None
