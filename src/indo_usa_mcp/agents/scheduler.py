@@ -37,7 +37,7 @@ _RUN_ORDER = [
     "realestate_scraper", "realestate_cleaner",
     "finance_scraper", "finance_cleaner",
     "event_feed_discovery", "event_scraper", "event_cleaner",
-    "web_enrichment", "curation", "geo_backfill", "llm_enrichment", "embedding_backfill",
+    "web_enrichment", "osm_verify", "curation", "geo_backfill", "llm_enrichment", "embedding_backfill",
     "link_check", "recommendation", "lifecycle", "learning", "knowledge_indexer",
     "demographics", "h1b", "movies", "intelligence", "contact_reply", "submission_review",
     "review_moderation", "review_aggregator", "irs_eo",

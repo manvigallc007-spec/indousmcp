@@ -30,6 +30,23 @@ def test_movies_now_actually_runs():
     assert "movies" in _RUN_ORDER
 
 
+def test_osm_verify_agent_registered_scheduled_and_ordered():
+    assert "osm_verify" in AGENTS and "osm_verify" in _RUN_ORDER
+    order = {n: i for i, n in enumerate(_RUN_ORDER)}
+    # verify enriches after web_enrichment, and before curation/embedding pick the results up.
+    assert order["web_enrichment"] < order["osm_verify"] < order["curation"]
+
+
+def test_osm_verify_agent_delegates(monkeypatch):
+    import indo_usa_mcp.osm_verify as ov
+    seen = {}
+    monkeypatch.setattr(ov, "verify_listings",
+                        lambda limit_per_vertical=30, max_age_days=45:
+                        seen.update(lpv=limit_per_vertical, mad=max_age_days) or {"ok": 1})
+    out = d.OsmVerifyAgent().run()
+    assert out == {"ok": 1} and seen == {"lpv": 30, "mad": 45}
+
+
 def test_agent_names_unique():
     names = [a.name for a in d.ALL_AGENTS]
     assert len(names) == len(set(names))

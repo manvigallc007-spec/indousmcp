@@ -230,6 +230,11 @@ def cmd_llm_check(args: argparse.Namespace) -> None:
     _print(assistant.diagnose())
 
 
+def cmd_osm_verify(args: argparse.Namespace) -> None:
+    from . import osm_verify
+    _print(osm_verify.verify_listings(limit_per_vertical=args.limit))
+
+
 def cmd_consulates_seed(args: argparse.Namespace) -> None:
     from . import consulates
     _print(consulates.seed())
@@ -729,6 +734,12 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Diagnose the live assistant: prints LLM config + a real ping to the "
                         "provider with the exact failure reason (never prints the key)"
                    ).set_defaults(func=cmd_llm_check)
+
+    ov = sub.add_parser("osm-verify",
+                        help="Cross-check non-OSM listings against OpenStreetMap: confirm + fill "
+                             "missing phone/website/tags + raise confidence (reward-only)")
+    ov.add_argument("--limit", type=int, default=30, help="Rows to check per vertical (default 30)")
+    ov.set_defaults(func=cmd_osm_verify)
 
     cu = sub.add_parser("curate",
                         help="Cleanup sweep for acquired data: merge dupes + remove non-USA + "

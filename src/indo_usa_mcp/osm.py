@@ -95,3 +95,27 @@ def attribute_tags(tags: dict) -> list[str]:
     if any((tags.get(k) or "").lower() == "yes" for k in _PAYMENT):
         out.append("cards-accepted")
     return sorted(set(out))
+
+
+# --- verification: look up OSM near an EXISTING listing's coordinates -----------------------
+def nearby_named(lat: float, lng: float, radius_m: int = 300, timeout: float = 25.0) -> list[dict]:
+    """Named OSM POIs within `radius_m` of a point — used to VERIFY a listing we got from another
+    source (IRS/NPPES/submissions) against OpenStreetMap. Returns raw Overpass elements (each carries
+    `tags` and `lat`/`lon` or `center`). Reuses `overpass_post` (retry/backoff). Raises OverpassError
+    if Overpass stays down, so the caller can stop politely."""
+    q = (f"[out:json][timeout:{int(timeout)}];\n"
+         f'nwr(around:{int(radius_m)},{lat},{lng})["name"];\n'
+         f"out center tags;")
+    return overpass_post(q, timeout=timeout + 5).get("elements", []) or []
+
+
+def contact_from_tags(tags: dict) -> dict:
+    """Pull the enrichable contact facets from an OSM element's tags: phone, website, opening hours,
+    and the attribute tags. Values are None/empty when absent so callers fill-missing only."""
+    tags = tags or {}
+    return {
+        "phone": (tags.get("contact:phone") or tags.get("phone") or "").strip() or None,
+        "website": (tags.get("contact:website") or tags.get("website") or "").strip() or None,
+        "hours": (tags.get("opening_hours") or "").strip() or None,
+        "tags": attribute_tags(tags),
+    }

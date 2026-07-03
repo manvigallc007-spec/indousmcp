@@ -971,6 +971,20 @@ class SocrataScraperAgent(Agent):
         return out
 
 
+class OsmVerifyAgent(Agent):
+    name = "osm_verify"
+    description = ("Cross-checks non-OSM listings (IRS/NPPES/submissions/Socrata/consulates) against "
+                   "OpenStreetMap: confirms real places, fills missing phone/website/tags, and raises "
+                   "confidence + freshness. Reward-only — a miss never removes anything.")
+    default_interval_s = 604800  # weekly
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from .. import osm_verify
+        return osm_verify.verify_listings(
+            limit_per_vertical=params.get("limit_per_vertical", 30),
+            max_age_days=params.get("max_age_days", 45))
+
+
 ALL_AGENTS = [
     DiscoveryAgent(),
     ScraperAgent(),
@@ -1032,4 +1046,5 @@ ALL_AGENTS = [
     GeoBackfillAgent(),
     EmbeddingBackfillAgent(),
     SocrataScraperAgent(),
+    OsmVerifyAgent(),
 ]
