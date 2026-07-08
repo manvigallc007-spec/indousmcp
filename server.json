@@ -1,6 +1,7 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "us.namasteamerica/namaste-america",
+  "title": "Namaste America",
   "description": "Agent-first directory & knowledge hub for Indians from India in the USA — restaurants, temples, groceries, events, professionals and culture, searchable via MCP.",
   "version": "0.1.0",
   "websiteUrl": "https://namasteamerica.us/for-agents",
