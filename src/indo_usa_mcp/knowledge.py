@@ -111,7 +111,8 @@ def search(query: str, *, vertical: str | None = None, limit: int = 6) -> list[d
         params.append(limit)
         return db.query(
             "SELECT c.text, c.vertical, d.title, d.url, d.source_type FROM kb_chunks c "
-            "JOIN kb_documents d ON d.id = c.document_id WHERE c.text ILIKE %s " + vfilter +
+            "JOIN kb_documents d ON d.id = c.document_id "
+            "WHERE c.text ILIKE %s AND d.is_active AND d.deleted_at IS NULL " + vfilter +
             "LIMIT %s", params)
 
     qv = embeddings.to_vector_literal(embeddings.embed(q))
@@ -125,7 +126,8 @@ def search(query: str, *, vertical: str | None = None, limit: int = 6) -> list[d
         "SELECT c.text, c.vertical, d.title, d.url, d.source_type, "
         "(c.embedding <=> %s::vector) AS dist FROM kb_chunks c "
         "JOIN kb_documents d ON d.id = c.document_id "
-        "WHERE c.embedding IS NOT NULL " + vfilter + "ORDER BY dist LIMIT %s", params)
+        "WHERE c.embedding IS NOT NULL AND d.is_active AND d.deleted_at IS NULL " + vfilter +
+        "ORDER BY dist LIMIT %s", params)
 
 
 # ----------------------------------------------------------------- ingestion from listings
@@ -177,6 +179,63 @@ def index_all_listings(limit_per: int | None = None) -> dict[str, Any]:
         out["by_vertical"][v] = res
         out["total_indexed"] += res.get("indexed", 0)
     return out
+
+
+# ------------------------------------------------------------------------- admin moderation
+# v1 scope is deliberately pause/delete + metadata-only edit -- NOT `content`. KnowledgeIndexerAgent
+# calls upsert_document unconditionally every week (curated articles + listing sync), so a hand-edited
+# `content` would silently vanish within a week; is_active/deleted_at are never touched by that path.
+_EDIT_FIELDS = ("title", "url", "lang")
+
+
+def get_document(doc_id: int) -> dict | None:
+    return db.query_one("SELECT * FROM kb_documents WHERE id = %s", (doc_id,))
+
+
+def apply_edits_metadata(doc_id: int, edits: dict) -> dict:
+    diff = {k: v for k, v in edits.items() if k in _EDIT_FIELDS}
+    if not diff:
+        return {"ok": True, "updated": 0}
+    sets = ", ".join(f"{k} = %s" for k in diff)
+    db.execute(f"UPDATE kb_documents SET {sets}, updated_at = now() WHERE id = %s",
+               [*diff.values(), doc_id])
+    return {"ok": True, "updated": len(diff), "fields": sorted(diff)}
+
+
+def set_active(doc_id: int, active: bool) -> None:
+    db.execute("UPDATE kb_documents SET is_active = %s, updated_at = now() WHERE id = %s",
+               (active, doc_id))
+
+
+def set_deleted(doc_id: int, deleted: bool) -> None:
+    val = "now()" if deleted else "NULL"
+    db.execute(f"UPDATE kb_documents SET deleted_at = {val}, updated_at = now() WHERE id = %s", (doc_id,))
+
+
+def _admin_filters(q: str | None, flt: str | None) -> tuple[list[str], list]:
+    where, params = ["deleted_at IS NULL"], []
+    if q:
+        where.append("(title ILIKE %s OR content ILIKE %s)")
+        params += [f"%{q}%", f"%{q}%"]
+    if flt == "inactive":
+        where.append("NOT is_active")
+    elif flt == "active":
+        where.append("is_active")
+    return where, params
+
+
+def list_admin(q: str | None = None, flt: str | None = None, limit: int = 50, offset: int = 0) -> list[dict]:
+    where, params = _admin_filters(q, flt)
+    return db.query(
+        f"SELECT id, title, source_type, source_ref, vertical, is_active, updated_at "
+        f"FROM kb_documents WHERE {' AND '.join(where)} ORDER BY id DESC LIMIT %s OFFSET %s",
+        params + [limit, offset])
+
+
+def count_admin(q: str | None = None, flt: str | None = None) -> int:
+    where, params = _admin_filters(q, flt)
+    row = db.query_one(f"SELECT count(*) AS n FROM kb_documents WHERE {' AND '.join(where)}", params)
+    return row["n"] if row else 0
 
 
 def stats() -> dict[str, Any]:

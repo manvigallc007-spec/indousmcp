@@ -54,6 +54,73 @@ def test_to_sponsors_and_search_roundtrip():
         db.execute("DELETE FROM h1b_sponsors WHERE employer LIKE 'ZZTEST %'")
 
 
+# --- admin moderation: pause/suspend + soft-delete + scoped edit ---
+def _seed_sponsor():
+    db.execute("DELETE FROM h1b_sponsors WHERE employer = 'ZZTEST ADMIN CORP'")
+    row = db.query_one(
+        "INSERT INTO h1b_sponsors (employer, display_name, certified) "
+        "VALUES ('ZZTEST ADMIN CORP', 'ZZTest Admin Corp', 42) RETURNING id")
+    return row["id"]
+
+
+def test_h1b_set_active_and_deleted_roundtrip():
+    sid = _seed_sponsor()
+    try:
+        s = h1b.get_sponsor(sid)
+        assert s["is_active"] is True and s["deleted_at"] is None
+        h1b.set_active(sid, False)
+        assert h1b.get_sponsor(sid)["is_active"] is False
+        h1b.set_active(sid, True)
+        assert h1b.get_sponsor(sid)["is_active"] is True
+        h1b.set_deleted(sid, True)
+        assert h1b.get_sponsor(sid)["deleted_at"] is not None
+        h1b.set_deleted(sid, False)
+        assert h1b.get_sponsor(sid)["deleted_at"] is None
+    finally:
+        db.execute("DELETE FROM h1b_sponsors WHERE id = %s", (sid,))
+
+
+def test_h1b_apply_edits_updates_allowed_fields_only():
+    sid = _seed_sponsor()
+    try:
+        out = h1b.apply_edits(sid, {"display_name": "New Name", "employer": "HACKED",
+                                    "certified": 999999, "top_titles": ["Engineer"]})
+        assert sorted(out["fields"]) == ["display_name", "top_titles"]
+        s = h1b.get_sponsor(sid)
+        assert s["display_name"] == "New Name" and s["employer"] == "ZZTEST ADMIN CORP"
+        assert s["certified"] == 42 and s["top_titles"] == ["Engineer"]
+    finally:
+        db.execute("DELETE FROM h1b_sponsors WHERE id = %s", (sid,))
+
+
+def test_search_sponsors_excludes_paused():
+    sid = _seed_sponsor()
+    try:
+        assert h1b.search_sponsors(q="ZZTEST ADMIN CORP")
+        h1b.set_active(sid, False)
+        assert h1b.search_sponsors(q="ZZTEST ADMIN CORP") == []
+        h1b.set_active(sid, True)
+        assert h1b.search_sponsors(q="ZZTEST ADMIN CORP")
+    finally:
+        db.execute("DELETE FROM h1b_sponsors WHERE id = %s", (sid,))
+
+
+def test_to_sponsors_does_not_reset_pause():
+    # Regression: labor._to_sponsors' ON CONFLICT upsert must not clobber the admin pause flag.
+    db.execute("DELETE FROM h1b_sponsors WHERE employer = 'ZZTEST REIMPORT CORP'")
+    agg = {"employers": Counter({"ZZTEST REIMPORT CORP": 10}),
+          "emp_detail": {"ZZTEST REIMPORT CORP": {"wages": [], "titles": Counter(),
+                                                    "states": Counter(), "cities": Counter()}}}
+    try:
+        labor._to_sponsors(agg, "2025")
+        row = db.query_one("SELECT id FROM h1b_sponsors WHERE employer = 'ZZTEST REIMPORT CORP'")
+        h1b.set_active(row["id"], False)
+        labor._to_sponsors(agg, "2025")   # re-import, same employer key
+        assert h1b.get_sponsor(row["id"])["is_active"] is False
+    finally:
+        db.execute("DELETE FROM h1b_sponsors WHERE employer = 'ZZTEST REIMPORT CORP'")
+
+
 def test_is_h1b_query():
     assert a._is_h1b_query("which companies sponsor h1b")
     assert a._is_h1b_query("h-1b visa sponsors in tx")

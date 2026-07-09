@@ -5,6 +5,7 @@ Parsing is pure (no network); the page + list are DB-mocked."""
 from starlette.testclient import TestClient
 
 import indo_usa_mcp.movies as movies
+from indo_usa_mcp import db
 from indo_usa_mcp.web import landing
 from indo_usa_mcp.web.app import app
 
@@ -96,6 +97,76 @@ def test_movies_reply_empty(monkeypatch):
     monkeypatch.setattr(movies, "list_in_theaters", lambda language=None, limit=12: [])
     out = a._movies_reply("tamil movies", {})
     assert out["cards"] == [] and "Tamil" in out["reply"]
+
+
+# --- admin moderation: pause/suspend + soft-delete + scoped edit ---
+_ZZ_TMDB = 999900001
+
+
+def _seed_movie(**over):
+    db.execute("DELETE FROM movies WHERE tmdb_id = %s", (_ZZ_TMDB,))
+    data = {"tmdb_id": _ZZ_TMDB, "title": "ZZTEST Movie", "language": "Telugu", "now_playing": True}
+    data.update(over)
+    row = db.query_one(
+        "INSERT INTO movies (tmdb_id, title, language, now_playing) VALUES (%(tmdb_id)s,%(title)s,"
+        "%(language)s,%(now_playing)s) RETURNING id", data)
+    return row["id"]
+
+
+def test_movies_set_active_and_deleted_roundtrip():
+    mid = _seed_movie()
+    try:
+        m = movies.get_movie(mid)
+        assert m["is_active"] is True and m["deleted_at"] is None
+        movies.set_active(mid, False)
+        assert movies.get_movie(mid)["is_active"] is False
+        movies.set_active(mid, True)
+        assert movies.get_movie(mid)["is_active"] is True
+        movies.set_deleted(mid, True)
+        assert movies.get_movie(mid)["deleted_at"] is not None
+        movies.set_deleted(mid, False)
+        assert movies.get_movie(mid)["deleted_at"] is None
+    finally:
+        db.execute("DELETE FROM movies WHERE id = %s", (mid,))
+
+
+def test_movies_apply_edits_ignores_disallowed_fields():
+    mid = _seed_movie()
+    try:
+        out = movies.apply_edits(mid, {"title": "New Title", "tmdb_id": 1, "now_playing": False})
+        assert out["fields"] == ["title"]
+        m = movies.get_movie(mid)
+        assert m["title"] == "New Title" and m["tmdb_id"] == _ZZ_TMDB and m["now_playing"] is True
+    finally:
+        db.execute("DELETE FROM movies WHERE id = %s", (mid,))
+
+
+def test_list_in_theaters_excludes_paused():
+    mid = _seed_movie(title="ZZTEST Paused Movie")
+    try:
+        assert any(r["tmdb_id"] == _ZZ_TMDB for r in movies.list_in_theaters(limit=500))
+        movies.set_active(mid, False)
+        assert not any(r["tmdb_id"] == _ZZ_TMDB for r in movies.list_in_theaters(limit=500))
+        movies.set_active(mid, True)
+        assert any(r["tmdb_id"] == _ZZ_TMDB for r in movies.list_in_theaters(limit=500))
+    finally:
+        db.execute("DELETE FROM movies WHERE id = %s", (mid,))
+
+
+def test_refresh_does_not_reset_pause(monkeypatch):
+    # Regression: refresh()'s ON CONFLICT upsert must not clobber the admin pause flag -- only
+    # now_playing/data-driven columns are in its SET list.
+    mid = _seed_movie()
+    movies.set_active(mid, False)
+    try:
+        monkeypatch.setattr(movies.settings, "tmdb_api_key", "fake-key")
+        monkeypatch.setattr(movies, "_discover", lambda lang, since, until: (
+            [{"id": _ZZ_TMDB, "title": "ZZTEST Movie", "original_language": "te"}]
+            if lang == "te" else []))
+        movies.refresh()
+        assert movies.get_movie(mid)["is_active"] is False
+    finally:
+        db.execute("DELETE FROM movies WHERE id = %s", (mid,))
 
 
 def test_reply_routes_movie_query(monkeypatch):

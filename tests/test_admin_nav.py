@@ -6,7 +6,8 @@ from indo_usa_mcp.web import common
 def test_admin_nav_is_grouped():
     assert all(isinstance(sec, str) and isinstance(items, list) for sec, items in common._ADMIN_NAV)
     labels = [lbl for _sec, items in common._ADMIN_NAV for lbl, _href in items]
-    for must in ("Overview", "Operations", "Messages", "Approvals", "Moderation", "Agents"):
+    for must in ("Overview", "Operations", "Messages", "Approvals", "Moderation", "Agents",
+                "Search all", "Movies", "Employers", "Knowledge"):
         assert must in labels, must
 
 

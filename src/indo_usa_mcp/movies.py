@@ -107,7 +107,7 @@ def refresh(days_back: int = 45) -> dict[str, Any]:
 
 
 def list_in_theaters(language: str | None = None, limit: int = 60) -> list[dict]:
-    where, params = ["now_playing"], []
+    where, params = ["now_playing", "is_active", "deleted_at IS NULL"], []
     if language:
         where.append("LOWER(language) = LOWER(%s)")
         params.append(language)
@@ -123,7 +123,64 @@ def list_in_theaters(language: str | None = None, limit: int = 60) -> list[dict]
 def languages_in_theaters() -> list[str]:
     try:
         return [r["language"] for r in db.query(
-            "SELECT DISTINCT language FROM movies WHERE now_playing AND language IS NOT NULL "
-            "ORDER BY 1")]
+            "SELECT DISTINCT language FROM movies WHERE now_playing AND is_active "
+            "AND deleted_at IS NULL AND language IS NOT NULL ORDER BY 1")]
     except Exception:
         return []
+
+
+# ------------------------------------------------------------------------- admin moderation
+_EDIT_FIELDS = ("title", "original_title", "language", "poster_url", "overview", "release_date",
+                "ticket_url", "genres")
+# NOT editable here: tmdb_id (upsert key), now_playing/popularity/fetched_at -- those are data-driven,
+# recomputed by refresh() every day; is_active is the separate, admin-only pause flag (see below).
+
+
+def get_movie(movie_id: int) -> dict | None:
+    return db.query_one("SELECT * FROM movies WHERE id = %s", (movie_id,))
+
+
+def apply_edits(movie_id: int, edits: dict) -> dict:
+    diff = {k: v for k, v in edits.items() if k in _EDIT_FIELDS}
+    if not diff:
+        return {"ok": True, "updated": 0}
+    sets = ", ".join(f"{k} = %s" for k in diff)
+    db.execute(f"UPDATE movies SET {sets}, updated_at = now() WHERE id = %s",
+               [*diff.values(), movie_id])
+    return {"ok": True, "updated": len(diff), "fields": sorted(diff)}
+
+
+def set_active(movie_id: int, active: bool) -> None:
+    db.execute("UPDATE movies SET is_active = %s, updated_at = now() WHERE id = %s",
+               (active, movie_id))
+
+
+def set_deleted(movie_id: int, deleted: bool) -> None:
+    val = "now()" if deleted else "NULL"
+    db.execute(f"UPDATE movies SET deleted_at = {val}, updated_at = now() WHERE id = %s", (movie_id,))
+
+
+def _admin_filters(q: str | None, flt: str | None) -> tuple[list[str], list]:
+    where, params = ["deleted_at IS NULL"], []
+    if q:
+        where.append("title ILIKE %s")
+        params.append(f"%{q}%")
+    if flt == "inactive":
+        where.append("NOT is_active")
+    elif flt == "active":
+        where.append("is_active")
+    return where, params
+
+
+def list_admin(q: str | None = None, flt: str | None = None, limit: int = 50, offset: int = 0) -> list[dict]:
+    where, params = _admin_filters(q, flt)
+    return db.query(
+        f"SELECT id, tmdb_id, title, language, is_active, now_playing, release_date, popularity "
+        f"FROM movies WHERE {' AND '.join(where)} ORDER BY id DESC LIMIT %s OFFSET %s",
+        params + [limit, offset])
+
+
+def count_admin(q: str | None = None, flt: str | None = None) -> int:
+    where, params = _admin_filters(q, flt)
+    row = db.query_one(f"SELECT count(*) AS n FROM movies WHERE {' AND '.join(where)}", params)
+    return row["n"] if row else 0

@@ -111,6 +111,59 @@ def _agent_health_table() -> str:
 
 
 # --------------------------------------------------------------------- data browse
+def _entity_row(label: str, href: str, count: int) -> str:
+    return f"<a class='kpi act' href='{href}'><b>{count}</b><span>{esc(label)}</span></a>"
+
+
+def unified_search(request: Request) -> HTMLResponse:
+    """Cross-entity router: search or browse every vertical + movies + employers + knowledge in one
+    place, then hop into that entry's own canonical edit page (this page never edits anything itself)."""
+    if (r := require_admin(request)):
+        return r
+    from .. import h1b, knowledge, movies
+    q = request.query_params.get("q") or None
+
+    if not q:
+        cards = [_entity_row(verticals.VERTICALS[v]["label"], f"/admin/data/{v}",
+                             verticals.count_records(v)) for v in _VKEYS]
+        cards.append(_entity_row("Movies", "/admin/movies", movies.count_admin()))
+        cards.append(_entity_row("Employers", "/admin/employers", h1b.count_admin()))
+        cards.append(_entity_row("Knowledge", "/admin/knowledge", knowledge.count_admin()))
+        body = (f"<form method='get' class='inline'><input name='q' placeholder='search everything' "
+                f"autofocus> <button>Search</button></form>"
+                f"<p class='muted'>Or browse an entity type directly:</p>"
+                f"<div class='cards'>{''.join(cards)}</div>")
+        return admin_page("Search all", body, active="Search all")
+
+    sections = ""
+    for v in _VKEYS:
+        rows = verticals.list_records(v, q=q, limit=8)
+        if not rows:
+            continue
+        trs = "".join(f"<tr><td>{x['id']}</td>"
+                      f"<td><a href='/admin/data/{v}/{x['id']}'>{esc(x['name'])}</a></td>"
+                      f"<td>{esc(x['city'])}, {esc(x['state'])}</td></tr>" for x in rows)
+        sections += (f"<h3>{esc(verticals.VERTICALS[v]['label'])}</h3>"
+                    f"<table><tr><th>ID</th><th>Name</th><th>Location</th></tr>{trs}</table>")
+    for label, href, rows_fn, name_key in (
+        ("Movies", "/admin/movies", lambda: movies.list_admin(q=q, limit=8), "title"),
+        ("Employers", "/admin/employers", lambda: h1b.list_admin(q=q, limit=8), "employer"),
+        ("Knowledge", "/admin/knowledge", lambda: knowledge.list_admin(q=q, limit=8), "title"),
+    ):
+        rows = rows_fn()
+        if not rows:
+            continue
+        trs = "".join(f"<tr><td>{x['id']}</td>"
+                      f"<td><a href='{href}/{x['id']}'>{esc(x.get(name_key) or x['id'])}</a></td></tr>"
+                      for x in rows)
+        sections += f"<h3>{label}</h3><table><tr><th>ID</th><th>Name</th></tr>{trs}</table>"
+
+    body = (f"<form method='get' class='inline'><input name='q' value='{esc(q)}'> "
+            f"<button>Search</button></form>"
+            + (sections or "<p class='muted'>No matches.</p>"))
+    return admin_page(f"Search: {q}", body, active="Search all")
+
+
 def data_list(request: Request) -> HTMLResponse:
     if (r := require_admin(request)):
         return r
@@ -1367,6 +1420,7 @@ routes = [
     Route("/admin", overview, methods=["GET"]),
     Route("/admin/ops", ops_page, methods=["GET"]),
     Route("/admin/dashboard", dashboard_page, methods=["GET"]),
+    Route("/admin/data", unified_search, methods=["GET"]),
     Route("/admin/moderation", moderation_page, methods=["GET"]),
     Route("/admin/moderation", moderation_action, methods=["POST"]),
     Route("/admin/coverage", coverage_page, methods=["GET"]),
