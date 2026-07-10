@@ -67,7 +67,7 @@ def footer_html() -> str:
 def _doc(path: str, title: str, desc: str, body: str, status: int = 200,
          extra_jsonld: str = "") -> HTMLResponse:
     base = settings.public_web_url.rstrip("/")
-    url, img = base + path, base + "/og-image.svg"
+    url, img = base + path, base + "/og.png"
     t, d = html.escape(title), html.escape(desc)
     doc = f"""<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -77,6 +77,9 @@ def _doc(path: str, title: str, desc: str, body: str, status: int = 200,
 <meta property="og:title" content="{t}"><meta property="og:description" content="{d}">
 <meta property="og:type" content="website"><meta property="og:url" content="{html.escape(url)}">
 <meta property="og:image" content="{html.escape(img)}">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta property="og:image:type" content="image/png">
+<meta property="og:site_name" content="{html.escape(settings.platform_name)}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{t}"><meta name="twitter:description" content="{d}">
 <meta name="twitter:image" content="{html.escape(img)}">

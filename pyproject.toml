@@ -15,6 +15,7 @@ dependencies = [
     "itsdangerous>=2.0",
     "reverse_geocoder>=1.5",
     "openpyxl>=3.1",   # read the DOL H-1B disclosure .xlsx (streamed, read-only); .csv needs no dep
+    "pillow>=10.2",    # render raster (PNG) social-share cards -- SVG OG images don't show on FB/LinkedIn/WhatsApp/X
 ]
 
 [project.optional-dependencies]

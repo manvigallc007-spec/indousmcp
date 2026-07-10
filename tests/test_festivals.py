@@ -57,7 +57,7 @@ def test_festivals_page_renders():
     r = _client.get("/festivals")
     assert r.status_code == 200
     assert "festival" in r.text.lower()
-    assert "festival-card.svg" in r.text          # share links present
+    assert "og.png?kind=festival" in r.text       # PNG greeting-card share links (render on WhatsApp/FB/X)
 
 
 def test_festival_card_svg_renders():

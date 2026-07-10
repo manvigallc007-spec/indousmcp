@@ -7,6 +7,7 @@ import functools
 import html
 import pathlib
 import time
+from datetime import date
 
 from starlette.requests import Request
 from starlette.responses import FileResponse, HTMLResponse, RedirectResponse, Response
@@ -159,6 +160,33 @@ def festival_card(request: Request) -> Response:
                     headers={"Cache-Control": "public, max-age=21600"})
 
 
+# Raster (PNG) share cards — the real fix for social previews (SVG OG images don't render on
+# Facebook/LinkedIn/WhatsApp/X). See web/ogimage.py. og:image URLs across the site point here.
+_OG_KINDS = {"home", "default", "festival", "city", "movies"}
+_OG_PARAMS = {"festival": ("name",), "city": ("label", "city", "state")}
+_OG_MAXLEN = 80          # clamp attacker-controllable params: bounds render cost + prevents overflow
+
+
+@functools.lru_cache(maxsize=128)
+def _og_png_cached(kind: str, params_key: tuple, day: int) -> bytes:
+    # `day` is part of the key so the festival countdown refreshes daily without re-rendering per request.
+    from . import ogimage
+    return ogimage.render(kind, **dict(params_key))
+
+
+def og_png(request: Request) -> Response:
+    """1200x630 branded PNG share card. ?kind=home|festival|city|movies (+ kind-specific params)."""
+    kind = (request.query_params.get("kind") or "home").strip().lower()
+    if kind not in _OG_KINDS:
+        kind = "home"
+    keys = _OG_PARAMS.get(kind, ())
+    params_key = tuple((k, (request.query_params.get(k) or "").strip()[:_OG_MAXLEN]) for k in keys)
+    day = date.today().toordinal() if kind == "festival" else 0
+    png = _og_png_cached(kind, params_key, day)
+    return Response(png, media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
 _LANDING_HTML = """<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__PLAT__ — Find Indian America</title>
@@ -168,7 +196,13 @@ _LANDING_HTML = """<!doctype html><html lang="en"><head>
 <meta property="og:type" content="website">
 <meta property="og:url" content="__OGURL__">
 <meta property="og:image" content="__OGIMG__">
-<meta name="twitter:card" content="summary">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:alt" content="__PLAT__ — Find Indian America">
+<meta property="og:site_name" content="__PLAT__">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="__OGIMG__">
 <link rel="canonical" href="__OGURL__">
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
 <link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#c1440e">
@@ -253,7 +287,7 @@ def home(request: Request) -> HTMLResponse:
         # URL is what caused Search Console's "Duplicate without user-selected canonical" (no
         # canonical tag was present at all before) confusion between them.
         "__OGURL__": html.escape(settings.public_web_url.rstrip("/") + "/explore"),
-        "__OGIMG__": html.escape(settings.public_web_url.rstrip("/") + "/icon.svg"),
+        "__OGIMG__": html.escape(settings.public_web_url.rstrip("/") + "/og.png"),
         "__OGDESC__": html.escape(desc),
     }
     doc = _LANDING_HTML
@@ -578,6 +612,7 @@ routes = [
     Route("/icon.svg", icon, methods=["GET"]),
     Route("/favicon.ico", icon, methods=["GET"]),
     Route("/og-image.svg", og_image, methods=["GET"]),
+    Route("/og.png", og_png, methods=["GET"]),
     Route("/festival-card.svg", festival_card, methods=["GET"]),
     Route("/logo", brand_logo, methods=["GET"]),
     Route("/submit", submit_get, methods=["GET"]),

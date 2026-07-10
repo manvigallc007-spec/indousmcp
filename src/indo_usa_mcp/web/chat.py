@@ -76,6 +76,11 @@ _CHAT_HTML = """<!doctype html><html lang="en"><head>
 <meta property="og:type" content="website">
 <meta property="og:url" content="__OGURL__">
 <meta property="og:image" content="__OGIMG__">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:alt" content="__PLAT__ — __PTAG__">
+<meta property="og:site_name" content="__PLAT__">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="__PLAT__ — __PTAG__">
 <meta name="twitter:description" content="__OGDESC__">
@@ -602,7 +607,7 @@ def chat_page(request: Request) -> HTMLResponse:
     except Exception:
         festival_html = ""
     og_url = base + "/"          # the chatbot is the homepage now
-    og_img = f"{base}/og-image.svg"
+    og_img = f"{base}/og.png"    # raster card (SVG OG images don't render on FB/LinkedIn/WhatsApp/X)
     aname_raw = settings.assistant_name
     og_desc = (f"{settings.platform_name} — your guide to Indian America. Find Indian restaurants, "
                f"sweets, temples, doctors, events, classes, salons and jewelry near you across the "

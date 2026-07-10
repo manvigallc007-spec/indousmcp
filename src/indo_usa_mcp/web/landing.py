@@ -132,9 +132,18 @@ def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200,
           if jsonld else "")
     can = (f'<link rel="canonical" href="{html.escape(canonical)}">'
            f'<meta property="og:url" content="{html.escape(canonical)}">' if canonical else "")
-    img_meta = (f'<meta property="og:image" content="{html.escape(image)}">'
-                f'<meta name="twitter:card" content="summary_large_image">'
-                f'<meta name="twitter:image" content="{html.escape(image)}">' if image else "")
+    # Every page gets a share card: a tailored /og.png when the caller passes none. Declare
+    # 1200x630 dimensions only for our generated cards (a real listing photo has other dimensions).
+    if not image:
+        image = _base() + "/og.png"
+    dims = ('<meta property="og:image:width" content="1200">'
+            '<meta property="og:image:height" content="630">'
+            '<meta property="og:image:type" content="image/png">') if "/og.png" in image else ""
+    img_meta = (f'<meta property="og:image" content="{html.escape(image)}">' + dims
+                + f'<meta property="og:image:alt" content="{html.escape(title)}">'
+                + f'<meta property="og:site_name" content="{html.escape(settings.platform_name)}">'
+                + f'<meta name="twitter:card" content="summary_large_image">'
+                + f'<meta name="twitter:image" content="{html.escape(image)}">')
     # "follow" (not "nofollow") -- keep internal crawl paths (breadcrumbs/filter bar) open even on a
     # page whose own content is too thin to index, e.g. a browse_city view with zero listings.
     robots_meta = '<meta name="robots" content="noindex,follow">' if noindex else ""
@@ -457,7 +466,11 @@ def browse_city(request: Request) -> HTMLResponse:
             f"<p class='muted'>{len(rows)} result{'s' if len(rows) != 1 else ''} · "
             f"<a href='/chat'>{html.escape(tr['ask_picks'])}</a>{best_link}</p>"
             f"{fbar}{cards}<p><a class='cta' href='/chat'>{html.escape(tr['ask_picks'])} →</a></p>")
-    og_img = next((x.get("photo_url") for x in rows if x.get("photo_url")), "")
+    # A real listing photo is the most clickable share image; fall back to a tailored city card
+    # (better than the generic home default) when no listing has one.
+    og_img = (next((x.get("photo_url") for x in rows if x.get("photo_url")), None)
+              or f"{_base()}/og.png?kind=city&label={quote(label)}"
+                 f"&city={quote(city.title())}&state={quote(state.upper())}")
     facets = seo.top_facets(rows)
     facet_clause = f" Including {', '.join(facets)}." if facets else ""
     return _page(f"{h1} · {settings.platform_name} ({len(rows)})",
@@ -519,7 +532,10 @@ def best_city(request: Request) -> HTMLResponse:
             f"<a href='/browse/{v}/{_slug(state)}/{_slug(city)}'>See all</a> · "
             f"<a href='/chat'>{html.escape(tr['ask_picks'])}</a></p>"
             f"{cards}<p><a class='cta' href='/chat'>{html.escape(tr['ask_picks'])} →</a></p>")
-    og_img = next((x.get("photo_url") for x in rows if x.get("photo_url")), "")
+    # Top listing photo makes the most clickable share image; else a tailored city card.
+    og_img = (next((x.get("photo_url") for x in rows if x.get("photo_url")), None)
+              or f"{_base()}/og.png?kind=city&label={quote(label)}"
+                 f"&city={quote(city.title())}&state={quote(state.upper())}")
     return _page(f"{h1} · {settings.platform_name}",
                  f"The best Indian {label.lower()} in {loc} ({year}) — top-rated picks with ratings, "
                  f"addresses, phone and websites, ranked by community and web reviews.",
@@ -577,7 +593,7 @@ def movies_page(request: Request) -> HTMLResponse:
     return _page(f"{h1} · {settings.platform_name}",
                  "Latest Hindi, Telugu, Tamil, Malayalam and other Indian movies now playing in US "
                  "theaters — find showtimes and buy tickets near you.", body,
-                 canonical=f"{_base()}/movies")
+                 canonical=f"{_base()}/movies", image=f"{_base()}/og.png?kind=movies")
 
 
 def employers_page(request: Request) -> HTMLResponse:
@@ -632,7 +648,7 @@ def festivals_page(request: Request) -> HTMLResponse:
         rows += (f"<div class='lc'><h3>{html.escape(e['emoji'])} {html.escape(e['name'])} "
                  f"<span class='muted' style='font-weight:400'>· {when}</span></h3>"
                  f"<div class='meta'>{html.escape(date_str)}</div>"
-                 f"<p><a href='/festival-card.svg?name={quote(e['name'])}' target='_blank' "
+                 f"<p><a href='/og.png?kind=festival&name={quote(e['name'])}' target='_blank' "
                  f"rel='noopener'>🖼 Share a greeting card</a></p></div>")
     lead = ""
     if nf:
@@ -647,7 +663,7 @@ def festivals_page(request: Request) -> HTMLResponse:
     return _page(f"Upcoming Indian festivals · {settings.platform_name}",
                  "When Diwali, Holi, Navratri, Pongal, Eid and more fall this year — a countdown for the "
                  "Indian community in the USA, with shareable greeting cards.",
-                 body, canonical=f"{_base()}/festivals")
+                 body, canonical=f"{_base()}/festivals", image=f"{_base()}/og.png?kind=festival")
 
 
 def _when(dt) -> str:
@@ -730,7 +746,8 @@ def sitemap(request: Request) -> Response:
             rows = []
         for r in rows:
             urls.append(f"{base}/browse/{v}/{_slug(r['state'])}/{_slug(r['city'])}")
-    # 'Best of' pages — only (vertical × city) with enough listings to make a credible ranking.
+    # 'Best of' pages — match best_city's own render threshold (>=3 listings; it redirects below that),
+    # so every live, canonical /best page is listed and none are orphaned from the sitemap.
     for v in verticals.VERTICALS:
         if v == "events":
             continue
@@ -738,7 +755,7 @@ def sitemap(request: Request) -> Response:
             rows = db.query(
                 f"SELECT state, city FROM {verticals._table(v)} "
                 f"WHERE deleted_at IS NULL AND is_active AND city IS NOT NULL AND state IS NOT NULL "
-                f"GROUP BY state, city HAVING count(*) >= 5")
+                f"GROUP BY state, city HAVING count(*) >= 3")
         except Exception:
             rows = []
         for r in rows:
