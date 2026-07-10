@@ -475,11 +475,48 @@ def upgrade_get(request: Request) -> HTMLResponse:
     try:
         rid = int(request.query_params.get("id", ""))
     except ValueError:
-        return _page("Bad request", "<h2>Missing restaurant id</h2>", status=400)
-    result = payments.create_checkout_session(rid)
+        return _page("Bad request", "<h2>Missing listing id</h2>", status=400)
+    vertical = (request.query_params.get("vertical") or "restaurants").strip()   # back-compat default
+    days_q = request.query_params.get("days")
+    if not days_q:                                        # no duration chosen yet -> show the picker
+        opts = "".join(
+            f"<label style='display:block;margin:8px 0;font-size:16px'>"
+            f"<input type='radio' name='days' value='{o['days']}'{' checked' if i == 0 else ''}> "
+            f"⭐ {html.escape(o['label'])}</label>" for i, o in enumerate(payments.duration_options()))
+        body = ("<h2>Feature your listing</h2><p class='muted'>Featured listings rank higher in browse "
+                "&amp; search across the USA.</p>"
+                f"<form method='post' action='/upgrade/checkout'>"
+                f"<input type='hidden' name='id' value='{rid}'>"
+                f"<input type='hidden' name='vertical' value='{html.escape(vertical)}'>"
+                f"{opts}<button type='submit' style='margin-top:10px'>Continue to payment →</button></form>")
+        return _page("Feature your listing", body)
+    return _start_upgrade_checkout(vertical, rid, days_q)
+
+
+def _start_upgrade_checkout(vertical: str, rid: int, days_q) -> HTMLResponse:
+    try:
+        days = int(days_q)
+    except (TypeError, ValueError):
+        return _page("Bad request", "<h2>Invalid duration</h2>", status=400)
+    if days not in settings.featured_pricing_table:
+        return _page("Bad request", "<h2>Invalid duration</h2>", status=400)
+    result = payments.create_listing_upgrade_session(vertical, rid, days)
     if not result.get("ok"):
         return _page("Error", "<h2 class='err'>Could not start checkout</h2>", status=502)
     return RedirectResponse(result["url"], status_code=303)
+
+
+async def upgrade_checkout(request: Request) -> HTMLResponse:
+    """POST target of the duration picker -> start Stripe checkout."""
+    if not settings.featured_for_sale:
+        return _page("Unavailable", "<h2>Featured upgrades aren't available yet</h2>", status=503)
+    form = await request.form()
+    try:
+        rid = int(form.get("id") or "")
+    except ValueError:
+        return _page("Bad request", "<h2>Missing listing id</h2>", status=400)
+    vertical = (form.get("vertical") or "restaurants").strip()
+    return _start_upgrade_checkout(vertical, rid, form.get("days"))
 
 
 def upgrade_success(request: Request) -> HTMLResponse:
@@ -550,6 +587,7 @@ routes = [
     Route("/manage", manage_get, methods=["GET"]),
     Route("/manage", manage_post, methods=["POST"]),
     Route("/upgrade", upgrade_get, methods=["GET"]),
+    Route("/upgrade/checkout", upgrade_checkout, methods=["POST"]),
     Route("/upgrade/success", upgrade_success, methods=["GET"]),
     Route("/upgrade/cancel", upgrade_cancel, methods=["GET"]),
     Route("/optout", optout_get, methods=["GET"]),

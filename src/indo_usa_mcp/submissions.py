@@ -34,8 +34,18 @@ def submit(vertical: str, payload: dict, contact_email: str | None = None,
 
 def list_pending(limit: int = 100) -> list[dict]:
     return db.query(
-        "SELECT id, vertical, payload, contact_email, note, created_at FROM submissions "
-        "WHERE status = 'pending' ORDER BY created_at LIMIT %s", (limit,))
+        "SELECT id, vertical, payload, contact_email, note, created_at, paid_featured_days, "
+        "stripe_session_id FROM submissions WHERE status = 'pending' ORDER BY created_at LIMIT %s",
+        (limit,))
+
+
+def list_paid_unresolved(limit: int = 50) -> list[dict]:
+    """Submissions that were paid but then REJECTED — no featured placement was applied, so the owner
+    is owed a refund. list_pending() can never show these (they aren't pending). Admin acts via Stripe."""
+    return db.query(
+        "SELECT id, vertical, payload, contact_email, paid_featured_days, stripe_session_id, "
+        "reviewed_at FROM submissions WHERE status = 'rejected' AND paid_featured_days IS NOT NULL "
+        "ORDER BY reviewed_at DESC LIMIT %s", (limit,))
 
 
 def list_for_owner(email: str, limit: int = 50) -> list[dict]:
@@ -74,6 +84,13 @@ def approve(sub_id: int) -> dict[str, Any]:
         return {"ok": False, "error": res.get("error", "create_failed")}
     db.execute("UPDATE submissions SET status = 'approved', created_record_id = %s, "
                "reviewed_at = now() WHERE id = %s", (res["id"], sub_id))
+    # If the owner paid for premium during onboarding, apply the featured placement now — the ONLY
+    # place payment ever takes effect (never before approval, never influencing the approval decision).
+    if sub.get("paid_featured_days"):
+        try:
+            verticals.set_featured(sub["vertical"], res["id"], days=sub["paid_featured_days"])
+        except Exception:
+            pass
     return {"ok": True, "vertical": sub["vertical"], "record_id": res["id"]}
 
 

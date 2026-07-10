@@ -178,9 +178,12 @@ class Settings(BaseSettings):
     # Payments (Stripe) — optional. Blank secret key = payments disabled (manual featuring).
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
-    stripe_price_cents: int = 3000      # $30.00 for a featured listing
+    stripe_price_cents: int = 3000      # $30.00 for a featured listing (30-day base / fallback)
     stripe_currency: str = "usd"
     featured_days: int = 30
+    # Multi-duration pricing as an explicit "days:cents" CSV (a non-linear bulk discount is just the
+    # numbers you put here). Falls back to the single stripe_price_cents if unset/misparsed.
+    featured_pricing: str = "30:3000,90:7500,365:24000"
     # Sell Featured placement? Kept OFF until a city+vertical has provable traffic — Stripe
     # plumbing stays intact, but the "Get Featured" buttons + /upgrade are hidden meanwhile.
     featured_sales_enabled: bool = False
@@ -188,6 +191,20 @@ class Settings(BaseSettings):
     @property
     def payments_enabled(self) -> bool:
         return bool(self.stripe_secret_key)
+
+    @property
+    def featured_pricing_table(self) -> dict[int, int]:
+        """{days: price_cents}, parsed defensively — a bad env value can never break checkout."""
+        table: dict[int, int] = {}
+        for part in (self.featured_pricing or "").split(","):
+            if ":" not in part:
+                continue
+            d, c = part.split(":", 1)
+            try:
+                table[int(d.strip())] = int(c.strip())
+            except ValueError:
+                continue
+        return table or {self.featured_days: self.stripe_price_cents}
 
     # Claiming a listing is FREE (drives adoption + the verified-owner badge). Flip on only
     # if/when you decide to charge for claims — the paid checkout itself is not built yet.

@@ -60,29 +60,70 @@ def test_portal_add_requires_login():
 def test_onboarding_prefills_then_submits(monkeypatch):
     monkeypatch.setattr(portal, "portal_email", lambda req: "owner@example.com")
     monkeypatch.setattr(portal.onboard, "lookup",
-                        lambda name, city, state, vertical=None: {
+                        lambda name, city, state, vertical=None, website=None: {
                             "name": name, "city": city, "state": state, "address_full": "100 Main St",
                             "phone": "+1 555", "website": "https://x.com", "photo_url": "http://img/p.jpg"})
+    monkeypatch.setattr(portal.onboard, "ai_fill", lambda v, rec: {**rec, "cuisine_type": "South Indian"})
     c = TestClient(app)
     r = c.post("/portal/add", data={"vertical": "restaurants", "name": "Spice Hut",
-                                    "state": "TX", "city": "Plano"})
+                                    "state": "TX", "city": "Plano", "website": "https://x.com"})
     assert r.status_code == 200
     assert "Verify Spice Hut" in r.text
     assert "100 Main St" in r.text                 # prefilled from the lookup
     assert "http://img/p.jpg" in r.text            # photo preview
+    assert "name='cuisine_type'" in r.text and "South Indian" in r.text   # AI-filled vertical field shown
 
     captured = {}
     monkeypatch.setattr(portal.submissions, "submit",
                         lambda v, payload, contact_email=None, note=None:
-                        captured.update(v=v, payload=payload, email=contact_email) or {"ok": True})
+                        captured.update(v=v, payload=payload, email=contact_email) or {"ok": True, "id": 1})
     r2 = c.post("/portal/add/confirm",
                 data={"vertical": "restaurants", "name": "Spice Hut", "address_full": "100 Main St",
                       "city": "Plano", "state": "TX", "phone": "+1 555", "website": "https://x.com",
-                      "hours": "Mon-Sun 11-9", "languages": "Telugu"}, follow_redirects=False)
+                      "hours": "Mon-Sun 11-9", "languages": "Telugu", "cuisine_type": "South Indian"},
+                follow_redirects=False)
     assert r2.status_code == 303 and "added=1" in r2.headers["location"]
     assert captured["email"] == "owner@example.com"
     assert captured["payload"]["name"] == "Spice Hut"
+    assert captured["payload"]["cuisine_type"] == "South Indian"   # vertical field reaches the submission
     assert captured["payload"]["hours_json"] == {"raw": "Mon-Sun 11-9"}
+
+
+def _enable_sales(monkeypatch):
+    monkeypatch.setattr(portal, "portal_email", lambda req: "owner@example.com")
+    monkeypatch.setattr(portal.settings, "stripe_secret_key", "sk_test")
+    monkeypatch.setattr(portal.settings, "featured_sales_enabled", True)
+    monkeypatch.setattr(portal.submissions, "submit", lambda *a, **k: {"ok": True, "id": 55})
+
+
+def test_add_confirm_premium_redirects_to_stripe(monkeypatch):
+    _enable_sales(monkeypatch)
+    monkeypatch.setattr("indo_usa_mcp.payments.create_submission_premium_session",
+                        lambda sub_id, days: {"ok": True, "url": "https://stripe.test/pay"})
+    r = TestClient(app).post("/portal/add/confirm",
+                             data={"vertical": "restaurants", "name": "X", "city": "Plano",
+                                   "state": "TX", "plan": "90"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "https://stripe.test/pay"
+
+
+def test_add_confirm_free_plan_never_calls_stripe(monkeypatch):
+    _enable_sales(monkeypatch)
+    monkeypatch.setattr("indo_usa_mcp.payments.create_submission_premium_session",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("stripe must not be called")))
+    r = TestClient(app).post("/portal/add/confirm",
+                             data={"vertical": "restaurants", "name": "X", "city": "Plano",
+                                   "state": "TX", "plan": "free"}, follow_redirects=False)
+    assert r.status_code == 303 and "added=1" in r.headers["location"]
+
+
+def test_add_confirm_premium_stripe_failure_falls_back_to_free(monkeypatch):
+    _enable_sales(monkeypatch)
+    monkeypatch.setattr("indo_usa_mcp.payments.create_submission_premium_session",
+                        lambda *a, **k: {"ok": False})
+    r = TestClient(app).post("/portal/add/confirm",
+                             data={"vertical": "restaurants", "name": "X", "city": "Plano",
+                                   "state": "TX", "plan": "90"}, follow_redirects=False)
+    assert r.status_code == 303 and "added=1" in r.headers["location"]   # submission not lost
 
 
 def test_owner_can_delete_own_submission(monkeypatch):

@@ -9,11 +9,29 @@ of a single gate/check function."""
 
 from starlette.testclient import TestClient
 
+import indo_usa_mcp.web.admin as admin_mod
 import indo_usa_mcp.web.admin_content as ac
-from indo_usa_mcp import db
+from indo_usa_mcp import db, submissions
 from indo_usa_mcp.web.app import app
 
 _client = TestClient(app)
+
+
+def test_submissions_page_shows_paid_badge_and_refund_callout(monkeypatch):
+    monkeypatch.setattr(admin_mod, "require_admin", lambda request: None)
+    p = submissions.submit("restaurants", {"name": "ZZTEST Admin Paid", "city": "Plano",
+                                           "state": "TX"}, contact_email="z@z.com")["id"]
+    db.execute("UPDATE submissions SET paid_featured_days = 90 WHERE id = %s", (p,))
+    rej = submissions.submit("restaurants", {"name": "ZZTEST Admin Rejected"},
+                             contact_email="z@z.com")["id"]
+    db.execute("UPDATE submissions SET status='rejected', paid_featured_days=30, "
+               "stripe_session_id='cs_admin_zz' WHERE id=%s", (rej,))
+    try:
+        html = _client.get("/admin/submissions").text
+        assert "Paid" in html and "90d" in html          # badge on the pending paid row
+        assert "cs_admin_zz" in html and "refund" in html.lower()   # refund callout w/ session id
+    finally:
+        db.execute("DELETE FROM submissions WHERE id = ANY(%s)", ([p, rej],))
 
 
 def test_unauthenticated_redirects_to_login():

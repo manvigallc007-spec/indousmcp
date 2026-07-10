@@ -974,22 +974,39 @@ def submissions_page(request: Request) -> HTMLResponse:
         contact = " · ".join(f for f in (p.get("phone"), p.get("website")) if f)
         note = f"<div class='muted'>{esc(x.get('note'))}</div>" if x.get("note") else ""
 
-        def act(op, label, gray=False):
-            return (f"<form method='post' action='/admin/submissions' class='inline'>"
+        paid = x.get("paid_featured_days")
+        paid_badge = (f" <span class='ok'>💰 Paid — {paid}d</span>" if paid else "")
+        reject_confirm = (" onsubmit=\"return confirm('This submission was PAID. Rejecting it will not "
+                          "refund the owner automatically — refund via Stripe first. Continue?')\""
+                          if paid else "")
+
+        def act(op, label, gray=False, form_attr=""):
+            return (f"<form method='post' action='/admin/submissions' class='inline'{form_attr}>"
                     f"<input type='hidden' name='id' value='{x['id']}'>"
                     f"<button class='btn{' gray' if gray else ''}' name='op' value='{op}'>{label}</button></form> ")
         label = verticals.VERTICALS.get(x["vertical"], {}).get("label", x["vertical"])
         rows += (f"<tr><td>{esc(label)}</td>"
-                 f"<td><b>{esc(p.get('name'))}</b><br><span class='muted'>{esc(loc)}</span>{note}</td>"
+                 f"<td><b>{esc(p.get('name'))}</b>{paid_badge}<br><span class='muted'>{esc(loc)}</span>{note}</td>"
                  f"<td class='muted'>{esc(contact)}<br>{esc(x.get('contact_email'))}</td>"
-                 f"<td>{act('approve', 'Approve &amp; publish')}{act('reject', 'Reject', True)}</td></tr>")
+                 f"<td>{act('approve', 'Approve &amp; publish')}"
+                 f"{act('reject', 'Reject', True, reject_confirm)}</td></tr>")
     cards = (f"<div class='cards'><div class='kpi'><b>{s['pending']}</b><span>pending</span></div>"
              f"<div class='kpi'><b>{s['approved']}</b><span>approved</span></div>"
              f"<div class='kpi'><b>{s['rejected']}</b><span>rejected</span></div></div>")
+    # Paid-but-rejected submissions need a manual Stripe refund — surface them so they can't be missed.
+    unresolved = submissions.list_paid_unresolved()
+    refund_callout = ""
+    if unresolved:
+        items = "".join(
+            f"<li>{esc((u['payload'] or {}).get('name'))} — {u['paid_featured_days']}d paid · "
+            f"<code>{esc(u.get('stripe_session_id'))}</code></li>" for u in unresolved)
+        refund_callout = (f"<div class='banner warn' style='margin:10px 0'>💸 {len(unresolved)} paid "
+                          f"submission(s) were rejected — refund via the Stripe dashboard (search the "
+                          f"session id):<ul>{items}</ul></div>")
     table = (f"<table><tr><th>Category</th><th>Business</th><th>Contact</th><th></th></tr>{rows}</table>"
              if rows else "<p class='muted'>No pending submissions. Owners add listings at "
              "<a href='/submit'>/submit</a>.</p>")
-    return admin_page("Submissions", cards + table, active="Submissions")
+    return admin_page("Submissions", cards + refund_callout + table, active="Submissions")
 
 
 async def submissions_action(request: Request) -> HTMLResponse:

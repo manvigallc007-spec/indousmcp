@@ -320,8 +320,8 @@ def dashboard(request: Request) -> HTMLResponse:
         status = ("<span class='ok'>★ featured</span>" if x["is_featured"]
                   else ("active" if x["is_active"] else "<span class='err'>inactive</span>"))
         upgrade = ""
-        if x["vertical"] == "restaurants" and not x["is_featured"] and settings.featured_for_sale:
-            upgrade = f" · <a href='/upgrade?id={x['id']}'>Get featured</a>"
+        if not x["is_featured"] and settings.featured_for_sale:   # any vertical, not just restaurants
+            upgrade = f" · <a href='/upgrade?id={x['id']}&vertical={x['vertical']}'>Get featured</a>"
         reach = analytics.reach_for(x["vertical"], x["id"], days=30)
         rows += (f"<tr><td><a href='/portal/edit/{x['vertical']}/{x['id']}'>{esc(x['name'])}</a></td>"
                  f"<td class='muted'>{x['vertical']}</td>"
@@ -409,6 +409,8 @@ def add_get(request: Request) -> HTMLResponse:
                  "<form method='post' action='/portal/add'>"
                  f"<label>Category</label><select name='vertical'>{opts}</select>"
                  "<label>Business name</label><input name='name' required autofocus>"
+                 "<label>Website <span style='font-weight:400;color:#6b7280'>(optional — we'll auto-fill "
+                 "the details for you)</span></label><input name='website' placeholder='https://'>"
                  f"<label>State</label>{state_select('state', required=True)}"
                  "<label>City</label><input name='city' required placeholder='e.g. Plano'>"
                  "<button type='submit'>Find my business →</button></form>"
@@ -432,13 +434,29 @@ async def add_post(request: Request) -> HTMLResponse:
     if vertical not in submissions.SUBMITTABLE or not name:
         return _page("Add your business", "<h2 class='err'>Please enter a business name and category</h2>"
                      "<p><a href='/portal/add'>‹ back</a></p>", status=400)
-    cand = onboard.lookup(name, city, state, vertical)
+    website = (form.get("website") or "").strip()
+    cand = onboard.lookup(name, city, state, vertical, website=website or None)
+    cand = onboard.ai_fill(vertical, cand)                 # LLM-fill the category fields it can
+    cfg = verticals.VERTICALS[vertical]
     photo = (f"<img src='{esc(cand['photo_url'])}' alt='' onerror='this.remove()' style='width:100%;"
              f"max-height:220px;object-fit:cover;border-radius:12px;margin:6px 0'>"
              if cand.get("photo_url") else "")
+    # Vertical-specific category fields (cuisine_type, *_type, ...) — everything in edit_fields not
+    # already covered by the fixed inputs below. This is what makes AI-filled category data reach the
+    # submission instead of being silently dropped.
+    _fixed = {"phone", "email", "website", "address_full", "city", "state"}
+    extra = "".join(_fld(f.replace("_", " ").title(), f, cand)
+                    for f in cfg["edit_fields"] if f not in _fixed)
+    if cfg.get("has_dietary"):
+        extra += (f"<label>Dietary (comma-separated)</label><input name='dietary_csv' "
+                  f"value='{esc(','.join(cand.get('dietary_tags') or []))}' "
+                  f"placeholder='vegetarian, vegan, halal'>")
+    from .. import describe
+    desc_preview = esc(describe.describe(vertical, {**cand, "vertical": vertical}))
+    plan_html = _plan_picker()
     body = (f"<h2>Verify {esc(name)}</h2>"
-            "<p class='muted'>We pre-filled what we found from public sources. Check it, fix anything, "
-            "then submit — your listing is reviewed before it goes live.</p>" + photo
+            "<p class='muted'>We pre-filled what we found. Check it, fix anything, then submit — your "
+            "listing is reviewed before it goes live.</p>" + photo
             + "<form method='post' action='/portal/add/confirm'>"
             f"<input type='hidden' name='vertical' value='{esc(vertical)}'>"
             f"<input type='hidden' name='photo_url' value='{esc(cand.get('photo_url') or '')}'>"
@@ -450,9 +468,28 @@ async def add_post(request: Request) -> HTMLResponse:
             + _fld("Website", "website", cand)
             + _fld("Opening hours", "hours", cand, "e.g. Mon-Sun 11am-9pm")
             + _fld("Languages spoken", "languages", cand, "Telugu, Hindi, English")
+            + extra
+            + (f"<p class='muted' style='margin-top:8px'>Preview: {desc_preview}</p>" if desc_preview else "")
+            + plan_html
             + "<button type='submit'>Submit for review</button></form>"
             "<p class='muted' style='margin-top:12px'><a href='/portal/add'>‹ start over</a></p>")
     return _page(f"Verify {name}", body)
+
+
+def _plan_picker() -> str:
+    """Free vs paid featured-duration radios — only shown when the operator has enabled Stripe sales."""
+    if not settings.featured_for_sale:
+        return ""
+    from .. import payments
+    rows = ("<label style='display:block;margin:4px 0'><input type='radio' name='plan' value='free' "
+            "checked> Free listing</label>")
+    for o in payments.duration_options():
+        rows += (f"<label style='display:block;margin:4px 0'><input type='radio' name='plan' "
+                 f"value='{o['days']}'> ⭐ Featured — {esc(o['label'])}</label>")
+    return ("<fieldset style='border:1px solid #e2e0dd;border-radius:10px;padding:10px 14px;margin:14px 0'>"
+            "<legend style='font-size:13px;color:#6b7280'>Visibility (optional)</legend>"
+            f"{rows}<p class='muted' style='font-size:12px;margin:6px 0 0'>Featured listings rank higher "
+            "in browse &amp; search. Reviewed before going live, same as free.</p></fieldset>")
 
 
 async def add_confirm(request: Request) -> HTMLResponse:
@@ -463,14 +500,33 @@ async def add_confirm(request: Request) -> HTMLResponse:
     vertical = (form.get("vertical") or "").strip()
     payload = {k: (form.get(k) or "").strip() for k in
                ("name", "address_full", "city", "state", "phone", "email", "website", "languages")}
+    # Vertical-specific category fields (cuisine_type, *_type, ...) — collect what the review form showed.
+    cfg = verticals.VERTICALS.get(vertical, {})
+    _fixed = {"phone", "email", "website", "address_full", "city", "state"}
+    for f in cfg.get("edit_fields", []):
+        if f not in _fixed and form.get(f) is not None:
+            payload[f] = (form.get(f) or "").strip()
+    if cfg.get("has_dietary") and form.get("dietary_csv") is not None:
+        payload["dietary_tags"] = [t.strip() for t in (form.get("dietary_csv") or "").split(",") if t.strip()]
     if (form.get("photo_url") or "").strip():
         payload["photo_url"] = form.get("photo_url").strip()
     if (form.get("hours") or "").strip():
         payload["hours_json"] = {"raw": form.get("hours").strip()}
+    # ALWAYS submit first, identically for free and paid — so the approval decision can't be
+    # influenced by payment (payment only takes effect at approval, in submissions.approve).
     res = submissions.submit(vertical, payload, contact_email=email, note="owner onboarding")
     if not res.get("ok"):
         return _page("Couldn't submit", "<h2 class='err'>Please add a business name and category</h2>"
                      "<p><a href='/portal/add'>‹ back</a></p>", status=400)
+    plan = (form.get("plan") or "free").strip()
+    if plan != "free" and settings.featured_for_sale:
+        try:
+            from .. import payments
+            sess = payments.create_submission_premium_session(res["id"], days=int(plan))
+            if sess.get("ok") and sess.get("url"):
+                return RedirectResponse(sess["url"], status_code=303)
+        except Exception:
+            pass                                           # Stripe hiccup -> don't lose the free submission
     return RedirectResponse("/portal?added=1", status_code=303)
 
 
