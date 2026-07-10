@@ -985,6 +985,30 @@ class OsmVerifyAgent(Agent):
             max_age_days=params.get("max_age_days", 45))
 
 
+class TelegramDigestAgent(Agent):
+    name = "telegram_digest"
+    description = ("Sends opt-in Telegram subscribers a weekly digest: festival countdown + this "
+                   "week's events + new listings in their city. No-op without a bot token.")
+    default_interval_s = 604800  # weekly
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        import time as _t
+        from .. import telegram_bot
+        if not telegram_bot.enabled():
+            return {"skipped": "telegram_disabled"}
+        subs = telegram_bot.active_subscribers()
+        sent = 0
+        for s in subs:
+            try:
+                telegram_bot.send_message(
+                    s["chat_id"], telegram_bot.build_weekly_digest(s.get("city"), s.get("state")))
+                sent += 1
+            except Exception:
+                pass
+            _t.sleep(0.3)                                    # gentle on the Telegram API
+        return {"subscribers": len(subs), "sent": sent}
+
+
 ALL_AGENTS = [
     DiscoveryAgent(),
     ScraperAgent(),
@@ -1047,4 +1071,5 @@ ALL_AGENTS = [
     EmbeddingBackfillAgent(),
     SocrataScraperAgent(),
     OsmVerifyAgent(),
+    TelegramDigestAgent(),
 ]
