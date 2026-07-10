@@ -242,6 +242,7 @@ a{color:var(--brand);text-decoration:none}
    <p class="heroSub">Your desi friend for finding Indian America — restaurants, groceries, temples,
     events, movies, doctors and more across the USA. Tell me what you want and roughly where.</p>
   </div>
+  __FESTIVAL__
   <div class="chips">__CHIPS__</div>
   <button class="voicecta" onclick="startConvo()">🎙️ <span class="voicebtn-t">Talk to Dost</span></button>
   <p class="voicetip">Hands-free voice — speak in English, हिंदी or తెలుగు</p>
@@ -363,9 +364,11 @@ async function startMic(){
  // prompt (the 🔒 / mic icon). Don't await anything before it or the gesture can be lost (Safari).
  if(!(await ensureMic())){fillBot(addBot(),micError('not-allowed'),[]);return;}
  let r;try{r=new SR();}catch(e){return;}
- r.lang=LOCALE[lang]||'en-US';r.interimResults=false;r.maxAlternatives=1;
+ r.lang=LOCALE[lang]||'en-US';r.interimResults=true;r.maxAlternatives=1;
  const mic=document.getElementById('mic');if(mic)mic.classList.add('rec');
- r.onresult=function(e){const tx=(e.results[0][0]||{}).transcript||'';if(tx){ta.value=tx;submitForm(new Event('submit'));}};
+ r.onresult=function(e){var fin='',intr='';for(var i=e.resultIndex;i<e.results.length;i++){var t=e.results[i][0].transcript;if(e.results[i].isFinal)fin+=t;else intr+=t;}
+   ta.value=fin||intr;                                  // live words appear as you speak
+   if(fin&&fin.trim()){submitForm(new Event('submit'));}};
  r.onerror=function(ev){if(mic)mic.classList.remove('rec');var m=micError(ev.error);if(m)fillBot(addBot(),m,[]);};
  r.onend=function(){if(mic)mic.classList.remove('rec');};
  try{r.start();}catch(e){if(mic)mic.classList.remove('rec');}
@@ -403,15 +406,27 @@ function speak(text){
   try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang=LOCALE[lang]||'en-US';
     const v=pickVoice(u.lang);if(v)u.voice=v;
     u.rate=(lang==='en')?1:0.93;u.pitch=1;   // a touch slower for clearer Hindi/Telugu narration
-    u.onstart=function(){if(convoMode)convoStatus('speaking');};
-    u.onend=function(){if(convoMode)convoListen();};            // after Dost speaks, listen again
+    u.onstart=function(){if(convoMode){convoStatus('speaking');barged=false;bargeListen();}};
+    u.onend=function(){stopBarge();if(convoMode&&!barged)convoListen();};   // barge handles its own re-listen
     speechSynthesis.speak(u);
   }catch(e){if(convoMode)convoListen();}
 }
 function toggleSpeak(){speakOn=!speakOn;localStorage.setItem('dost_speak',speakOn?'1':'0');const spk=document.getElementById('spk');if(spk)spk.classList.toggle('on',speakOn);if(!speakOn&&'speechSynthesis' in window){try{speechSynthesis.cancel();}catch(e){}}}
 
 // ---- hands-free voice conversation: talk -> hear answer -> auto-listen for the next question ----
-let convoMode=false, convoRecog=null;
+let convoMode=false, convoRecog=null, bargeRecog=null, barged=false;
+// Barge-in: while Dost speaks, listen so the user can talk OVER him to cut him off. Final-result-only
+// + length>1 to avoid TTS echo (echoCancellation is on by default via getUserMedia) falsely triggering.
+function bargeListen(){
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return;
+  try{bargeRecog=new SR();}catch(e){return;}
+  bargeRecog.lang=LOCALE[lang]||'en-US';bargeRecog.interimResults=false;bargeRecog.maxAlternatives=1;
+  bargeRecog.onresult=function(e){var fin='';for(var i=e.resultIndex;i<e.results.length;i++){if(e.results[i].isFinal)fin+=e.results[i][0].transcript;}
+    if(fin&&fin.trim().length>1){barged=true;stopBarge();try{speechSynthesis.cancel();}catch(_){}convoStatus('thinking');send(fin.trim(),false);}};
+  bargeRecog.onerror=function(){};
+  try{bargeRecog.start();}catch(e){}
+}
+function stopBarge(){if(bargeRecog){try{bargeRecog.abort();}catch(e){}bargeRecog=null;}}
 function convoStatus(s){var bar=document.getElementById('convobar'),txt=document.getElementById('convostatus');
   if(bar)bar.style.display=convoMode?'flex':'none';
   if(txt)txt.textContent=s==='listening'?'🎙️ Listening…':(s==='thinking'?'💭 Thinking…':'🔊 Speaking…');}
@@ -427,7 +442,7 @@ async function startConvo(){
   var spk=document.getElementById('spk');if(spk)spk.classList.add('on');
   hideWelcome();convoListen();
 }
-function stopConvo(){convoMode=false;try{if(convoRecog)convoRecog.abort();}catch(e){}
+function stopConvo(){convoMode=false;stopBarge();try{if(convoRecog)convoRecog.abort();}catch(e){}
   if('speechSynthesis' in window){try{speechSynthesis.cancel();}catch(e){}}
   var cb=document.getElementById('convo');if(cb){cb.classList.remove('on');var vl=cb.querySelector('.vlabel');if(vl)vl.textContent=T().voiceLabel;}
   var bar=document.getElementById('convobar');if(bar)bar.style.display='none';}
@@ -435,10 +450,11 @@ function convoListen(){
   if(!convoMode)return;
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   try{convoRecog=new SR();}catch(e){return;}
-  convoRecog.lang=LOCALE[lang]||'en-US';convoRecog.interimResults=false;convoRecog.maxAlternatives=1;
+  convoRecog.lang=LOCALE[lang]||'en-US';convoRecog.interimResults=true;convoRecog.maxAlternatives=1;
   var got=false;convoStatus('listening');
-  convoRecog.onresult=function(e){got=true;var tx=(e.results[0][0]||{}).transcript||'';
-    if(tx&&tx.trim()){convoStatus('thinking');send(tx.trim(),false);}};
+  convoRecog.onresult=function(e){var fin='',intr='';for(var i=e.resultIndex;i<e.results.length;i++){var t=e.results[i][0].transcript;if(e.results[i].isFinal)fin+=t;else intr+=t;}
+    if(intr&&!fin){var st=document.getElementById('convostatus');if(st)st.textContent='🎙️ '+intr;}   // live
+    if(fin&&fin.trim()){got=true;convoStatus('thinking');send(fin.trim(),false);}};
   convoRecog.onerror=function(ev){
     if(ev.error==='not-allowed'||ev.error==='service-not-allowed'||ev.error==='language-not-supported'||ev.error==='audio-capture'){
       stopConvo();var m=micError(ev.error);if(m)fillBot(addBot(),m,[]);return;}
@@ -519,15 +535,16 @@ function openContribute(vertical,city){
   const f=el('div','contrib');
   const nm=el('input','cin');nm.placeholder='Place name (e.g. Saravana Bhavan)';
   const ct=el('input','cin');ct.placeholder='City, ST (e.g. Edison, NJ)';if(city)ct.value=city;
+  const ws=el('input','cin');ws.placeholder='Website (optional — we fill in the rest)';
   const send=el('button','csend','Add it');
-  send.onclick=function(){submitContribute(content,nm.value,ct.value,vertical);};
-  f.appendChild(nm);f.appendChild(ct);f.appendChild(send);content.appendChild(f);scroll();nm.focus();
+  send.onclick=function(){submitContribute(content,nm.value,ct.value,vertical,ws.value);};
+  f.appendChild(nm);f.appendChild(ct);f.appendChild(ws);f.appendChild(send);content.appendChild(f);scroll();nm.focus();
 }
-function submitContribute(content,name,city,vertical){
+function submitContribute(content,name,city,vertical,website){
   name=(name||'').trim();if(!name){return;}
   content.innerHTML='';content.appendChild(el('div','bubble','Sending… 🙏'));
   fetch('/chat/contribute',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({name:name,city:city,vertical:vertical})})
+    body:JSON.stringify({name:name,city:city,vertical:vertical,website:website})})
     .then(r=>r.json()).then(d=>{content.innerHTML='';
       content.appendChild(el('div','bubble',d.message||'Thanks! We’ll review and add it.'));scroll();})
     .catch(function(){content.innerHTML='';
@@ -568,6 +585,22 @@ def chat_page(request: Request) -> HTMLResponse:
     chips = "".join(f"<button class='chip' onclick=\"ask(this.textContent)\">{html.escape(s)}</button>"
                     for s in _SUGGESTIONS)
     base = settings.public_web_url.rstrip("/")
+    # Festival countdown strip in the hero (links to the /festivals page). Empty when none upcoming.
+    try:
+        from .. import festivals
+        _nf = festivals.next_festival()
+        if _nf:
+            _d = _nf["days_until"]
+            _when = "today! 🎉" if _d == 0 else ("tomorrow" if _d == 1 else f"in {_d} days")
+            festival_html = (
+                "<a href='/festivals' style='display:inline-block;background:#fff3dc;"
+                "border:1px solid #ffd9a0;border-radius:999px;padding:7px 15px;margin:2px 0 8px;"
+                "color:#b4530f;font-weight:600;font-size:14px;text-decoration:none'>"
+                f"{html.escape(_nf['emoji'])} <b>{html.escape(_nf['name'])}</b> is {_when} →</a>")
+        else:
+            festival_html = ""
+    except Exception:
+        festival_html = ""
     og_url = base + "/"          # the chatbot is the homepage now
     og_img = f"{base}/og-image.svg"
     aname_raw = settings.assistant_name
@@ -591,7 +624,7 @@ def chat_page(request: Request) -> HTMLResponse:
         "__ATAG__": html.escape(settings.assistant_tagline),
         "__PTAG__": html.escape(settings.platform_tagline),
         "__AMEAN__": html.escape(settings.assistant_meaning),
-        "__CHIPS__": chips, "__OGURL__": html.escape(og_url),
+        "__CHIPS__": chips, "__FESTIVAL__": festival_html, "__OGURL__": html.escape(og_url),
         "__OGIMG__": html.escape(og_img), "__OGDESC__": html.escape(og_desc),
         "__JSONLD__": jsonld,
         "__ICONS__": json.dumps(_CAT_ICON, ensure_ascii=False),
@@ -680,9 +713,17 @@ async def chat_contribute(request: Request) -> JSONResponse:
         v = assistant._guess_vertical(f"{name} {raw_city}") or "restaurants"
     if v == "events":
         v = "restaurants"
-    from .. import submissions
-    res = submissions.submit(v, {"name": name, "city": city, "state": state},
-                             note="Suggested by a visitor via Dost chat")
+    website = (body.get("website") or "").strip()[:300] or None
+    # Enrich the bare name/city into a full candidate (OSM + the site + LLM category-fill) so a
+    # chat-contributed place arrives rich -> better data + more likely to clear auto-approve.
+    from .. import onboard, submissions
+    try:
+        payload = onboard.lookup(name, city or "", state or "", v, website=website)
+        payload = onboard.ai_fill(v, payload)
+    except Exception:
+        payload = {"name": name, "city": city, "state": state}
+    payload.setdefault("name", name)
+    res = submissions.submit(v, payload, note="Suggested by a visitor via Dost chat")
     if res.get("ok"):
         return JSONResponse({"ok": True, "message":
                              f"🎉 Thank you! I've sent “{name}” to our team to verify and add to the "

@@ -8,6 +8,7 @@ honestly approximate answer than a fabricated precise one. Update YEAR + the lis
 
 from __future__ import annotations
 
+import datetime
 from typing import Any
 
 YEAR = 2026
@@ -44,6 +45,130 @@ FESTIVALS: list[tuple[str, str, str]] = [
     ("Guru Nanak Jayanti", "November", "Sikh — Guru Nanak's birthday"),
     ("Christmas", "December 25", "fixed"),
 ]
+
+
+# --------------------------------------------------------------------- dated calendar (countdown)
+# Curated actual dates for a "days until <festival>" countdown + greetings. Lunar/lunisolar dates
+# shift each year and are moon-sighting-dependent (Eid especially), so these are BEST-EFFORT and the
+# UI always tells users to confirm locally — same honesty as the month-only FESTIVALS list above.
+# UPKEEP: verify + extend this table once a year (a few hours with any published panchang). `emoji`
+# and `greeting` power the home banner, /festivals page, chat answers and the shareable greeting card.
+_D = datetime.date
+FESTIVAL_DATES: dict[int, list[dict[str, Any]]] = {
+    2026: [
+        {"name": "Makar Sankranti / Pongal", "date": _D(2026, 1, 14), "emoji": "🌾",
+         "greeting": "Happy Makar Sankranti & Pongal!"},
+        {"name": "Republic Day", "date": _D(2026, 1, 26), "emoji": "🇮🇳",
+         "greeting": "Happy Republic Day!"},
+        {"name": "Vasant Panchami", "date": _D(2026, 1, 23), "emoji": "📚",
+         "greeting": "Happy Vasant Panchami!"},
+        {"name": "Maha Shivaratri", "date": _D(2026, 2, 15), "emoji": "🕉️",
+         "greeting": "Har Har Mahadev — Happy Maha Shivaratri!"},
+        {"name": "Holi", "date": _D(2026, 3, 4), "emoji": "🌈",
+         "greeting": "Happy Holi! May your life be as colorful as the festival."},
+        {"name": "Ugadi / Gudi Padwa", "date": _D(2026, 3, 19), "emoji": "🌱",
+         "greeting": "Happy Ugadi & Gudi Padwa — a joyful new year!"},
+        {"name": "Ram Navami", "date": _D(2026, 3, 26), "emoji": "🏹",
+         "greeting": "Jai Shri Ram — Happy Ram Navami!"},
+        {"name": "Eid al-Fitr", "date": _D(2026, 3, 20), "emoji": "🌙",
+         "greeting": "Eid Mubarak!"},
+        {"name": "Baisakhi / Vaisakhi", "date": _D(2026, 4, 14), "emoji": "🌾",
+         "greeting": "Happy Baisakhi!"},
+        {"name": "Akshaya Tritiya", "date": _D(2026, 4, 19), "emoji": "🪙",
+         "greeting": "Happy Akshaya Tritiya!"},
+        {"name": "Eid al-Adha (Bakrid)", "date": _D(2026, 5, 27), "emoji": "🌙",
+         "greeting": "Eid Mubarak!"},
+        {"name": "Rath Yatra", "date": _D(2026, 7, 16), "emoji": "🛕",
+         "greeting": "Jai Jagannath — Happy Rath Yatra!"},
+        {"name": "Guru Purnima", "date": _D(2026, 7, 29), "emoji": "🙏",
+         "greeting": "Happy Guru Purnima!"},
+        {"name": "Onam", "date": _D(2026, 8, 26), "emoji": "🌸",
+         "greeting": "Happy Onam!"},
+        {"name": "Raksha Bandhan", "date": _D(2026, 8, 28), "emoji": "🧵",
+         "greeting": "Happy Raksha Bandhan!"},
+        {"name": "Independence Day", "date": _D(2026, 8, 15), "emoji": "🇮🇳",
+         "greeting": "Happy Independence Day!"},
+        {"name": "Janmashtami", "date": _D(2026, 9, 4), "emoji": "🦚",
+         "greeting": "Happy Krishna Janmashtami!"},
+        {"name": "Ganesh Chaturthi", "date": _D(2026, 9, 14), "emoji": "🐘",
+         "greeting": "Ganpati Bappa Morya — Happy Ganesh Chaturthi!"},
+        {"name": "Navratri & Durga Puja", "date": _D(2026, 10, 11), "emoji": "🪔",
+         "greeting": "Happy Navratri! Nine nights of devotion, Garba & Dandiya."},
+        {"name": "Dussehra (Vijayadashami)", "date": _D(2026, 10, 20), "emoji": "🏹",
+         "greeting": "Happy Dussehra — victory of good over evil!"},
+        {"name": "Karva Chauth", "date": _D(2026, 10, 29), "emoji": "🌕",
+         "greeting": "Happy Karva Chauth!"},
+        {"name": "Dhanteras", "date": _D(2026, 11, 6), "emoji": "🪙",
+         "greeting": "Happy Dhanteras!"},
+        {"name": "Diwali (Deepavali)", "date": _D(2026, 11, 8), "emoji": "🪔",
+         "greeting": "Happy Diwali! ✨ May the festival of lights bring you joy and prosperity."},
+        {"name": "Bhai Dooj", "date": _D(2026, 11, 11), "emoji": "🧡",
+         "greeting": "Happy Bhai Dooj!"},
+        {"name": "Chhath Puja", "date": _D(2026, 11, 15), "emoji": "🌅",
+         "greeting": "Happy Chhath Puja!"},
+        {"name": "Guru Nanak Jayanti", "date": _D(2026, 11, 24), "emoji": "☬",
+         "greeting": "Happy Gurpurab!"},
+        {"name": "Christmas", "date": _D(2026, 12, 25), "emoji": "🎄",
+         "greeting": "Merry Christmas!"},
+    ],
+    2027: [
+        {"name": "Makar Sankranti / Pongal", "date": _D(2027, 1, 14), "emoji": "🌾",
+         "greeting": "Happy Makar Sankranti & Pongal!"},
+        {"name": "Republic Day", "date": _D(2027, 1, 26), "emoji": "🇮🇳",
+         "greeting": "Happy Republic Day!"},
+        {"name": "Maha Shivaratri", "date": _D(2027, 3, 6), "emoji": "🕉️",
+         "greeting": "Har Har Mahadev — Happy Maha Shivaratri!"},
+        {"name": "Holi", "date": _D(2027, 3, 22), "emoji": "🌈",
+         "greeting": "Happy Holi! May your life be as colorful as the festival."},
+        {"name": "Diwali (Deepavali)", "date": _D(2027, 10, 29), "emoji": "🪔",
+         "greeting": "Happy Diwali! ✨ May the festival of lights bring you joy and prosperity."},
+    ],
+}
+
+
+def _today() -> datetime.date:
+    return datetime.date.today()
+
+
+def _all_dated() -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for entries in FESTIVAL_DATES.values():
+        out.extend(entries)
+    out.sort(key=lambda e: e["date"])
+    return out
+
+
+def upcoming(n: int = 6, today: datetime.date | None = None) -> list[dict[str, Any]]:
+    """The next `n` dated festivals from `today` (each with a `days_until` added). Sorted soonest-first."""
+    t = today or _today()
+    out = []
+    for e in _all_dated():
+        d = (e["date"] - t).days
+        if d >= 0:
+            out.append({**e, "days_until": d})
+        if len(out) >= n:
+            break
+    return out
+
+
+def next_festival(today: datetime.date | None = None) -> dict[str, Any] | None:
+    up = upcoming(1, today)
+    return up[0] if up else None
+
+
+def find(query: str, today: datetime.date | None = None) -> dict[str, Any] | None:
+    """The soonest upcoming festival whose name loosely matches `query` (for 'when is diwali')."""
+    q = (query or "").strip().lower()
+    if not q:
+        return None
+    t = today or _today()
+    for e in _all_dated():
+        if (e["date"] - t).days < 0:
+            continue
+        name = e["name"].lower()
+        if q in name or any(w in name for w in q.split() if len(w) > 2):
+            return {**e, "days_until": (e["date"] - t).days}
+    return None
 
 
 def kb_article() -> dict[str, Any]:

@@ -122,6 +122,43 @@ def og_image(request: Request) -> Response:
                     headers={"Cache-Control": "public, max-age=86400"})
 
 
+def festival_card(request: Request) -> Response:
+    """A 1200x630 shareable festival greeting card (SVG). ?name=Diwali -> the greeting + brand."""
+    from .. import festivals
+    name = (request.query_params.get("name") or "").strip()
+    hit = festivals.find(name) or (festivals.next_festival() or {})
+    fname = html.escape(hit.get("name") or "Festival")
+    greeting = html.escape(hit.get("greeting") or "Warm festival wishes from Namaste America!")
+    emoji = html.escape(hit.get("emoji") or "🪔")
+    plat = html.escape(settings.platform_name)
+    f = "font-family='Segoe UI,Helvetica,Arial,sans-serif'"
+    # wrap the greeting onto two lines at ~40 chars so long greetings don't overflow
+    words, lines, cur = greeting.split(), [], ""
+    for w in words:
+        if len(cur) + len(w) + 1 > 42:
+            lines.append(cur); cur = w
+        else:
+            cur = f"{cur} {w}".strip()
+    if cur:
+        lines.append(cur)
+    tspans = "".join(
+        f"<text x='600' y='{360 + i * 58}' text-anchor='middle' {f} font-size='42' fill='#5a3210'>"
+        f"{ln}</text>" for i, ln in enumerate(lines[:2]))
+    svg = (
+        "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='630' viewBox='0 0 1200 630'>"
+        "<defs><linearGradient id='fg' x1='0' y1='0' x2='0' y2='1'>"
+        "<stop offset='0' stop-color='#fff3dc'/><stop offset='1' stop-color='#ffd9a0'/></linearGradient></defs>"
+        "<rect width='1200' height='630' fill='url(#fg)'/>"
+        "<rect width='1200' height='16' fill='#e8772e'/><rect y='614' width='1200' height='16' fill='#0f9b8e'/>"
+        f"<text x='600' y='210' text-anchor='middle' font-size='120'>{emoji}</text>"
+        f"<text x='600' y='300' text-anchor='middle' {f} font-size='64' font-weight='700' fill='#b4530f'>{fname}</text>"
+        + tspans +
+        f"<text x='600' y='560' text-anchor='middle' {f} font-size='28' fill='#8a6a40'>{plat} · namasteamerica.us</text>"
+        "</svg>")
+    return Response(svg, media_type="image/svg+xml",
+                    headers={"Cache-Control": "public, max-age=21600"})
+
+
 _LANDING_HTML = """<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__PLAT__ — Find Indian America</title>
@@ -504,6 +541,7 @@ routes = [
     Route("/icon.svg", icon, methods=["GET"]),
     Route("/favicon.ico", icon, methods=["GET"]),
     Route("/og-image.svg", og_image, methods=["GET"]),
+    Route("/festival-card.svg", festival_card, methods=["GET"]),
     Route("/logo", brand_logo, methods=["GET"]),
     Route("/submit", submit_get, methods=["GET"]),
     Route("/submit", submit_post, methods=["POST"]),

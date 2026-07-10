@@ -618,6 +618,38 @@ def employers_page(request: Request) -> HTMLResponse:
                  body, canonical=f"{_base()}/employers")
 
 
+def festivals_page(request: Request) -> HTMLResponse:
+    """Countdown to upcoming Indian festivals, with a shareable greeting card per festival."""
+    from .. import festivals
+    up = festivals.upcoming(12)
+    nf = up[0] if up else None
+    rows = ""
+    for e in up:
+        d = e["days_until"]
+        when = "Today 🎉" if d == 0 else ("Tomorrow" if d == 1 else f"in {d} days")
+        dt = e["date"]
+        date_str = f"{dt.strftime('%A, %B')} {dt.day}, {dt.year}"
+        rows += (f"<div class='lc'><h3>{html.escape(e['emoji'])} {html.escape(e['name'])} "
+                 f"<span class='muted' style='font-weight:400'>· {when}</span></h3>"
+                 f"<div class='meta'>{html.escape(date_str)}</div>"
+                 f"<p><a href='/festival-card.svg?name={quote(e['name'])}' target='_blank' "
+                 f"rel='noopener'>🖼 Share a greeting card</a></p></div>")
+    lead = ""
+    if nf:
+        nd = nf["days_until"]
+        when_lead = "today!" if nd == 0 else ("tomorrow" if nd == 1 else f"in {nd} days")
+        lead = (f"<p class='lead'>{html.escape(nf['emoji'])} <b>{html.escape(nf['name'])}</b> is "
+                f"{when_lead} — {html.escape(nf['greeting'])}</p>")
+    body = (f"<h1>Upcoming Indian festivals</h1>{lead}"
+            f"<p class='muted'>Dates are approximate for lunar festivals — confirm with your local "
+            f"temple, gurdwara, mosque or a panchang. Ask {html.escape(settings.assistant_name)} "
+            f"\"when is Diwali?\" any time.</p>{rows or '<p>Calendar coming soon.</p>'}")
+    return _page(f"Upcoming Indian festivals · {settings.platform_name}",
+                 "When Diwali, Holi, Navratri, Pongal, Eid and more fall this year — a countdown for the "
+                 "Indian community in the USA, with shareable greeting cards.",
+                 body, canonical=f"{_base()}/festivals")
+
+
 def _when(dt) -> str:
     if not hasattr(dt, "strftime"):
         return str(dt)[:16]
@@ -683,10 +715,10 @@ def events_page(request: Request) -> HTMLResponse:
 # -------------------------------------------------------------- crawler files
 def sitemap(request: Request) -> Response:
     base = _base()
-    urls = [f"{base}/", f"{base}/browse", f"{base}/explore", f"{base}/events", f"{base}/movies",
-            f"{base}/employers", f"{base}/insights", f"{base}/for-business", f"{base}/for-agents",
-            f"{base}/submit", f"{base}/about", f"{base}/privacy", f"{base}/terms", f"{base}/contact",
-            f"{base}/faq"]
+    urls = [f"{base}/", f"{base}/browse", f"{base}/explore", f"{base}/events", f"{base}/festivals",
+            f"{base}/movies", f"{base}/employers", f"{base}/insights", f"{base}/for-business",
+            f"{base}/for-agents", f"{base}/submit", f"{base}/about", f"{base}/privacy", f"{base}/terms",
+            f"{base}/contact", f"{base}/faq"]
     urls += [f"{base}/browse/{v}" for v in verticals.VERTICALS]
     # All (vertical × city) pages that actually have active listings.
     for v in verticals.VERTICALS:
@@ -1017,6 +1049,7 @@ def mcp_well_known(request: Request) -> Response:
 routes = [
     Route("/browse", browse_root, methods=["GET"]),
     Route("/events", events_page, methods=["GET"]),
+    Route("/festivals", festivals_page, methods=["GET"]),
     Route("/movies", movies_page, methods=["GET"]),
     Route("/employers", employers_page, methods=["GET"]),
     Route("/insights", insights, methods=["GET"]),

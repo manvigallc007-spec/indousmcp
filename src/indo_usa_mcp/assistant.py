@@ -1023,6 +1023,47 @@ def _movies_reply(query: str, filters: dict | None) -> dict:
             "buy tickets near you. 🎬", "cards": cards, "provider": "movies"}
 
 
+# --- festivals: "when is Diwali / how many days until Holi" -> a dated countdown + greeting, instead
+# of falling through to the month-only KB article.
+_FESTIVAL_WORDS = ("festival", "diwali", "deepavali", "holi", "navratri", "durga puja", "dussehra",
+                   "dasara", "pongal", "sankranti", "ugadi", "gudi padwa", "ganesh chaturthi",
+                   "janmashtami", "raksha bandhan", "rakhi", "onam", "eid", "ramadan", "baisakhi",
+                   "vaisakhi", "shivaratri", "ram navami", "gurpurab", "guru nanak", "karva chauth",
+                   "dhanteras", "bhai dooj", "chhath")
+_WHEN_WORDS = ("when", "how many days", "days until", "days to", "date of", "what day", "how long until",
+               "countdown", "upcoming")
+
+
+def _is_festival_query(query: str) -> bool:
+    ql = (query or "").lower()
+    if not any(w in ql for w in _FESTIVAL_WORDS):
+        return False
+    return any(w in ql for w in _WHEN_WORDS) or "festival" in ql
+
+
+def _festival_reply(query: str, filters: dict | None) -> dict:
+    """Dated countdown + greeting for a festival query. Grounded in festivals.FESTIVAL_DATES."""
+    from . import festivals
+    hit = festivals.find(query)
+    if hit is None:                                          # 'upcoming festivals' with no named one
+        up = festivals.upcoming(4)
+        if not up:
+            return {"reply": "I don't have upcoming festival dates handy right now.", "cards": [],
+                    "provider": "festival"}
+        lines = "; ".join(f"{e['emoji']} {e['name']} in {e['days_until']} day"
+                          f"{'s' if e['days_until'] != 1 else ''}" for e in up)
+        return {"reply": f"Upcoming festivals: {lines}. (Dates are approximate for lunar festivals — "
+                "confirm with your local temple or panchang.)", "cards": [], "provider": "festival"}
+    d = hit["days_until"]
+    when = "today! 🎉" if d == 0 else ("tomorrow" if d == 1 else f"in {d} days")
+    dt = hit["date"]
+    date_str = (f"{dt.strftime('%A, %B')} {dt.day}, {dt.year}"   # platform-independent (no %-d)
+                if hasattr(dt, "strftime") else str(dt))
+    return {"reply": f"{hit['emoji']} {hit['name']} is {when} — {date_str}. {hit['greeting']} "
+            "(Exact dates for lunar festivals can shift by a day — confirm locally.)",
+            "cards": [], "provider": "festival"}
+
+
 # --- H-1B visa sponsors: another non-geographic vertical (its own table), wired into the chat.
 _H1B_WORDS = ("h-1b", "h1b", "h 1b", "visa sponsor", "sponsor visa", "sponsors visa",
               "visa sponsorship", "sponsoring employer", "who sponsors", "companies that sponsor")
@@ -1095,6 +1136,8 @@ def _reply_impl(messages: list[dict], geo: dict | None = None, filters: dict | N
         return _movies_reply(query, filters)
     if query and _is_h1b_query(query):
         return _h1b_reply(query, filters)
+    if query and _is_festival_query(query):
+        return _festival_reply(query, filters)
     if _needs_location(messages, geo, filters):
         return {"reply": "Which city or area should I look in? For example: “Edison, NJ”, "
                 "“Jersey City”, or “Bay Area”.", "cards": [], "provider": "clarify"}
