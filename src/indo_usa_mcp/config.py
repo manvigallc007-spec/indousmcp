@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Free / OpenAI-compatible LLM presets. Selecting one by name (LLM_PROVIDER=groq) fills in the
@@ -163,6 +164,23 @@ class Settings(BaseSettings):
         return bool(self.turnstile_site_key and self.turnstile_secret_key)
     # Public base URL of the web app (for Stripe redirect URLs), e.g. https://yourdomain.com
     public_web_url: str = "http://localhost:8080"
+
+    @field_validator("public_web_url")
+    @classmethod
+    def _absolute_url(cls, v: str) -> str:
+        """Guarantee an absolute URL with a scheme so og:image / og:url / canonical never become
+        relative (which breaks social previews site-wide). A bare host gets https:// prepended; a
+        non-local http:// host is warned about but left as-is (don't crash)."""
+        v = (v or "").strip().rstrip("/")
+        if not v:
+            return v
+        if "://" not in v:
+            v = "https://" + v
+        if v.startswith("http://") and "localhost" not in v and "127.0.0.1" not in v:
+            import warnings
+            warnings.warn(f"public_web_url is http:// on a non-local host ({v}); use https:// in prod.",
+                          stacklevel=2)
+        return v
     # IndexNow: instantly notify Bing/Copilot/Yandex when listings change (free, no account). Set
     # INDEXNOW_KEY to a random 16-32 char hex string; we serve it at /{key}.txt and ping on updates.
     # Blank = disabled (all IndexNow calls are no-ops). NOT a secret — the key file is public.
@@ -297,6 +315,10 @@ class Settings(BaseSettings):
     mcp_transport: str = "stdio"
     mcp_host: str = "0.0.0.0"
     mcp_port: int = 8000
+    # Expose internal growth/ops MCP tools (find_unclaimed_restaurants, draft_claim_outreach) that
+    # CREATE claims / outreach drafts. OFF by default so the anonymous public MCP endpoint can't be
+    # driven to write state; enable via MCP_INTERNAL_TOOLS=1 only on a trusted/local ops server.
+    mcp_internal_tools: bool = False
 
     # Embeddings (semantic search)
     # Provider: "hashing" (zero-dep default), "fastembed" (real semantic, ONNX, no torch,

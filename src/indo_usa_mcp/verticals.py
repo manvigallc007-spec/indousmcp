@@ -666,6 +666,24 @@ def unset_featured(vertical: str, rec_id: int) -> None:
                f"updated_at = now() WHERE id = %s", (rec_id,))
 
 
+def expire_featured() -> dict[str, Any]:
+    """Clear the stored is_featured flag on listings whose paid window has ended (featured_until in the
+    past), across every vertical that supports featuring. Read-time queries already guard expiry, but
+    lifecycle/quality read the RAW column, so an expired promo would otherwise permanently shield a
+    listing from archival/suppression. Permanent features (featured_until IS NULL) are left untouched."""
+    by_vertical: dict[str, int] = {}
+    for v in VERTICALS:
+        table = _table(v)
+        if "is_featured" not in _table_columns(table):
+            continue
+        rows = db.query(
+            f"UPDATE {table} SET is_featured = false, featured_until = NULL, updated_at = now() "
+            f"WHERE is_featured AND featured_until IS NOT NULL AND featured_until < now() RETURNING id")
+        if rows:
+            by_vertical[v] = len(rows)
+    return {"expired": sum(by_vertical.values()), "by_vertical": by_vertical}
+
+
 def set_active(vertical: str, rec_id: int, active: bool) -> None:
     db.execute(f"UPDATE {_table(vertical)} SET is_active = %s, updated_at = now() WHERE id = %s",
                (active, rec_id))

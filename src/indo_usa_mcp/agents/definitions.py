@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from psycopg.types.json import Jsonb
+
 from .. import db
 from ..pipeline import feedback, ingest, outreach
 from ..pipeline.scrapers import SCRAPERS
@@ -863,8 +865,14 @@ class MonitoringAgent(Agent):
                            "AND started_at > now() - interval '1 day' GROUP BY agent ORDER BY n DESC")
         if failing:
             names = ", ".join(f"{f['agent']}({f['n']})" for f in failing[:6])
+            # Carry the most recent actual error inline so the alert (and its push) is actionable
+            # without drilling into Admin → Agents.
+            last = db.query_one(
+                "SELECT agent, error FROM agent_runs WHERE status = 'error' AND error IS NOT NULL "
+                "AND started_at > now() - interval '1 day' ORDER BY started_at DESC LIMIT 1")
+            detail = f"Latest: {last['agent']}: {(last['error'] or '')[:500]}" if last else None
             cand.append(_alert("critical", "agent_failure",
-                               f"Agent failures in 24h: {names} — Admin → Agents"))
+                               f"Agent failures in 24h: {names} — Admin → Agents", details=detail))
 
         # Reconcile: refresh/raise current issues, auto-resolve managed ones that cleared.
         current = {a["kind"]: a for a in cand}
@@ -877,15 +885,22 @@ class MonitoringAgent(Agent):
             else:
                 open_kinds.add(r["kind"])
         raised = 0
+        newly_critical: list[dict] = []
         for kind, a in current.items():
             if kind in open_kinds:        # keep one open alert per kind, but refresh its text/severity
                 db.execute("UPDATE agent_alerts SET message = %s, severity = %s "
                            "WHERE kind = %s AND NOT resolved", (a["message"], a["severity"], kind))
             else:
                 db.execute("INSERT INTO agent_alerts (severity, kind, message, details) "
-                           "VALUES (%s,%s,%s,%s)", (a["severity"], a["kind"], a["message"], None))
+                           "VALUES (%s,%s,%s,%s)", (a["severity"], a["kind"], a["message"],
+                                                    Jsonb({"error": a["details"]}) if a.get("details") else None))
                 raised += 1
-        return {"checked": len(cand), "alerts_raised": raised, "alerts_auto_resolved": resolved}
+                if a["severity"] == "critical":       # push only when NEWLY raised (not every 30-min tick)
+                    newly_critical.append(a)
+        for a in newly_critical:
+            _notify_critical(a)
+        return {"checked": len(cand), "alerts_raised": raised, "alerts_auto_resolved": resolved,
+                "critical_pushed": len(newly_critical)}
 
 
 # ------------------------------------------------------------------------- helpers
@@ -894,8 +909,27 @@ def _scalar(sql: str) -> int:
     return int(list(row.values())[0]) if row else 0
 
 
-def _alert(severity: str, kind: str, message: str) -> dict[str, str]:
-    return {"severity": severity, "kind": kind, "message": message}
+def _alert(severity: str, kind: str, message: str, details: str | None = None) -> dict[str, Any]:
+    return {"severity": severity, "kind": kind, "message": message, "details": details}
+
+
+def _notify_critical(alert: dict) -> None:
+    """Best-effort out-of-band push for a newly-raised CRITICAL alert (email to the admin), so a human
+    hears about it within the 30-minute monitoring cadence instead of waiting for the daily report.
+    Never raises — a delivery failure must not fail the monitoring run."""
+    try:
+        from ..config import settings
+        from ..pipeline import outreach
+        to = settings.report_email or settings.outreach_contact_email
+        if not to:
+            return
+        body = alert["message"]
+        if alert.get("details"):
+            body += f"\n\n{alert['details']}"
+        body += f"\n\nAdmin: {settings.public_web_url.rstrip('/')}/admin/ops"
+        outreach.send_email(to, f"[{settings.platform_name}] CRITICAL: {alert['kind']}", body)
+    except Exception:
+        pass
 
 
 class MoviesAgent(Agent):
@@ -946,12 +980,25 @@ class GeoBackfillAgent(Agent):
 
 class EmbeddingBackfillAgent(Agent):
     name = "embedding_backfill"
-    description = ("Embeds any listing left with a NULL vector (embeddings disabled at ingest, a failed "
-                   "embed, or a facet/model change) so nothing stays invisible to semantic search.")
+    description = ("Embeds any listing left with a NULL vector across ALL verticals AND the knowledge "
+                   "base (embeddings disabled at ingest, a failed embed, or a facet/model change) so "
+                   "nothing stays invisible to semantic search.")
     default_interval_s = 86400  # daily
 
     def run(self, **params: Any) -> dict[str, Any]:
         return ingest.backfill_embeddings(only_missing=True)
+
+
+class FeaturedExpiryAgent(Agent):
+    name = "featured_expiry"
+    description = ("Clears the stored is_featured flag on listings whose paid featured window has ended "
+                   "(featured_until in the past), so expired promos stop shielding them from the "
+                   "lifecycle/quality agents (which read the raw column). Runs before lifecycle.")
+    default_interval_s = 86400  # daily
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from .. import verticals
+        return verticals.expire_featured()
 
 
 class SocrataScraperAgent(Agent):
@@ -1069,6 +1116,7 @@ ALL_AGENTS = [
     CurationAgent(),
     GeoBackfillAgent(),
     EmbeddingBackfillAgent(),
+    FeaturedExpiryAgent(),
     SocrataScraperAgent(),
     OsmVerifyAgent(),
     TelegramDigestAgent(),

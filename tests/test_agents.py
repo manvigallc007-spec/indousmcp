@@ -28,3 +28,10 @@ def test_get_agent_unknown_raises():
 def test_run_order_only_references_real_agents():
     assert set(_RUN_ORDER) <= set(AGENTS)
     assert set(DEFAULT_SCHEDULE) == set(AGENTS)
+
+
+def test_every_registered_agent_is_scheduled():
+    # The scheduler loop only visits names in _RUN_ORDER, so an agent registered in ALL_AGENTS but
+    # missing from _RUN_ORDER silently NEVER runs (the historical `movies` bug). Guard that direction.
+    missing = set(AGENTS) - set(_RUN_ORDER)
+    assert not missing, f"registered but never scheduled (add to _RUN_ORDER): {sorted(missing)}"

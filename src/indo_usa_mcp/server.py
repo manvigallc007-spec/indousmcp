@@ -1,4 +1,8 @@
-"""FastMCP server exposing the Phase-1 restaurant capabilities.
+"""FastMCP server: the agent-first interface to Namaste America.
+
+Exposes structured search/detail/text-search tools across all 15 registry verticals plus events,
+movies and H-1B sponsors, community reviews, grounded festival dates + knowledge-base RAG, and
+owner listing submission. Internal growth/ops tools are gated behind MCP_INTERNAL_TOOLS.
 
 Run with: python -m indo_usa_mcp.server   (stdio transport)
 """
@@ -9,7 +13,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from . import queries, reviews, verticals
+from . import festivals, h1b, knowledge, movies, queries, reviews, submissions, verticals
 from .apparel import queries as apparel_queries
 from .community import queries as community_queries
 from .config import settings
@@ -111,7 +115,9 @@ def search_restaurants_by_text(
     return queries.search_restaurants_by_text(query, city=city, state=state, limit=limit)
 
 
-@mcp.tool()
+# Internal growth/ops tools — these WRITE state (create claims + outreach drafts), so they are
+# registered only when settings.mcp_internal_tools is on (see conditional block below). They are NOT
+# exposed on the anonymous public MCP endpoint.
 def find_unclaimed_restaurants(limit: int = 20, min_confidence: float = 0.5) -> dict[str, Any]:
     """List active, unclaimed restaurants that are eligible for claim outreach.
 
@@ -123,7 +129,6 @@ def find_unclaimed_restaurants(limit: int = 20, min_confidence: float = 0.5) -> 
     return {"count": len(rows), "results": rows}
 
 
-@mcp.tool()
 def draft_claim_outreach(limit: int = 20, min_confidence: float = 0.5) -> dict[str, Any]:
     """Generate claim links and personalized outreach drafts for unclaimed restaurants.
 
@@ -134,16 +139,29 @@ def draft_claim_outreach(limit: int = 20, min_confidence: float = 0.5) -> dict[s
     return outreach.run_outreach(limit=limit, min_confidence=min_confidence)
 
 
-@mcp.tool()
-def submit_correction(restaurant_id: int, field: str, value: str, reason: str = "") -> dict[str, Any]:
-    """Propose a correction to a restaurant field (agents/users reporting bad data).
+if settings.mcp_internal_tools:
+    mcp.tool()(find_unclaimed_restaurants)
+    mcp.tool()(draft_claim_outreach)
 
-    Correctable fields: phone, email, website, menu_url, address_full, city, state,
-    region_tag, price_range, cuisine_type, festival_specials. The correction is stored and
-    applied by the Feedback agent — automatically for unclaimed listings, or routed to a
-    human for claimed/featured ones. Identity fields (name, coordinates) are not correctable.
+
+@mcp.tool()
+def submit_correction(listing_id: int, field: str, value: str, reason: str = "",
+                      vertical: str = "restaurants") -> dict[str, Any]:
+    """Propose a correction to a listing field (agents/users reporting bad data).
+
+    `vertical` is the category key (default 'restaurants'); `listing_id` is the id from that category's
+    get_/search_ tools. Correctable restaurant fields: phone, email, website, menu_url, address_full,
+    city, state, region_tag, price_range, cuisine_type, festival_specials. The correction is stored and
+    applied by the Feedback agent — automatically for unclaimed listings, or routed to a human for
+    claimed/featured ones. Identity fields (name, coordinates) are not correctable. Structured field
+    corrections currently apply to restaurants; for other categories use submit_review to flag issues
+    (or the owner portal). Returns {ok, feedback_id|error}.
     """
-    return feedback.submit_correction(restaurant_id, field, value, reason=reason, source="agent")
+    if vertical != "restaurants":
+        return {"ok": False, "error": "not_supported", "vertical": vertical,
+                "hint": "field corrections are available for restaurants today; "
+                        "use submit_review to flag issues on other categories"}
+    return feedback.submit_correction(listing_id, field, value, reason=reason, source="agent")
 
 
 @mcp.tool()
@@ -706,6 +724,87 @@ def search_all(
     tagged with its `vertical`. Optionally constrain by `city`/`state`.
     """
     return verticals.search_all(query, city=city, state=state, lat=lat, lng=lng, limit=limit)
+
+
+# --------------------------------------------------- festivals, knowledge base, submission, details
+@mcp.tool()
+def get_festival_dates(query: str = "", limit: int = 6) -> dict[str, Any]:
+    """Upcoming Indian & South-Asian festival dates for planning in the USA.
+
+    With no `query`, returns the next `limit` festivals soonest-first. With a `query` (e.g. "Diwali",
+    "when is holi"), returns the single soonest matching festival. Each item has name, date (ISO),
+    days_until, emoji and a greeting. IMPORTANT: many Hindu/Sikh/Jain/Muslim festivals follow lunar
+    calendars, so these dates are best-effort — always tell the user to confirm the exact date with
+    their local temple, gurdwara, mosque or a panchang. Returns {'results': [...], 'note': ...}.
+    """
+    note = ("Dates for lunar festivals are approximate — confirm locally "
+            "(temple / gurdwara / mosque / panchang).")
+
+    def _fmt(e: dict) -> dict:
+        return {"name": e["name"], "date": e["date"].isoformat(), "days_until": e["days_until"],
+                "emoji": e.get("emoji"), "greeting": e.get("greeting")}
+
+    q = (query or "").strip()
+    if q:
+        hit = festivals.find(q)
+        return {"results": [_fmt(hit)] if hit else [], "note": note}
+    return {"results": [_fmt(e) for e in festivals.upcoming(limit)], "note": note}
+
+
+@mcp.tool()
+def search_knowledge(query: str, vertical: str | None = None, limit: int = 6) -> dict[str, Any]:
+    """Grounded answers from the Namaste America knowledge base — culture, festivals, visa/H-1B, tax,
+    banking, and newcomer/settling-in guides for Indians from India living in the USA.
+
+    Returns the top matching passages, each with the source document's title + url so you can cite it.
+    Optionally scope to a `vertical`. Use this for factual "how/what/when" questions rather than the
+    listing-search tools. Returns {'count', 'results': [{text, title, url, source_type, vertical}]}.
+    """
+    rows = knowledge.search(query, vertical=vertical, limit=limit)
+    results = [{"text": r.get("text"), "title": r.get("title"), "url": r.get("url"),
+                "source_type": r.get("source_type"), "vertical": r.get("vertical")} for r in rows]
+    return {"count": len(results), "results": results}
+
+
+@mcp.tool()
+def submit_listing(vertical: str, name: str, city: str = "", state: str = "",
+                   address_full: str = "", phone: str = "", website: str = "",
+                   contact_email: str = "") -> dict[str, Any]:
+    """Submit a new Indian-American business/listing for REVIEW — it does NOT go live automatically.
+
+    `vertical` is the category key (restaurants, temples, groceries, professionals, salons, apparel,
+    sweets, studios, services, community, legal, education, realestate, finance — not events, which are
+    agent-managed). The submission enters a human moderation queue and is published only after an admin
+    approves it. `name` is required; provide as much else as you can. Returns {'ok', 'id'} or
+    {'ok': False, 'error': 'bad_vertical'|'name_required'}.
+    """
+    payload = {k: v for k, v in {"name": name, "city": city, "state": state,
+                                 "address_full": address_full, "phone": phone,
+                                 "website": website}.items() if v}
+    return submissions.submit(vertical, payload, contact_email=contact_email or None)
+
+
+@mcp.tool()
+def get_movie_details(movie_id: int) -> dict[str, Any]:
+    """Full details for one Indian movie (the id from get_indian_movies_in_theaters).
+
+    Returns the movie record (title, language, overview, release_date, genres, poster_url, ...) or
+    {'error': 'not_found'}. Movie data from TMDB; this product uses the TMDB API but is not endorsed or
+    certified by TMDB.
+    """
+    rec = movies.get_movie(movie_id)
+    return rec or {"error": "not_found", "movie_id": movie_id}
+
+
+@mcp.tool()
+def get_h1b_sponsor_details(sponsor_id: int) -> dict[str, Any]:
+    """Full details for one H-1B sponsor (the id from search_h1b_sponsors).
+
+    Returns the sponsor record (employer, certified counts, wages, top titles/states/cities, ...) or
+    {'error': 'not_found'}. Aggregated from U.S. Department of Labor LCA disclosure data.
+    """
+    rec = h1b.get_sponsor(sponsor_id)
+    return rec or {"error": "not_found", "sponsor_id": sponsor_id}
 
 
 # ---------------------------------------------------- agent traffic analytics

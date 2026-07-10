@@ -96,6 +96,20 @@ def upsert_document(*, source_type: str, source_ref: str, content: str,
     return {"ok": True, "document_id": doc_id, "chunks": len(chunks), "updated": bool(existing)}
 
 
+def backfill_embeddings(only_missing: bool = True) -> dict[str, int]:
+    """Embed kb_chunks left without a vector (e.g. chunks indexed while embeddings were disabled, then
+    enabled). Vector search filters `embedding IS NOT NULL`, so un-embedded chunks are otherwise
+    silently excluded from RAG recall. No-op when embeddings are disabled."""
+    if not embeddings.enabled():
+        return {"updated": 0}
+    where = "WHERE embedding IS NULL" if only_missing else ""
+    rows = db.query(f"SELECT id, text FROM kb_chunks {where}")
+    for r in rows:
+        db.execute("UPDATE kb_chunks SET embedding = %s::vector WHERE id = %s",
+                   (embeddings.to_vector_literal(embeddings.embed(r["text"])), r["id"]))
+    return {"updated": len(rows)}
+
+
 def search(query: str, *, vertical: str | None = None, limit: int = 6) -> list[dict]:
     """Top-k knowledge chunks for a question, optionally scoped to a vertical. Each row carries the
     chunk text + its source document's title/url so the answer can cite it."""

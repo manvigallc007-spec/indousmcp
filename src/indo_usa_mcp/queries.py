@@ -95,7 +95,9 @@ def stats() -> dict[str, Any]:
             "SELECT count(*) FROM restaurants WHERE deleted_at IS NULL AND is_active"
         ),
         "restaurants_featured": scalar(
-            "SELECT count(*) FROM restaurants WHERE deleted_at IS NULL AND is_featured"
+            # effective featured (within the paid window), matching reporting.py — not the raw column,
+            # which over-counts listings whose featured_until has already passed.
+            f"SELECT count(*) FROM restaurants WHERE deleted_at IS NULL AND {_FEATURED}"
         ),
         "approvals_pending": scalar(
             "SELECT count(*) FROM approval_queue WHERE status = 'pending'"

@@ -327,15 +327,33 @@ def unset_featured(restaurant_id: int) -> dict[str, Any]:
     return row or {"error": "not_found", "id": restaurant_id}
 
 
-def backfill_embeddings(only_missing: bool = True) -> dict[str, int]:
-    """(Re)compute embeddings for canonical rows. Used after enabling/changing a provider."""
+def backfill_embeddings(only_missing: bool = True) -> dict[str, Any]:
+    """(Re)compute embeddings for canonical rows across ALL verticals + the knowledge base, so nothing
+    stays invisible to semantic search after enabling/changing a provider. Previously restaurants-only;
+    a vertical embedded only at write time would stay NULL (and unsearchable) after an embeddings toggle."""
     if not embeddings.enabled():
         return {"updated": 0, "skipped": "embeddings disabled"}
-    where = "WHERE deleted_at IS NULL" + (" AND embedding IS NULL" if only_missing else "")
-    rows = db.query(f"SELECT * FROM restaurants {where}")
-    for row in rows:
-        _write_embedding(row)
-    return {"updated": len(rows)}
+    from .. import knowledge, verticals   # lazy: avoid an import cycle at module load
+
+    by_table: dict[str, int] = {}
+    for v in verticals.VERTICALS:
+        table = verticals._table(v)
+        # Only tables that actually have an embedding column (e.g. events may not) — skip the rest.
+        if not db.query_one("SELECT 1 FROM information_schema.columns "
+                            "WHERE table_name = %s AND column_name = 'embedding'", (table,)):
+            continue
+        where = "WHERE deleted_at IS NULL" + (" AND embedding IS NULL" if only_missing else "")
+        rows = db.query(f"SELECT * FROM {table} {where}")
+        for row in rows:
+            if table == "restaurants":
+                _write_embedding(row)
+            else:
+                db.execute(f"UPDATE {table} SET embedding = %s::vector WHERE id = %s",
+                           (embeddings.to_vector_literal(embeddings.embed(embeddings.text_for(row))),
+                            row["id"]))
+        by_table[v] = len(rows)
+    by_table["kb_chunks"] = knowledge.backfill_embeddings(only_missing=only_missing)["updated"]
+    return {"updated": sum(by_table.values()), "by_table": by_table}
 
 
 def reject_approval(approval_id: int, reviewed_by: str = "human") -> None:
