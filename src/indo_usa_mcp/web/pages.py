@@ -18,6 +18,7 @@ from .. import inbox
 from ..config import settings
 from . import seo
 from .auth import verify_captcha
+from .common import partner_bar
 from .common import captcha_field
 
 # SEO keywords (Google) — Namaste America is the app brand; Dost is the assistant.
@@ -104,6 +105,7 @@ footer a{{color:var(--accent)}} .flinks{{margin-bottom:8px}} .attr{{margin:6px 0
 </style></head><body>
 <header class="top"><a class="logo" href="/">🪷</a>
  <b><a href="/" style="color:var(--ink)">{html.escape(settings.platform_name)}</a></b></header>
+{partner_bar()}
 <main>{body}</main>
 {footer_html()}
 </body></html>"""

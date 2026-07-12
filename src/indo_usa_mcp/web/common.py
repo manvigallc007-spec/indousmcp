@@ -48,6 +48,29 @@ def captcha_field() -> str:
             f"<input type='hidden' name='captcha_token' value='{esc(c['token'])}'>")
 
 
+# Cross-promotion for sibling apps (same operator) — mirrors the "From our family of apps" section
+# on biryanihub.co, but placed at the top (below the header) rather than the footer, per request.
+# Fully inline-styled so it drops cleanly into any of the site's several independent page templates
+# without needing a matching CSS class in each one's own <style> block. Palette matches the existing
+# festival-banner look (chat.py's countdown strip / ogimage.py's festival card) for visual consistency.
+_PARTNER_APPS = [
+    ("https://biryanihub.co", "🍛", "BiryaniHub.co"),
+    ("https://caterbid.co", "🍽", "CaterBid.co"),
+]
+
+
+def partner_bar() -> str:
+    links = "".join(
+        f"<a href='{url}' target='_blank' rel='noopener' "
+        "style='color:#b4530f;font-weight:600;text-decoration:none;margin:0 10px;white-space:nowrap'>"
+        f"{emoji} {html.escape(name)}</a>" for url, emoji, name in _PARTNER_APPS)
+    return (
+        "<div style='background:#fff3dc;border-bottom:1px solid #ffd9a0;padding:8px 16px;"
+        "text-align:center;font-size:13px;color:#8a6a40'>"
+        "<span style='margin-right:6px'>✨ From our family of apps:</span>"
+        f"{links}</div>")
+
+
 def analytics_tag() -> str:
     """Google Analytics (GA4) gtag snippet for the <head>, or '' when GOOGLE_ANALYTICS_ID is unset.
     The measurement ID is public (it's visible in page source), so it's plain config, not a secret."""

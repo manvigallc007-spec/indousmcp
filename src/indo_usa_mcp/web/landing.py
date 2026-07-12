@@ -21,7 +21,7 @@ from .. import db, tags as tagsmod, verticals
 from ..config import settings
 from . import i18n, seo
 from .chat import _CAT_BLURB, _CAT_COLOR, _CAT_ICON
-from .common import analytics_tag
+from .common import analytics_tag, partner_bar
 
 _BRAND = "#c1440e"
 _FEATURED = "(is_featured AND (featured_until IS NULL OR featured_until > now()))"
@@ -191,6 +191,7 @@ def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200,
 {CATEGORY_CSS}
 </style></head><body>
 <header><a href="/" style="display:inline-flex;align-items:center;gap:9px"><img src="/logo" alt="{plat}" style="height:34px;width:auto;max-width:160px;border-radius:8px">{plat}</a> &nbsp;·&nbsp; <a href="/browse">Browse</a> &nbsp;·&nbsp; <a href="/chat">Ask {settings.assistant_name}</a></header>
+{partner_bar()}
 <main>{body}</main></body></html>"""
     return HTMLResponse(doc, status_code=status)
 
