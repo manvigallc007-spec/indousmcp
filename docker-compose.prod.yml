@@ -159,7 +159,9 @@ services:
       INDEXNOW_KEY: ${INDEXNOW_KEY:-}      # serves /<key>.txt for IndexNow verification
       # Human chatbot (/chat). Default = free no-LLM semantic search ($0). For a real bot pick a
       # preset and add a key: LLM_PROVIDER=groq + LLM_API_KEY=<free Groq key> (fast, free), or
-      # LLM_PROVIDER=ollama (self-hosted via the `llm` profile below, $0 but slow on CPU).
+      # LLM_PROVIDER=ollama (self-hosted via the `llm` profile below, $0 but slow on CPU), or
+      # LLM_PROVIDER=gemini + LLM_API_KEY=<free Google AI Studio key> (also unlocks flyer upload --
+      # it's the only preset that reads images).
       # NOTE: leave LLM_BASE_URL/LLM_MODEL BLANK for a preset — the preset fills them. Set them
       # only for LLM_PROVIDER=llm (fully custom) or to override a preset's default model.
       CHAT_ENABLED: ${CHAT_ENABLED:-true}
@@ -212,6 +214,13 @@ services:
       # Agent metering (charge agents for retrieval) — DORMANT. Flip on later; see SCALING.md.
       AGENT_METERING_ENABLED: ${AGENT_METERING_ENABLED:-false}
       AGENT_FREE_MONTHLY_QUOTA: ${AGENT_FREE_MONTHLY_QUOTA:-1000}
+      # Flyer upload (portal + chat): image -> LLM-vision extraction -> reviewed listing/event. Needs
+      # LLM_PROVIDER=gemini above (the only free preset that's vision-capable) -- otherwise the upload
+      # UI stays hidden. Images are stored locally under UPLOAD_DIR (zero-budget, no object storage).
+      UPLOAD_DIR: ${UPLOAD_DIR:-uploads}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-8}
+    volumes:
+      - ./uploads:/app/uploads
     ports:
       - "8080:8080"
     depends_on:

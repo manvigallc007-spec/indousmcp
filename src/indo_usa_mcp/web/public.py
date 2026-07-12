@@ -22,7 +22,7 @@ from ..pipeline import compliance, ingest, outreach
 from . import i18n
 from .auth import verify_captcha
 from .landing import CATEGORY_CSS, category_grid
-from .common import _page, captcha_field, esc as _esc, state_select
+from .common import _page, captcha_field, esc as _esc, partner_bar, state_select
 
 # Text fields shown on the owner edit form (label, restaurant field).
 _EDIT_FIELDS = [
@@ -67,6 +67,27 @@ def brand_logo(request: Request) -> Response:
         if f.exists():
             return FileResponse(f, headers={"Cache-Control": "public, max-age=86400"})
     return icon(request)
+
+
+_UPLOAD_MIME = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
+
+
+def uploaded_file(request: Request) -> Response:
+    """Serve a locally-stored upload (flyer images). Path-traversal safe: only a bare 'flyers/<hex>.ext'
+    shape (no '..', no absolute path, no subdirectory beyond 'flyers/') is ever resolved to disk."""
+    rel = (request.path_params.get("path") or "").strip()
+    parts = rel.split("/")
+    if (len(parts) != 2 or parts[0] != "flyers" or not parts[1]
+            or ".." in rel or rel.startswith("/") or "\\" in rel):
+        return Response(status_code=404)
+    ext = parts[1].rsplit(".", 1)[-1].lower() if "." in parts[1] else ""
+    mime = _UPLOAD_MIME.get(ext)
+    if not mime:
+        return Response(status_code=404)
+    f = pathlib.Path(settings.upload_dir) / rel
+    if not f.is_file():
+        return Response(status_code=404)
+    return FileResponse(f, media_type=mime, headers={"Cache-Control": "public, max-age=31536000"})
 
 
 @functools.lru_cache(maxsize=1)
@@ -243,6 +264,7 @@ footer{text-align:center;color:#9aa0a6;font-size:14px;padding:22px 20px 48px;bor
  <a class="brand" href="/"><span class="logo">🪷</span><span><b>__PLAT__</b><i>__TAGLINE__</i></span></a>
  <nav class="nav"><a class="signin" href="/submit">Add your business</a><a class="btn" href="/chat">Ask __ANAME__</a></nav>
 </header>
+__PARTNERBAR__
 <main>
  <section class="hero">
   <h1>Find Indian America with __ANAME__</h1>
@@ -282,6 +304,7 @@ def home(request: Request) -> HTMLResponse:
         "__PLAT__": plat, "__ANAME__": aname,
         "__TAGLINE__": html.escape(settings.platform_tagline),
         "__SUB__": html.escape(desc), "__TILES__": category_grid(), "__CATCSS__": CATEGORY_CSS,
+        "__PARTNERBAR__": partner_bar(),
         # Self-reference /explore (its OWN url) -- not "/" (the chatbot homepage). They're different
         # pages with different content; pointing this page's canonical/og:url at a different page's
         # URL is what caused Search Console's "Duplicate without user-selected canonical" (no
@@ -615,6 +638,7 @@ routes = [
     Route("/og.png", og_png, methods=["GET"]),
     Route("/festival-card.svg", festival_card, methods=["GET"]),
     Route("/logo", brand_logo, methods=["GET"]),
+    Route("/uploads/{path:path}", uploaded_file, methods=["GET"]),
     Route("/submit", submit_get, methods=["GET"]),
     Route("/submit", submit_post, methods=["POST"]),
     Route("/claim", claim_get, methods=["GET"]),

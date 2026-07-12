@@ -160,6 +160,22 @@ def _update(existing: dict, rec: dict, diff: dict) -> None:
     _snapshot(row, "update")
 
 
+def submit_flyer_event(c: dict) -> dict[str, Any]:
+    """Insert a flyer-sourced event. ALWAYS lands as 'pending' -- unlike _reconcile()'s scraped-feed
+    path, this never auto-approves regardless of confidence_score, because it's LLM-vision-derived
+    from a user upload rather than a trusted iCal feed. Lands in the same /admin/events pending queue
+    (events.pending()/set_status()) with zero new admin UI."""
+    rec = clean_event({**c, "source_name": c.get("source_name") or "flyer_upload"})
+    if not rec["name"] or rec["start_at"] is None:
+        return {"ok": False, "error": "missing_required_fields"}
+    existing = db.query_one("SELECT id FROM events WHERE natural_key = %s", (rec["natural_key"],))
+    if existing:
+        return {"ok": False, "error": "duplicate_event", "event_id": existing["id"]}
+    _insert(rec, "pending")
+    row = db.query_one("SELECT id FROM events WHERE natural_key = %s", (rec["natural_key"],))
+    return {"ok": True, "id": row["id"]}
+
+
 def _snapshot(row: dict, reason: str) -> None:
     db.execute(
         "INSERT INTO event_versions (event_id, version, data, change_reason) VALUES (%s, %s, %s, %s)",

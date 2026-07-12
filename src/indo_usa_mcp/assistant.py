@@ -11,6 +11,7 @@ impressions — the same reach signal that makes featured placements valuable.
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 from typing import Any
@@ -828,6 +829,24 @@ def complete_text(system: str, user: str) -> str | None:
     try:
         msg = _chat([{"role": "system", "content": system},
                      {"role": "user", "content": user}], use_tools=False)
+        return (msg.get("content") or "").strip() or None
+    except Exception:
+        return None
+
+
+def complete_vision(system: str, user_text: str, image_bytes: bytes, mime_type: str) -> str | None:
+    """One-shot multimodal completion for flyer/image understanding. Only the 'gemini' preset is
+    vision-capable among the free presets (Groq's default model + Ollama's gemma2:2b are text-only),
+    so this requires settings.flyer_uploads_enabled. Returns the model's text, or None if unavailable
+    or the call fails (caller decides — never raises)."""
+    if not settings.flyer_uploads_enabled or not llm_active():
+        return None
+    try:
+        data_uri = f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
+        content = [{"type": "text", "text": user_text},
+                  {"type": "image_url", "image_url": {"url": data_uri}}]
+        msg = _chat([{"role": "system", "content": system},
+                     {"role": "user", "content": content}], use_tools=False)
         return (msg.get("content") or "").strip() or None
     except Exception:
         return None

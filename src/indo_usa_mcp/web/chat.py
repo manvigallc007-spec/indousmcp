@@ -14,9 +14,10 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.routing import Route
 
-from .. import assistant, verticals
+from .. import assistant, flyer, verticals
 from ..config import settings
-from .common import analytics_tag
+from .auth import portal_email
+from .common import analytics_tag, partner_bar
 
 # --- tiny in-memory per-IP rate limiter (abuse guard; LLM calls cost CPU or money) ---
 _HITS: dict[str, list[float]] = {}
@@ -239,6 +240,7 @@ a{color:var(--brand);text-decoration:none}
   <span class="status"><span class="dot"></span>__MODE__</span>
  </div>
 </header>
+__PARTNERBAR__
 <main id="log"><div class="wrap" id="thread">
  <section id="welcome" class="welcome">
   <div class="herocard">
@@ -275,6 +277,7 @@ a{color:var(--brand);text-decoration:none}
   <button class="voicebtn" id="convo" type="button" onclick="toggleConvo()" title="Hands-free voice chat — speak your question and hear the answer" aria-label="Start voice conversation">
    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
    <span class="vlabel">Voice</span></button>
+  __FLYERBTN__
   <button class="micbtn" id="mic" type="button" onclick="startMic()" title="Dictate your search" aria-label="Speak to type">🎤</button>
   <button class="send" type="submit" aria-label="Send">
    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
@@ -572,6 +575,22 @@ function submitForm(e){if(e&&e.preventDefault)e.preventDefault();const t=ta.valu
 function ask(text){send(text,false);}
 ta.addEventListener('input',()=>{ta.style.height='auto';ta.style.height=Math.min(ta.scrollHeight,140)+'px';});
 ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submitForm(e);}});
+// --- flyer upload: extract, then hand off to the review form (no in-chat conversation) ---
+const flyerFile=document.getElementById('flyerfile');
+if(flyerFile){flyerFile.addEventListener('change',function(){
+  const file=flyerFile.files&&flyerFile.files[0];flyerFile.value='';if(!file)return;
+  hideWelcome();addUser('📎 '+file.name);const content=addBot();
+  content.innerHTML='';content.appendChild(el('div','bubble','Reading your flyer… 🔍'));scroll();
+  const fd=new FormData();fd.append('image',file);
+  fetch('/chat/flyer',{method:'POST',body:fd}).then(r=>r.json().then(d=>({status:r.status,d:d})))
+    .then(function(res){content.innerHTML='';
+      content.appendChild(el('div','bubble',res.d.reply||'Something went wrong.'));
+      if(res.d.needs_login){const a=el('a','addcta','Sign in →');a.href='/portal/login';content.appendChild(a);}
+      else if(res.d.link){const a=el('a','addcta','Review & confirm →');a.href=res.d.link;content.appendChild(a);}
+      scroll();})
+    .catch(function(){content.innerHTML='';
+      content.appendChild(el('div','bubble','Sorry, that upload didn’t go through — please try again.'));scroll();});
+});}
 setLang(lang);  // apply saved language to the UI + selector
 if('speechSynthesis' in window){speechSynthesis.onvoiceschanged=function(){};speechSynthesis.getVoices();}
 ta.focus();
@@ -606,6 +625,11 @@ def chat_page(request: Request) -> HTMLResponse:
             festival_html = ""
     except Exception:
         festival_html = ""
+    flyerbtn_html = (
+        '<button class="micbtn" id="flyerbtn" type="button" onclick="document.getElementById(\'flyerfile\').click()" '
+        'title="Upload an event or business flyer" aria-label="Upload a flyer">📎</button>'
+        '<input type="file" id="flyerfile" accept="image/jpeg,image/png,image/webp" style="display:none">'
+        if settings.flyer_uploads_enabled else "")
     og_url = base + "/"          # the chatbot is the homepage now
     og_img = f"{base}/og.png"    # raster card (SVG OG images don't render on FB/LinkedIn/WhatsApp/X)
     aname_raw = settings.assistant_name
@@ -629,7 +653,8 @@ def chat_page(request: Request) -> HTMLResponse:
         "__ATAG__": html.escape(settings.assistant_tagline),
         "__PTAG__": html.escape(settings.platform_tagline),
         "__AMEAN__": html.escape(settings.assistant_meaning),
-        "__CHIPS__": chips, "__FESTIVAL__": festival_html, "__OGURL__": html.escape(og_url),
+        "__CHIPS__": chips, "__FESTIVAL__": festival_html, "__FLYERBTN__": flyerbtn_html,
+        "__PARTNERBAR__": partner_bar(), "__OGURL__": html.escape(og_url),
         "__OGIMG__": html.escape(og_img), "__OGDESC__": html.escape(og_desc),
         "__JSONLD__": jsonld,
         "__ICONS__": json.dumps(_CAT_ICON, ensure_ascii=False),
@@ -737,6 +762,32 @@ async def chat_contribute(request: Request) -> JSONResponse:
                         status_code=400)
 
 
+async def chat_flyer(request: Request) -> JSONResponse:
+    """In-chat flyer upload: extract, then hand off to the SAME review form the portal upload uses --
+    deliberately NOT a multi-turn conversation (see the flyer-upload plan's clarify-UX decision)."""
+    email = portal_email(request)
+    if not email:
+        return JSONResponse({"reply": "Please sign in to upload a flyer.", "needs_login": True},
+                            status_code=401)
+    if not settings.flyer_uploads_enabled:
+        return JSONResponse({"reply": "Flyer upload isn't available right now."}, status_code=503)
+    form = await request.form()
+    upload = form.get("image")
+    if upload is None or not getattr(upload, "filename", None):
+        return JSONResponse({"reply": "Please attach an image."}, status_code=400)
+    data = await upload.read()
+    res = flyer.create_upload(email, data, upload.content_type or "")
+    if not res.get("ok"):
+        msg = {"unsupported_image_type": "Please upload a JPG, PNG, or WEBP image.",
+               "image_too_large": f"That image is too large (max {settings.max_upload_mb}MB)."}.get(
+            res.get("error"), "Couldn't read that image.")
+        return JSONResponse({"reply": msg}, status_code=400)
+    link = f"/portal/flyer/{res['id']}/review"
+    guess = (res.get("vertical_guess") or "").replace("_", " ").title() or "your flyer"
+    return JSONResponse({"reply": f"Got it! I read your flyer — looks like {guess}. "
+                                  f"Review and confirm the details here: {link}", "link": link})
+
+
 def chat_redirect(request: Request) -> RedirectResponse:
     return RedirectResponse("/", status_code=308)   # chat moved to the homepage; keep old links
 
@@ -746,4 +797,5 @@ routes = [
     Route("/chat", chat_redirect, methods=["GET"]),  # legacy path -> /
     Route("/chat/api", chat_api, methods=["POST"]),
     Route("/chat/contribute", chat_contribute, methods=["POST"]),
+    Route("/chat/flyer", chat_flyer, methods=["POST"]),
 ]

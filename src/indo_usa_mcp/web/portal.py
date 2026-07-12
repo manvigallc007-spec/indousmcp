@@ -10,8 +10,9 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Route
 
-from .. import analytics, db, onboard, payments, submissions, verticals
+from .. import analytics, db, flyer, onboard, payments, submissions, verticals
 from ..config import settings
+from ..events import pipeline as events
 from ..pipeline import outreach
 from .auth import (check_login, create_user, get_user, google_auth_url, google_exchange,
                    make_action_token, portal_email, set_password, set_verified,
@@ -540,6 +541,169 @@ async def submission_delete(request: Request) -> RedirectResponse:
     return RedirectResponse("/portal", status_code=303)
 
 
+# ----------------------------------------------------------------- flyer upload
+_FLYER_VERTICAL_OPTS = [(k, v["label"]) for k, v in verticals.VERTICALS.items() if k != "events"] \
+    + [("events", "Events")]
+
+
+def flyer_get(request: Request) -> HTMLResponse:
+    email = portal_email(request)
+    if not email:
+        return RedirectResponse("/portal/login", status_code=303)
+    if not settings.flyer_uploads_enabled:
+        return _page("Upload a flyer",
+                     "<h2>Flyer upload isn't available yet</h2>"
+                     "<p class='muted'>This feature needs a vision-capable LLM configured on the "
+                     "server. Check back soon, or <a href='/portal/add'>add your business manually</a>.</p>")
+    past = flyer.list_for_uploader(email)
+    rows = "".join(
+        f"<div class='lc'><b>{esc((u.get('vertical_guess') or 'unclassified').title())}</b> "
+        f"<span class='muted'>· {esc(u['status'])} · {esc(str(u['created_at'])[:16])}</span>"
+        + (f" · <a href='/portal/flyer/{u['id']}/review'>review</a>" if u["status"] == "extracted" else "")
+        + "</div>" for u in past)
+    return _page("Upload a flyer",
+                 "<h2>Upload a flyer</h2>"
+                 "<p class='muted'>Upload an event poster or business promo — we'll read it and "
+                 "pre-fill a listing for you to check before it's submitted for review.</p>"
+                 "<form method='post' action='/portal/flyer' enctype='multipart/form-data'>"
+                 "<label>Flyer image (JPG, PNG or WEBP)</label>"
+                 "<input type='file' name='image' accept='image/jpeg,image/png,image/webp' required>"
+                 "<button type='submit'>Read my flyer →</button></form>"
+                 + (f"<h3 style='margin-top:24px'>Your uploads</h3>{rows}" if rows else ""))
+
+
+async def flyer_post(request: Request) -> HTMLResponse:
+    email = portal_email(request)
+    if not email:
+        return RedirectResponse("/portal/login", status_code=303)
+    if not settings.flyer_uploads_enabled:
+        return _page("Unavailable", "<h2>Flyer upload isn't available yet</h2>", status=503)
+    form = await request.form()
+    upload = form.get("image")
+    if upload is None or not getattr(upload, "filename", None):
+        return _page("Upload a flyer", "<h2 class='err'>Please choose an image</h2>"
+                     "<p><a href='/portal/flyer'>‹ back</a></p>", status=400)
+    data = await upload.read()
+    res = flyer.create_upload(email, data, upload.content_type or "")
+    if not res.get("ok"):
+        msg = {"unsupported_image_type": "Please upload a JPG, PNG, or WEBP image.",
+               "image_too_large": f"Image is too large (max {settings.max_upload_mb}MB)."}.get(
+            res.get("error"), "Couldn't process that image.")
+        return _page("Upload a flyer", f"<h2 class='err'>{esc(msg)}</h2>"
+                     "<p><a href='/portal/flyer'>‹ try again</a></p>", status=400)
+    return RedirectResponse(f"/portal/flyer/{res['id']}/review", status_code=303)
+
+
+def _flyer_field(label: str, name: str, value: str, ph: str = "", input_type: str = "text") -> str:
+    return (f"<label>{esc(label)}</label>"
+            f"<input type='{input_type}' name='{name}' value='{esc(value)}' placeholder='{esc(ph)}'>")
+
+
+def flyer_review_get(request: Request) -> HTMLResponse:
+    email = portal_email(request)
+    if not email:
+        return RedirectResponse("/portal/login", status_code=303)
+    upload = flyer.get_upload(int(request.path_params["id"]), email)
+    if upload is None:
+        return _page("Not found", "<h2>Flyer not found</h2>", status=404)
+    ex = upload.get("extracted") or {}
+    opts = "".join(
+        f"<option value='{k}'{' selected' if k == upload.get('vertical_guess') else ''}>{esc(lbl)}</option>"
+        for k, lbl in _FLYER_VERTICAL_OPTS)
+    img = (f"<img src='/uploads/{esc(upload['image_path'])}' alt='' style='width:100%;max-height:280px;"
+          f"object-fit:cover;border-radius:12px;margin:6px 0'>")
+    note = ("<p class='muted'>We couldn't automatically read this image — please fill in the details "
+            "below.</p>" if upload.get("error") else
+            "<p class='muted'>Here's what we read from your flyer — check it, fix anything, then submit.</p>")
+    body = (f"<h2>Review your flyer</h2>{note}{img}"
+            f"<form method='post' action='/portal/flyer/{upload['id']}/confirm'>"
+            f"<label>Category</label><select name='vertical'>{opts}</select>"
+            + _flyer_field("Name / event title", "name", ex.get("name") or "")
+            + _flyer_field("Description", "description", ex.get("description") or "")
+            + "<fieldset style='border:1px solid #e2e0dd;border-radius:10px;padding:10px 14px;margin:14px 0'>"
+            "<legend style='font-size:13px;color:#6b7280'>Events only</legend>"
+            + _flyer_field("Start date", "start_date", ex.get("start_date") or "", input_type="date")
+            + _flyer_field("Start time", "start_time", ex.get("start_time") or "", input_type="time")
+            + _flyer_field("End date", "end_date", ex.get("end_date") or "", input_type="date")
+            + _flyer_field("Venue", "venue_name", ex.get("venue_name") or "")
+            + _flyer_field("Organizer", "organizer", ex.get("organizer") or "")
+            + _flyer_field("Event category", "category", ex.get("category") or "")
+            + "</fieldset>"
+            + _flyer_field("Address", "address_full", ex.get("address_full") or "")
+            + _flyer_field("City", "city", ex.get("city") or "")
+            + f"<label>State</label>{state_select('state', ex.get('state') or '')}"
+            + _flyer_field("Phone", "phone", ex.get("phone") or "")
+            + _flyer_field("Website", "website", ex.get("website") or "")
+            + _flyer_field("Contact email (events only)", "email", ex.get("email") or "")
+            + "<button type='submit'>Submit for review</button></form>"
+            "<p class='muted' style='margin-top:12px'><a href='/portal/flyer'>‹ back</a></p>")
+    return _page("Review your flyer", body)
+
+
+async def flyer_confirm_post(request: Request) -> HTMLResponse:
+    email = portal_email(request)
+    if not email:
+        return RedirectResponse("/portal/login", status_code=303)
+    upload_id = int(request.path_params["id"])
+    upload = flyer.get_upload(upload_id, email)
+    if upload is None:
+        return _page("Not found", "<h2>Flyer not found</h2>", status=404)
+    form = await request.form()
+    vertical = (form.get("vertical") or "").strip()
+    valid = {k for k, _ in _FLYER_VERTICAL_OPTS}
+    if vertical not in valid:
+        return _page("Review your flyer", "<h2 class='err'>Please pick a category</h2>"
+                     f"<p><a href='/portal/flyer/{upload_id}/review'>‹ back</a></p>", status=400)
+    name = (form.get("name") or "").strip()
+    if not name:
+        return _page("Review your flyer", "<h2 class='err'>Please enter a name / event title</h2>"
+                     f"<p><a href='/portal/flyer/{upload_id}/review'>‹ back</a></p>", status=400)
+
+    if vertical == "events":
+        start_date = (form.get("start_date") or "").strip()
+        if not start_date:
+            return _page("Review your flyer", "<h2 class='err'>Please enter a start date for the event</h2>"
+                         f"<p><a href='/portal/flyer/{upload_id}/review'>‹ back</a></p>", status=400)
+        start_time = (form.get("start_time") or "").strip() or "00:00"
+        end_date = (form.get("end_date") or "").strip()
+        rec = {
+            "name": name, "venue_name": (form.get("venue_name") or "").strip() or None,
+            "address_full": (form.get("address_full") or "").strip() or None,
+            "city": (form.get("city") or "").strip() or None,
+            "state": (form.get("state") or "").strip() or None,
+            "phone": (form.get("phone") or "").strip() or None,
+            "email": (form.get("email") or "").strip() or None,
+            "website": (form.get("website") or "").strip() or None,
+            "organizer": (form.get("organizer") or "").strip() or None,
+            "category": (form.get("category") or "").strip() or None,
+            "start_at": f"{start_date}T{start_time}",
+            "end_at": f"{end_date}T{start_time}" if end_date else None,
+            "festival_specials": (form.get("description") or "").strip()[:500] or None,
+        }
+        res = events.submit_flyer_event(rec)
+        if not res.get("ok"):
+            msg = {"missing_required_fields": "Please enter a name and start date.",
+                  "duplicate_event": "This event looks like a duplicate of one already listed."}.get(
+                res.get("error"), "Couldn't submit this event.")
+            return _page("Review your flyer", f"<h2 class='err'>{esc(msg)}</h2>"
+                         f"<p><a href='/portal/flyer/{upload_id}/review'>‹ back</a></p>", status=400)
+        flyer.mark_submitted(upload_id, event_id=res["id"])
+    else:
+        payload = {"name": name, "address_full": (form.get("address_full") or "").strip(),
+                  "city": (form.get("city") or "").strip(), "state": (form.get("state") or "").strip(),
+                  "phone": (form.get("phone") or "").strip(), "website": (form.get("website") or "").strip()}
+        desc = (form.get("description") or "").strip()
+        if desc:
+            payload["description"] = desc
+        res = submissions.submit(vertical, payload, contact_email=email, note="flyer upload")
+        if not res.get("ok"):
+            return _page("Review your flyer", "<h2 class='err'>Couldn't submit — please check the "
+                         "category and name</h2>"
+                         f"<p><a href='/portal/flyer/{upload_id}/review'>‹ back</a></p>", status=400)
+        flyer.mark_submitted(upload_id, submission_id=res["id"])
+    return RedirectResponse("/portal/flyer?added=1", status_code=303)
+
+
 def logout(request: Request) -> RedirectResponse:
     request.session.pop("owner_email", None)
     return RedirectResponse("/portal/login", status_code=303)
@@ -563,6 +727,10 @@ routes = [
     Route("/portal/add", add_post, methods=["POST"]),
     Route("/portal/add/confirm", add_confirm, methods=["POST"]),
     Route("/portal/submission/{id:int}/delete", submission_delete, methods=["POST"]),
+    Route("/portal/flyer", flyer_get, methods=["GET"]),
+    Route("/portal/flyer", flyer_post, methods=["POST"]),
+    Route("/portal/flyer/{id:int}/review", flyer_review_get, methods=["GET"]),
+    Route("/portal/flyer/{id:int}/confirm", flyer_confirm_post, methods=["POST"]),
     Route("/portal/edit/{vertical}/{id:int}", edit_get, methods=["GET"]),
     Route("/portal/edit/{vertical}/{id:int}", edit_post, methods=["POST"]),
     Route("/portal/logout", logout, methods=["GET"]),

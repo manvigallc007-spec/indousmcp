@@ -284,6 +284,18 @@ class Settings(BaseSettings):
         # A preset knows the right mode for its model (Groq tool-calls; Gemma/Gemini grounded).
         preset = self._llm_preset
         return bool(preset["llm_use_tools"]) if preset else self.llm_use_tools
+
+    # Flyer upload (image -> LLM-vision extraction -> reviewed listing/event). Local disk storage only
+    # (zero-budget, self-hosted — see the ./backups bind-mount for the same pattern). Vision requires
+    # the 'gemini' preset: it's the only one of the 3 free LLM presets that's vision-capable out of the
+    # box (Groq's default model + Ollama's gemma2:2b are text-only). Blank/other provider = the upload
+    # UI simply doesn't show, same "blank = disabled" idiom as Stripe/TMDB/Telegram below.
+    upload_dir: str = "uploads"
+    max_upload_mb: int = 8
+
+    @property
+    def flyer_uploads_enabled(self) -> bool:
+        return self.llm_provider.strip().lower() == "gemini" and bool(self.llm_api_key)
     chat_rate_per_min: int = 20            # per-IP request cap on the chat API (abuse guard)
     api_rate_per_min: int = 60             # per-IP request cap on the public read-only JSON API
 
