@@ -147,6 +147,9 @@ class Settings(BaseSettings):
     review_min_chars: int = 0          # 0 = a star-only rating (no text) is allowed
     review_max_chars: int = 2000
     reviews_per_ip_per_day: int = 8    # across all listings (abuse guard)
+    # Ask-the-community Q&A. Clean questions/answers auto-publish (same screen as reviews); flagged wait.
+    # Dost posts an instant AI answer when the LLM is active. Set QA_ENABLED=false to hide the feature.
+    qa_enabled: bool = True
     # Google sign-in for the business-owner portal (optional; magic-link still works without it).
     # Create an OAuth 2.0 Web client at console.cloud.google.com -> APIs & Services -> Credentials.
     # Authorized redirect URI = <PUBLIC_WEB_URL>/portal/google/callback. Secrets via env only.

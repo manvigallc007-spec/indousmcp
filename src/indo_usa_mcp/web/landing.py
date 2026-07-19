@@ -733,10 +733,16 @@ def events_page(request: Request) -> HTMLResponse:
 def sitemap(request: Request) -> Response:
     base = _base()
     urls = [f"{base}/", f"{base}/browse", f"{base}/explore", f"{base}/events", f"{base}/festivals",
-            f"{base}/movies", f"{base}/employers", f"{base}/insights", f"{base}/for-business",
-            f"{base}/for-agents", f"{base}/submit", f"{base}/about", f"{base}/privacy", f"{base}/terms",
-            f"{base}/contact", f"{base}/faq"]
+            f"{base}/today", f"{base}/questions", f"{base}/movies", f"{base}/employers", f"{base}/insights",
+            f"{base}/for-business", f"{base}/for-agents", f"{base}/submit", f"{base}/about",
+            f"{base}/privacy", f"{base}/terms", f"{base}/contact", f"{base}/faq"]
     urls += [f"{base}/browse/{v}" for v in verticals.VERTICALS]
+    # Published community Q&A — each an indexable, long-tail-friendly QAPage.
+    try:
+        from .. import qa
+        urls += [f"{base}/q/{q['slug']}" for q in qa.list_questions(limit=5000) if q.get("slug")]
+    except Exception:
+        pass
     # All (vertical × city) pages that actually have active listings.
     for v in verticals.VERTICALS:
         try:

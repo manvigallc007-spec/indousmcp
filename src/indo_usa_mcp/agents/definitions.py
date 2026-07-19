@@ -1056,6 +1056,37 @@ class TelegramDigestAgent(Agent):
         return {"subscribers": len(subs), "sent": sent}
 
 
+class ConsumerDigestAgent(Agent):
+    name = "consumer_digest"
+    description = ("Emails opted-in consumers their personalized 'Today in Indian America' digest on "
+                   "their chosen cadence (daily/weekly). No-op without SMTP; one-click unsubscribe.")
+    default_interval_s = 86400  # runs daily; per-user cadence enforced by accounts.due_for_digest()
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from ..config import settings
+        if not settings.email_enabled:
+            return {"skipped": "email_disabled"}
+        from .. import accounts, today
+        from ..pipeline import outreach
+        from ..web.auth import make_action_token
+        base = settings.public_web_url.rstrip("/")
+        sent = 0
+        due = accounts.due_for_digest(limit=params.get("limit", 300))
+        for p in due:
+            try:
+                feed = today.assemble(city=p.get("home_city"), state=p.get("home_state"),
+                                      languages=p.get("languages") or [])
+                unsub = f"{base}/me/unsubscribe?t={make_action_token(p['email'], 'digest_unsub', 60*24*90)}"
+                body = (today.render_digest_text(feed, base)
+                        + f"\n\n—\nManage your digest: {base}/me\nUnsubscribe: {unsub}")
+                if outreach.send_email(p["email"], "Today in Indian America", body, list_unsubscribe=unsub):
+                    accounts.mark_digest_sent(p["email"])
+                    sent += 1
+            except Exception:
+                continue
+        return {"due": len(due), "sent": sent}
+
+
 ALL_AGENTS = [
     DiscoveryAgent(),
     ScraperAgent(),
@@ -1120,4 +1151,5 @@ ALL_AGENTS = [
     SocrataScraperAgent(),
     OsmVerifyAgent(),
     TelegramDigestAgent(),
+    ConsumerDigestAgent(),
 ]

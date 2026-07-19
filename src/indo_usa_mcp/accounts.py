@@ -113,3 +113,54 @@ def list_follows(email: str, kind: str | None = None) -> list[dict]:
                         "ORDER BY created_at DESC", (_norm(email), kind))
     return db.query("SELECT kind, value, created_at FROM follows WHERE email=%s "
                     "ORDER BY created_at DESC", (_norm(email),))
+
+
+# --------------------------------------------------------------------------- digest (Today email)
+def due_for_digest(limit: int = 500) -> list[dict]:
+    """Consumers whose email digest is due now: opted in, not 'off', and past their cadence window
+    (daily = not sent today; weekly = not sent in 7 days)."""
+    return db.query(
+        "SELECT * FROM user_profiles WHERE notify_email AND digest_freq <> 'off' AND ("
+        "  digest_sent_at IS NULL"
+        "  OR (digest_freq = 'daily'  AND digest_sent_at < date_trunc('day', now()))"
+        "  OR (digest_freq = 'weekly' AND digest_sent_at < now() - interval '7 days')"
+        ") ORDER BY digest_sent_at ASC NULLS FIRST LIMIT %s", (limit,))
+
+
+def mark_digest_sent(email: str) -> None:
+    db.execute("UPDATE user_profiles SET digest_sent_at = now() WHERE email = %s", (_norm(email),))
+
+
+def set_notify_email(email: str, on: bool) -> None:
+    """One-click unsubscribe / resubscribe. Upserts a minimal profile so an unsubscribe always sticks."""
+    email = _norm(email)
+    db.execute("INSERT INTO user_profiles (email, notify_email) VALUES (%s, %s) "
+               "ON CONFLICT (email) DO UPDATE SET notify_email = EXCLUDED.notify_email, updated_at=now()",
+               (email, on))
+
+
+# --------------------------------------------------------------------------- contributor stats (gamification-lite)
+def contributor_stats(email: str) -> dict[str, Any]:
+    """A member's contribution footprint, tied to their email across submissions/flyers/reviews/saves,
+    plus a simple points total + tier badge. Powers the 'you've helped N people find places' loop."""
+    e = _norm(email)
+
+    def scalar(sql: str) -> int:
+        try:
+            r = db.query_one(sql, (e,))
+            return int(list(r.values())[0]) if r else 0
+        except Exception:
+            return 0
+
+    added = scalar("SELECT count(*) FROM submissions WHERE lower(contact_email)=%s AND created_record_id IS NOT NULL")
+    pending = scalar("SELECT count(*) FROM submissions WHERE lower(contact_email)=%s AND status='pending'")
+    flyers = scalar("SELECT count(*) FROM flyer_uploads WHERE lower(uploader_email)=%s")
+    reviews = scalar("SELECT count(*) FROM reviews WHERE lower(author_email)=%s")
+    asked = scalar("SELECT count(*) FROM questions WHERE asker_email=%s AND status='published'")
+    answered = scalar("SELECT count(*) FROM answers WHERE author_email=%s AND status='published'")
+    saved = scalar("SELECT count(*) FROM saved_places WHERE email=%s")
+    points = added * 5 + reviews * 3 + flyers * 2 + answered * 2 + asked + pending
+    tier = ("🌟 Community Champion" if points >= 50 else "🏅 Regular Contributor" if points >= 15
+            else "🌱 New Contributor" if points > 0 else "")
+    return {"added": added, "pending": pending, "flyers": flyers, "reviews": reviews,
+            "asked": asked, "answered": answered, "saved": saved, "points": points, "tier": tier}

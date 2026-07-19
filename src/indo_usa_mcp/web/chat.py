@@ -230,7 +230,7 @@ a{color:var(--brand);text-decoration:none}
 </style></head><body>
 <header class="topbar">
  <a class="brand" href="/"><img class="brandlogo" src="/logo" alt="__PLAT__"><span><b>__PLAT__</b><i>__PTAG__</i></span></a>
- <nav class="topnav"><a href="/about">About</a><a href="/browse">Browse</a><a href="/me">♥ Saved</a><a href="/for-business">For business</a></nav>
+ <nav class="topnav"><a href="/today">☀ Today</a><a href="/questions">💬 Q&amp;A</a><a href="/browse">Browse</a><a href="/me">♥ Saved</a><a href="/for-business">For business</a></nav>
  <div class="actions">
   <select id="lang" class="langsel" onchange="setLang(this.value)" aria-label="Language">
    <option value="en">English</option><option value="hi">हिंदी</option><option value="te">తెలుగు</option>
@@ -617,10 +617,11 @@ def chat_page(request: Request) -> HTMLResponse:
             _d = _nf["days_until"]
             _when = "today! 🎉" if _d == 0 else ("tomorrow" if _d == 1 else f"in {_d} days")
             festival_html = (
-                "<a href='/festivals' style='display:inline-block;background:#fff3dc;"
+                "<a href='/today' style='display:inline-block;background:#fff3dc;"
                 "border:1px solid #ffd9a0;border-radius:999px;padding:7px 15px;margin:2px 0 8px;"
                 "color:#b4530f;font-weight:600;font-size:14px;text-decoration:none'>"
-                f"{html.escape(_nf['emoji'])} <b>{html.escape(_nf['name'])}</b> is {_when} →</a>")
+                f"{html.escape(_nf['emoji'])} <b>{html.escape(_nf['name'])}</b> is {_when} · "
+                "see today →</a>")
         else:
             festival_html = ""
     except Exception:

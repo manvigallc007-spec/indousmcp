@@ -9,7 +9,7 @@ from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.routing import Route
 
 from .. import accounts, verticals
-from .auth import portal_email
+from .auth import portal_email, verify_action_token
 from .common import _page, esc, state_select
 
 
@@ -79,12 +79,30 @@ def me_home(request: Request) -> HTMLResponse:
         f"<label>Digest frequency</label><select name='digest_freq'>{freq_opts}</select>"
         "<button type='submit' style='margin-top:12px'>Save preferences</button></form>")
 
+    st = accounts.contributor_stats(email)
+    contrib = ""
+    if st["tier"]:
+        contrib = (
+            "<div style='background:#fff7ef;border:1px solid #ffe0c2;border-radius:14px;padding:14px 16px;margin:12px 0'>"
+            f"<b>{esc(st['tier'])}</b> · {st['points']} pts "
+            f"<span class='muted'>· you've helped others find "
+            f"{st['added'] + st['flyers']} place{'s' if (st['added'] + st['flyers']) != 1 else ''}</span>"
+            f"<div class='muted' style='font-size:13px;margin-top:4px'>"
+            f"{st['added']} added · {st['flyers']} flyers · {st['reviews']} reviews · "
+            f"{st['asked']} asked · {st['answered']} answered"
+            + (f" · {st['pending']} pending review" if st['pending'] else "") + "</div></div>")
+    else:
+        contrib = ("<div style='background:#fff7ef;border:1px solid #ffe0c2;border-radius:14px;padding:14px 16px;margin:12px 0'>"
+                   "<b>🌱 Start contributing</b> <span class='muted'>— add a place or write a review to help "
+                   "the community and earn contributor status.</span> "
+                   "<a href='/submit'>Add a place →</a></div>")
+
     body = (f"<h2>Welcome{', ' + esc(prof.get('display_name')) if prof.get('display_name') else ''}! 🙏</h2>"
             f"<p class='muted'>{esc(email)} · <a href='/portal'>your business listings</a> · "
             "<a href='/portal/logout'>sign out</a></p>"
             + (f"<div class='ok' style='background:#e7f6ec;border-radius:10px;padding:10px 13px;margin:10px 0'>✓ Saved.</div>"
                if request.query_params.get("ok") else "")
-            + saved_block + follow_block + prefs)
+            + contrib + saved_block + follow_block + prefs)
     return _page("Your account", body)
 
 
@@ -153,9 +171,27 @@ async def unfollow_post(request: Request) -> RedirectResponse:
     return RedirectResponse("/me", status_code=303)
 
 
+def unsubscribe(request: Request) -> HTMLResponse:
+    """One-click email-digest unsubscribe from a signed token (no login needed; RFC 8058 target)."""
+    email = verify_action_token(request.query_params.get("t", ""), "digest_unsub")
+    if not email:
+        return _page("Unsubscribe", "<h2 class='err'>This unsubscribe link is invalid or expired.</h2>"
+                     "<p>Manage your preferences from <a href='/me'>your account</a>.</p>", status=400)
+    accounts.set_notify_email(email, False)
+    return _page("Unsubscribed", "<h2 class='ok'>✓ You're unsubscribed</h2>"
+                 f"<p>{esc(email)} will no longer get the daily digest. Changed your mind? "
+                 "<a href='/me'>Turn it back on</a> anytime.</p>")
+
+
+async def unsubscribe_post(request: Request) -> HTMLResponse:
+    return unsubscribe(request)   # RFC 8058 one-click POSTs to the same URL
+
+
 routes = [
     Route("/me", me_home, methods=["GET"]),
     Route("/me/login", me_login, methods=["GET"]),
+    Route("/me/unsubscribe", unsubscribe, methods=["GET"]),
+    Route("/me/unsubscribe", unsubscribe_post, methods=["POST"]),
     Route("/me/prefs", prefs_post, methods=["POST"]),
     Route("/me/save", save_post, methods=["POST"]),
     Route("/me/unsave", unsave_post, methods=["POST"]),
