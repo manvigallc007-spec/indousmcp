@@ -9,10 +9,23 @@ listing's embedding is refreshed to include the richer text so semantic search i
 from __future__ import annotations
 
 import hashlib
+import json
 import time
 from typing import Any
 
 from . import assistant, db
+
+# Bump when the enrichment OUTPUT shape changes (e.g. adding aspects) so already-enriched rows are
+# re-generated once to gain the new fields, not just newly-added listings.
+_ENRICH_VERSION = "2"
+
+_ASPECTS_SYS = (
+    "From the review text below, extract what customers actually say. Use ONLY the reviews; never "
+    "invent. Return STRICT JSON only (no markdown, no prose): {\"aspects\": [up to 6 SHORT lowercase "
+    "customer-language tags, 1-4 words each, e.g. \"great biryani\", \"long wait\", \"family friendly\", "
+    "\"authentic dosa\", \"good value\"], \"sentiment\": one of \"positive\", \"mixed\", \"negative\"}. "
+    "If the reviews are too thin to tell, return {\"aspects\": [], \"sentiment\": \"mixed\"}."
+)
 
 _DESC_SYS = (
     "You are an editor for an Indian-American business directory. Rewrite the FACTS into one "
@@ -30,10 +43,26 @@ _REV_SYS = (
 def get(vertical: str, listing_id: int) -> dict | None:
     try:
         return db.query_one(
-            "SELECT description, review_summary FROM ai_content "
+            "SELECT description, review_summary, aspects, sentiment FROM ai_content "
             "WHERE vertical = %s AND listing_id = %s", (vertical, listing_id))
     except Exception:
         return None
+
+
+def _extract_aspects(rblock: str) -> tuple[list[str], str | None]:
+    """Grounded aspect tags + overall sentiment from review text. ([], None) when unavailable."""
+    from .onboard import _strip_json
+    raw = assistant.complete_text(_ASPECTS_SYS, f"REVIEWS:\n{rblock}")
+    if not raw:
+        return [], None
+    try:
+        data = json.loads(_strip_json(raw))
+        aspects = [str(a).strip().lower()[:40] for a in (data.get("aspects") or [])
+                   if isinstance(a, str) and a.strip()][:6]
+        sentiment = data.get("sentiment") if data.get("sentiment") in ("positive", "mixed", "negative") else None
+        return aspects, sentiment
+    except Exception:
+        return [], None
 
 
 def _hash(*parts: str) -> str:
@@ -54,40 +83,41 @@ def enrich_listing(vertical: str, row: dict, reviews: list[dict]) -> dict | None
 
     facts = describe.describe(vertical, row)
     rblock = _review_block(reviews)
-    src = _hash(facts, rblock)
+    src = _hash(facts, rblock, _ENRICH_VERSION)
     existing = db.query_one(
-        "SELECT source_hash FROM ai_content WHERE vertical = %s AND listing_id = %s",
+        "SELECT source_hash, aspects FROM ai_content WHERE vertical = %s AND listing_id = %s",
         (vertical, row["id"]))
-    if existing and existing.get("source_hash") == src:
-        return None                                   # inputs unchanged -> nothing to regenerate
+    if existing and existing.get("source_hash") == src and existing.get("aspects") is not None:
+        return None                                   # inputs unchanged AND already has aspects -> skip
 
     desc = assistant.complete_text(_DESC_SYS, f"FACTS: {facts}")
     desc = desc.strip().strip('"')[:400] if desc else None
-    rsum = None
+    rsum, aspects, sentiment = None, [], None
     if rblock.count("\n") >= 1:                        # >= 2 review bodies -> worth summarizing
         rsum = assistant.complete_text(_REV_SYS, f"REVIEWS:\n{rblock}")
         rsum = rsum.strip().strip('"')[:300] if rsum else None
+        aspects, sentiment = _extract_aspects(rblock)   # structured, grounded, customer-language tags
 
     db.execute(
-        "INSERT INTO ai_content (vertical, listing_id, description, review_summary, source_hash, "
-        "updated_at) VALUES (%s, %s, %s, %s, %s, now()) "
+        "INSERT INTO ai_content (vertical, listing_id, description, review_summary, aspects, sentiment, "
+        "source_hash, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, now()) "
         "ON CONFLICT (vertical, listing_id) DO UPDATE SET description = EXCLUDED.description, "
-        "review_summary = EXCLUDED.review_summary, source_hash = EXCLUDED.source_hash, "
-        "updated_at = now()", (vertical, row["id"], desc, rsum, src))
+        "review_summary = EXCLUDED.review_summary, aspects = EXCLUDED.aspects, "
+        "sentiment = EXCLUDED.sentiment, source_hash = EXCLUDED.source_hash, updated_at = now()",
+        (vertical, row["id"], desc, rsum, aspects or [], sentiment, src))
 
-    if (desc or rsum) and embeddings.enabled():        # richer text -> better semantic recall
+    if (desc or rsum or aspects) and embeddings.enabled():   # richer text -> better semantic recall
         try:
-            # Fold BOTH the polished description AND the review summary in — the review summary is
-            # genuine customer language ("great biryani, friendly staff") that the templated
-            # description never carries, and is real signal for phrase-style queries ("authentic
-            # dosa place", "good service"). Previously only `desc` reached the vector; `rsum` was
-            # generated and stored in ai_content but silently never embedded.
-            text = " ".join(t for t in (embeddings.text_for(row), desc, rsum) if t)
+            # Fold the polished description, the review summary AND the structured aspect tags into the
+            # vector. The aspects are genuine customer language ("great biryani", "family friendly")
+            # that neither the templated description nor even the summary reliably carries — strong
+            # signal for phrase-style queries ("kid friendly temple", "authentic dosa place").
+            text = " ".join(t for t in (embeddings.text_for(row), desc, rsum, " ".join(aspects)) if t)
             db.execute(f"UPDATE {verticals._table(vertical)} SET embedding = %s::vector WHERE id = %s",
                        (embeddings.to_vector_literal(embeddings.embed(text)), row["id"]))
         except Exception:
             pass
-    return {"description": desc, "review_summary": rsum}
+    return {"description": desc, "review_summary": rsum, "aspects": aspects, "sentiment": sentiment}
 
 
 def run(vertical: str, limit: int = 30) -> dict[str, Any]:
@@ -100,7 +130,7 @@ def run(vertical: str, limit: int = 30) -> dict[str, Any]:
         rows = db.query(
             f"SELECT t.* FROM {table} t "
             f"LEFT JOIN ai_content a ON a.vertical = %s AND a.listing_id = t.id "
-            f"WHERE t.deleted_at IS NULL AND t.is_active AND a.listing_id IS NULL "
+            f"WHERE t.deleted_at IS NULL AND t.is_active AND (a.listing_id IS NULL OR a.aspects IS NULL) "
             f"ORDER BY t.id LIMIT %s", (vertical, limit))
     except Exception as exc:
         return {"vertical": vertical, "error": str(exc)}

@@ -50,7 +50,10 @@ def test_enrich_listing_generates_grounded_content(monkeypatch):
 
     out = el.enrich_listing("restaurants", _row(),
                             [{"body": "Great dosa"}, {"body": "Good filter coffee"}])
-    assert out == {"description": "Polished description.", "review_summary": "Diners praise the dosa."}
+    # Phase 4 also returns structured aspects/sentiment; the aspects LLM reply here isn't valid JSON
+    # (the fake returns prose), so they degrade to ([], None) — the point is the shape now includes them.
+    assert out == {"description": "Polished description.", "review_summary": "Diners praise the dosa.",
+                   "aspects": [], "sentiment": None}
     assert any("INSERT INTO ai_content" in sql for sql, _ in executed)
 
 
@@ -83,8 +86,9 @@ def test_enrich_listing_skips_unchanged(monkeypatch):
     monkeypatch.setattr(el.assistant, "llm_active", lambda: True)
     row = _row()
     facts = describe.describe("restaurants", row)
-    src = el._hash(facts, "")                                      # no reviews -> empty block
-    monkeypatch.setattr(el.db, "query_one", lambda *a, **k: {"source_hash": src})
+    src = el._hash(facts, "", el._ENRICH_VERSION)                  # no reviews -> empty block
+    # unchanged inputs AND aspects already present -> skip (Phase 4 also re-runs aspects-NULL rows)
+    monkeypatch.setattr(el.db, "query_one", lambda *a, **k: {"source_hash": src, "aspects": []})
     # complete_text must NOT be called when inputs are unchanged
     monkeypatch.setattr(el.assistant, "complete_text",
                         lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not run")))

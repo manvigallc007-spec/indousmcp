@@ -189,6 +189,23 @@ _SAVE_CSS = ("display:inline-block;border:1.5px solid #e57373;border-radius:999p
              "font-size:14px;font-weight:600;text-decoration:none;cursor:pointer;background:#fff;color:#c5221f")
 
 
+_SENTIMENT_LABEL = {"positive": "😊 Mostly positive", "mixed": "😐 Mixed reviews",
+                    "negative": "😕 Mixed-to-negative"}
+
+
+def _aspects_html(ai: dict) -> str:
+    """Structured 'what people mention' chips + overall sentiment, grounded in real reviews (Phase 4)."""
+    aspects = ai.get("aspects") or []
+    if not aspects:
+        return ""
+    chips = "".join(f"<span class='fchip'>{html.escape(a)}</span>" for a in aspects)
+    sent = _SENTIMENT_LABEL.get(ai.get("sentiment"), "")
+    tag = f"<span class='muted' style='font-size:13px;margin-left:4px'>· {sent}</span>" if sent else ""
+    return (f"<div class='feats' style='margin:6px 0 2px'>"
+            f"<span class='muted' style='font-size:13px;margin-right:2px'>What people mention:</span>"
+            f"{chips}{tag}</div>")
+
+
 def _save_button(request: Request, v: str, listing_id: int) -> str:
     """♡ Save / ♥ Saved toggle. Anonymous visitors get a link to sign in first. No-JS (form POST +
     redirect back), so it works everywhere."""
@@ -273,6 +290,7 @@ def listing_page(request: Request) -> HTMLResponse:
         + f"<h2 style='margin-top:26px'>{html.escape(tr['community_reviews'])}</h2>"
         + (f"<div class='banner'>💬 {html.escape(ai['review_summary'])}</div>"
            if ai.get("review_summary") else "")
+        + _aspects_html(ai)
         + _reviews_html(items, tr)
         + _form_html(v, listing_id, tr)
         + _suggest_form(v, listing_id))
