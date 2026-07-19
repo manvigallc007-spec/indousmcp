@@ -21,7 +21,7 @@ from .. import db, tags as tagsmod, verticals
 from ..config import settings
 from . import i18n, seo
 from .chat import _CAT_BLURB, _CAT_COLOR, _CAT_ICON
-from .common import analytics_tag, partner_bar
+from .common import analytics_tag, partner_bar, share_html
 
 _BRAND = "#c1440e"
 _FEATURED = "(is_featured AND (featured_until IS NULL OR featured_until > now()))"
@@ -528,6 +528,7 @@ def best_city(request: Request) -> HTMLResponse:
             f"Best in {html.escape(city.title())}</nav>"
             f"{_cathead(v)}"
             f"<h1>{html.escape(h1)}</h1>"
+            f"<p style='margin:6px 0 10px'>{share_html(canon, h1)}</p>"
             f"<p class='muted'>Top {len(rows)} Indian {html.escape(label.lower())} in {html.escape(loc)}, "
             f"ranked by community &amp; web ratings. "
             f"<a href='/browse/{v}/{_slug(state)}/{_slug(city)}'>See all</a> · "

@@ -9,8 +9,9 @@ from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.routing import Route
 
 from .. import accounts, verticals
+from ..config import settings
 from .auth import portal_email, verify_action_token
-from .common import _page, esc, state_select
+from .common import _page, esc, share_html, state_select
 
 
 def _safe_next(raw: str | None, fallback: str = "/me") -> str:
@@ -97,12 +98,21 @@ def me_home(request: Request) -> HTMLResponse:
                    "the community and earn contributor status.</span> "
                    "<a href='/submit'>Add a place →</a></div>")
 
+    code = accounts.ensure_referral_code(email)
+    invite = f"{settings.public_web_url.rstrip('/')}/portal/register?ref={code}"
+    joined = accounts.referral_count(email)
+    referral = (
+        "<div style='background:#e7f6f4;border:1px solid #b8e6df;border-radius:14px;padding:14px 16px;margin:12px 0'>"
+        "<b>🎁 Invite friends</b> <span class='muted'>— share Namaste America with your community"
+        + (f"; <b>{joined}</b> joined via you so far" if joined else "") + ".</span>"
+        f"<div style='margin:8px 0 0'>{share_html(invite, 'Join me on Namaste America — the guide to Indian America')}</div></div>")
+
     body = (f"<h2>Welcome{', ' + esc(prof.get('display_name')) if prof.get('display_name') else ''}! 🙏</h2>"
             f"<p class='muted'>{esc(email)} · <a href='/portal'>your business listings</a> · "
             "<a href='/portal/logout'>sign out</a></p>"
             + (f"<div class='ok' style='background:#e7f6ec;border-radius:10px;padding:10px 13px;margin:10px 0'>✓ Saved.</div>"
                if request.query_params.get("ok") else "")
-            + contrib + saved_block + follow_block + prefs)
+            + contrib + referral + saved_block + follow_block + prefs)
     return _page("Your account", body)
 
 

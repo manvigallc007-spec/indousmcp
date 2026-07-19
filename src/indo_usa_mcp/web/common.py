@@ -71,6 +71,27 @@ def partner_bar() -> str:
         f"{links}</div>")
 
 
+def share_html(path_or_url: str, title: str) -> str:
+    """A small share bar (native share sheet with copy-link fallback + a WhatsApp button — the
+    diaspora's dominant channel). `path_or_url` may be a site path; it's made absolute. Self-contained:
+    the tiny handler is defined idempotently, so dropping this into many templates is safe."""
+    url = path_or_url if "://" in path_or_url else settings.public_web_url.rstrip("/") + path_or_url
+    u, t = html.escape(url, quote=True), html.escape(title, quote=True)
+    import urllib.parse
+    wa = "https://wa.me/?text=" + urllib.parse.quote(f"{title} {url}")
+    btn = ("display:inline-block;border:1px solid #d9d5cf;background:#fff;border-radius:999px;"
+           "padding:5px 13px;font-size:13px;font-weight:600;color:#3a4654;text-decoration:none;cursor:pointer")
+    return (
+        "<span class='sharebar' style='display:inline-flex;gap:8px;flex-wrap:wrap;align-items:center'>"
+        f"<button type='button' style='{btn}' data-u=\"{u}\" data-t=\"{t}\" onclick='naShare(this)'>↗ Share</button>"
+        f"<a style='{btn};color:#128c7e' href='{html.escape(wa, quote=True)}' target='_blank' rel='noopener'>WhatsApp</a>"
+        "</span>"
+        "<script>window.naShare=window.naShare||function(b){var u=b.dataset.u,t=b.dataset.t;"
+        "if(navigator.share){navigator.share({title:t,url:u}).catch(function(){})}"
+        "else if(navigator.clipboard){navigator.clipboard.writeText(u);b.textContent='Copied!';"
+        "setTimeout(function(){b.textContent='↗ Share'},1500)}else{prompt('Copy this link:',u)}};</script>")
+
+
 def analytics_tag() -> str:
     """Google Analytics (GA4) gtag snippet for the <head>, or '' when GOOGLE_ANALYTICS_ID is unset.
     The measurement ID is public (it's visible in page source), so it's plain config, not a secret."""

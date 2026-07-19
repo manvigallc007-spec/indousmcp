@@ -7,6 +7,7 @@ feed, saved lists, follows, and digest notifications. All emails are lower-cased
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 from . import db, verticals
@@ -137,6 +138,49 @@ def set_notify_email(email: str, on: bool) -> None:
     db.execute("INSERT INTO user_profiles (email, notify_email) VALUES (%s, %s) "
                "ON CONFLICT (email) DO UPDATE SET notify_email = EXCLUDED.notify_email, updated_at=now()",
                (email, on))
+
+
+# --------------------------------------------------------------------------- referral loop
+def _code_for(email: str) -> str:
+    return hashlib.sha1(_norm(email).encode()).hexdigest()[:8]
+
+
+def ensure_referral_code(email: str) -> str:
+    """Return this member's stable share code, creating (and persisting) their profile row if needed."""
+    email = _norm(email)
+    code = _code_for(email)
+    db.execute("INSERT INTO user_profiles (email, referral_code) VALUES (%s, %s) "
+               "ON CONFLICT (email) DO UPDATE SET referral_code = COALESCE(user_profiles.referral_code, "
+               "EXCLUDED.referral_code), updated_at = now()", (email, code))
+    return code
+
+
+def referrer_for_code(code: str) -> str | None:
+    code = (code or "").strip()
+    if not code:
+        return None
+    row = db.query_one("SELECT email FROM user_profiles WHERE referral_code = %s", (code,))
+    return row["email"] if row else None
+
+
+def attribute_referral(new_email: str, code: str) -> bool:
+    """Attribute a newly-joining member to the referrer behind `code` (first-touch, never self,
+    never overwrites an existing attribution). Returns True if attribution was recorded."""
+    new_email = _norm(new_email)
+    referrer = referrer_for_code(code)
+    if not referrer or referrer == new_email:
+        return False
+    row = db.query_one(
+        "INSERT INTO user_profiles (email, referred_by) VALUES (%s, %s) "
+        "ON CONFLICT (email) DO UPDATE SET referred_by = COALESCE(user_profiles.referred_by, EXCLUDED.referred_by), "
+        "updated_at = now() RETURNING referred_by", (new_email, referrer))
+    return bool(row and row["referred_by"] == referrer)
+
+
+def referral_count(email: str) -> int:
+    r = db.query_one("SELECT count(*) AS n FROM user_profiles WHERE lower(referred_by) = lower(%s)",
+                     (_norm(email),))
+    return int(r["n"]) if r else 0
 
 
 # --------------------------------------------------------------------------- contributor stats (gamification-lite)

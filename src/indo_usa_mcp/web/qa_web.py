@@ -14,7 +14,7 @@ from starlette.routing import Route
 from .. import qa, verticals
 from ..config import settings
 from .auth import portal_email
-from .common import state_select
+from .common import share_html, state_select
 from .landing import _base, _page
 
 
@@ -146,6 +146,7 @@ def question_page(request: Request) -> HTMLResponse:
                        "or upvote →</a></p>")
     body = (f"<nav class='crumbs'><a href='/questions'>Q&amp;A</a> › {_esc(q['title'])}</nav>"
             f"<h1>{_esc(q['title'])}</h1>"
+            + f"<p style='margin:6px 0 10px'>{share_html('/q/' + q['slug'], q['title'])}</p>"
             + (f"<p class='muted'>📍 {_esc(loc)}</p>" if loc else "")
             + (f"<p style='white-space:pre-wrap'>{_esc(q['body'])}</p>" if q.get("body") else "")
             + f"<h2 style='margin-top:22px'>{len(q['answers'])} answer"
