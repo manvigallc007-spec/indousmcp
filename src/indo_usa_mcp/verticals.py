@@ -684,6 +684,11 @@ def expire_featured() -> dict[str, Any]:
     return {"expired": sum(by_vertical.values()), "by_vertical": by_vertical}
 
 
+def set_claimed(vertical: str, rec_id: int, claimed: bool = True) -> None:
+    db.execute(f"UPDATE {_table(vertical)} SET is_claimed = %s, updated_at = now() WHERE id = %s",
+               (claimed, rec_id))
+
+
 def set_active(vertical: str, rec_id: int, active: bool) -> None:
     db.execute(f"UPDATE {_table(vertical)} SET is_active = %s, updated_at = now() WHERE id = %s",
                (active, rec_id))

@@ -16,7 +16,7 @@ from starlette.routing import Route
 # Drop the real brand logo here (e.g. static/logo.png) and it's served at /logo automatically.
 _STATIC_DIR = pathlib.Path(__file__).resolve().parent / "static"
 
-from .. import payments, submissions, verticals
+from .. import db, payments, submissions, verticals
 from ..config import settings
 from ..pipeline import compliance, ingest, outreach
 from . import i18n
@@ -323,6 +323,36 @@ def home(request: Request) -> HTMLResponse:
 _SUB_HITS: dict[str, list[float]] = {}
 
 
+_TRACK_HITS: dict[str, list[float]] = {}
+
+
+def _track_rate_ok(ip: str, limit: int = 120, window: int = 60) -> bool:
+    now = time.time()
+    w = [t for t in _TRACK_HITS.get(ip, []) if now - t < window]
+    if len(w) >= limit:
+        _TRACK_HITS[ip] = w
+        return False
+    w.append(now)
+    _TRACK_HITS[ip] = w
+    return True
+
+
+async def track(request: Request) -> Response:
+    """Client beacon for real per-listing analytics (view + call/website/directions taps). Params in the
+    query string so navigator.sendBeacon works with an empty body. Best-effort; always 204."""
+    ip = (request.client.host if request.client else "?") or "?"
+    if _track_rate_ok(ip):
+        q = request.query_params
+        vertical = (q.get("v") or "").strip()
+        if vertical in verticals.VERTICALS:
+            try:
+                from .. import analytics
+                analytics.log_listing_event(vertical, int(q.get("id") or 0), (q.get("k") or "").strip())
+            except (ValueError, TypeError):
+                pass
+    return Response(status_code=204)
+
+
 def _sub_rate_ok(ip: str, limit: int = 5, window: int = 3600) -> bool:
     now = time.time()
     w = [t for t in _SUB_HITS.get(ip, []) if now - t < window]
@@ -392,6 +422,58 @@ async def submit_post(request: Request) -> HTMLResponse:
                  "<a href='/submit'>Add another business</a> · <a href='/chat'>explore the directory</a>.</p>")
 
 
+def _mask_email(e: str) -> str:
+    e = (e or "").strip()
+    if "@" not in e:
+        return e
+    local, dom = e.split("@", 1)
+    return (local[0] + "…" if local else "…") + "@" + dom
+
+
+def claim_start(request: Request) -> HTMLResponse:
+    """Self-serve claim for ANY vertical: a visitor on a listing clicks 'Own this business?'. We create a
+    claim and send the verification link to the business's ON-FILE email (proving association). No on-file
+    email -> route to contact for manual verification."""
+    v = request.path_params["vertical"]
+    if v not in verticals.VERTICALS:
+        return _page("Not found", "<h2>Unknown category</h2>", status=404)
+    try:
+        rid = int(request.path_params["id"])
+    except (ValueError, TypeError):
+        return _page("Not found", "<h2>Unknown listing</h2>", status=404)
+    rec = db.query_one(f"SELECT id, name, email, is_claimed FROM {verticals._table(v)} "
+                       f"WHERE id = %s AND deleted_at IS NULL AND is_active", (rid,))
+    if not rec:
+        return _page("Not found", "<h2>Listing not found</h2>", status=404)
+    name = html.escape(rec["name"])
+    if rec.get("is_claimed"):
+        return _page("Already claimed", f"<h2>{name} is already claimed</h2>"
+                     "<p class='muted'>If this is your business and you've lost access, "
+                     "<a href='/contact'>contact us</a>.</p>")
+    on_file = (rec.get("email") or "").strip()
+    if not on_file:
+        return _page(f"Claim {rec['name']}", f"<h2>Claim {name}</h2>"
+                     "<p>We don't have a contact email on file for this business, so we verify these "
+                     "claims by hand. <a href='/contact'>Contact us</a> with proof you own it and we'll "
+                     "set you up.</p>")
+    claim = outreach.create_claim(rid, "form", on_file, vertical=v)
+    verify_url = f"{settings.public_web_url.rstrip('/')}/claim?token={claim['token']}"
+    if settings.email_enabled:
+        try:
+            outreach.send_email(on_file, f"Claim {rec['name']} on {settings.platform_name}",
+                                f"Someone asked to claim {rec['name']} on {settings.platform_name}. "
+                                f"If that's you, verify ownership here:\n\n{verify_url}\n\n"
+                                "If not, you can ignore this email.")
+        except Exception:
+            pass
+        note = (f"<p class='ok'>We've emailed a verification link to the address on file "
+                f"(<b>{html.escape(_mask_email(on_file))}</b>). Open it to finish claiming.</p>")
+    else:
+        note = (f"<p class='muted'>Dev mode (no SMTP): <a href='{html.escape(verify_url)}'>"
+                "verification link</a>.</p>")
+    return _page(f"Claim {rec['name']}", f"<h2>Claim {name}</h2>{note}")
+
+
 def claim_get(request: Request) -> HTMLResponse:
     token = request.query_params.get("token", "")
     claim = outreach.claim_status(token) if token else None
@@ -401,15 +483,15 @@ def claim_get(request: Request) -> HTMLResponse:
                      "recognized. Please use the link from the message we sent you.</p>", status=404)
     if claim["status"] == "claimed":
         return _page("Already claimed",
-                     f"<h2>Already claimed</h2><p>{html.escape(claim['restaurant_name'])} "
+                     f"<h2>Already claimed</h2><p>{html.escape(claim['listing_name'])} "
                      "has already been claimed. If this wasn't you, contact us.</p>")
 
-    name = html.escape(claim["restaurant_name"])
+    name = html.escape(claim["listing_name"])
     loc = ", ".join(x for x in (claim.get("city"), claim.get("state")) if x)
     body = (
         f"<h2>Claim {name}</h2><p class='muted'>{html.escape(loc)}</p>"
         "<p>Verify your email or phone to take ownership of this free listing and keep "
-        "its hours, menu and details accurate.</p>"
+        "its hours, contact and details accurate.</p>"
         "<form method='post' action='/claim'>"
         f"<input type='hidden' name='token' value='{html.escape(token)}'>"
         "<label>Email</label><input name='email' type='email' placeholder='owner@example.com'>"
@@ -431,24 +513,16 @@ async def claim_post(request: Request) -> HTMLResponse:
 
     result = outreach.verify_claim(token, owner_email=email, owner_phone=phone)
     if result.get("ok"):
-        upgrade = ""
-        if settings.featured_for_sale:
-            rid = result["restaurant_id"]
-            price = f"${settings.stripe_price_cents / 100:.0f}"
-            upgrade = (
-                "<hr style='margin:20px 0;border:0;border-top:1px solid #eee'>"
-                "<p><b>Want more customers?</b> Featured listings appear first when AI "
-                "assistants recommend Indian restaurants in your area.</p>"
-                f"<a href='/upgrade?id={rid}'><button>Get Featured — {price}"
-                f"/{settings.featured_days} days</button></a>")
-        manage = (f"<p><a href='/manage?token={html.escape(token)}'>"
-                  f"<button>Edit your listing</button></a></p>")
+        # Unify with the portal: sign the owner in by email and send them to the vertical-aware manage
+        # page (edit + offers + reviews + analytics), instead of the restaurants-only /manage form.
+        if email:
+            request.session["owner_email"] = email
+            return RedirectResponse(f"/portal/listing/{result['vertical']}/{result['record_id']}",
+                                    status_code=303)
         return _page("Listing claimed",
                      "<h2 class='ok'>&#10003; Listing claimed</h2>"
-                     "<p>Thank you — you now own this listing. A <b>✓ Owner-verified</b> badge "
-                     "now shows on it in search, the assistant and your city page. Keep your "
-                     "details accurate below.</p>"
-                     + manage + upgrade)
+                     "<p>Thank you — you now own this listing (a <b>✓ Owner-verified</b> badge shows on "
+                     "it). <a href='/portal/login'>Sign in</a> with this email to manage it.</p>")
 
     reasons = {
         "invalid_token": "This claim link isn't valid.",
@@ -639,10 +713,12 @@ routes = [
     Route("/festival-card.svg", festival_card, methods=["GET"]),
     Route("/logo", brand_logo, methods=["GET"]),
     Route("/uploads/{path:path}", uploaded_file, methods=["GET"]),
+    Route("/track", track, methods=["POST"]),
     Route("/submit", submit_get, methods=["GET"]),
     Route("/submit", submit_post, methods=["POST"]),
     Route("/claim", claim_get, methods=["GET"]),
     Route("/claim", claim_post, methods=["POST"]),
+    Route("/claim/start/{vertical}/{id}", claim_start, methods=["GET"]),
     Route("/manage", manage_get, methods=["GET"]),
     Route("/manage", manage_post, methods=["POST"]),
     Route("/upgrade", upgrade_get, methods=["GET"]),

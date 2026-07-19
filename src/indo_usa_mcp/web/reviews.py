@@ -270,12 +270,21 @@ def listing_page(request: Request) -> HTMLResponse:
     addr = r.get("address_full") or loc
     label = _label(v)
     ratings = _ratings_html(r, tr)
+    directions = (f"https://www.google.com/maps/dir/?api=1&destination={r['lat']},{r['lng']}"
+                  if r.get("lat") and r.get("lng") else "")
     links = " &nbsp;·&nbsp; ".join(x for x in (
-        (f"<a href='{html.escape(r['website'])}' rel='nofollow'>Website</a>" if r.get("website") else ""),
-        (f"<a href='tel:{html.escape(r['phone'])}'>{html.escape(r['phone'])}</a>" if r.get("phone") else ""),
+        (f"<a class='trk' data-k='website' href='{html.escape(r['website'])}' rel='nofollow' "
+         f"target='_blank'>Website</a>" if r.get("website") else ""),
+        (f"<a class='trk' data-k='call' href='tel:{html.escape(r['phone'])}'>{html.escape(r['phone'])}</a>"
+         if r.get("phone") else ""),
+        (f"<a class='trk' data-k='directions' href='{directions}' target='_blank' rel='noopener'>Directions</a>"
+         if directions else ""),
     ) if x)
     verified = (f" <span style='color:#1565c0;font-weight:600'>✓ {html.escape(tr['owner_verified'])}</span>"
                 if r.get("is_claimed") else "")
+    claim_cta = ("" if r.get("is_claimed") else
+                 f"<a href='/claim/start/{v}/{listing_id}' class='muted' style='font-size:13px'>"
+                 "Own this business? Claim it →</a>")
 
     ok = request.query_params.get("ok")
     banner = ""
@@ -295,7 +304,8 @@ def listing_page(request: Request) -> HTMLResponse:
         + f"<h1>{html.escape(r['name'])}{verified}</h1>"
         + "<p style='margin:6px 0 10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center'>"
         + _save_button(request, v, listing_id)
-        + share_html(f"/listing/{v}/{listing_id}", f"{r['name']} on {settings.platform_name}") + "</p>"
+        + share_html(f"/listing/{v}/{listing_id}", f"{r['name']} on {settings.platform_name}")
+        + claim_cta + "</p>"
         + _offers_html(v, listing_id)
         + (f"<img src='{html.escape(r['photo_url'])}' alt='{html.escape(r['name'])}' loading='lazy' "
            f"onerror='this.remove()' style='width:100%;max-height:300px;object-fit:cover;"
@@ -315,7 +325,13 @@ def listing_page(request: Request) -> HTMLResponse:
         + _aspects_html(ai)
         + _reviews_html(items, tr)
         + _form_html(v, listing_id, tr)
-        + _suggest_form(v, listing_id))
+        + _suggest_form(v, listing_id)
+        # Real per-listing analytics: a human view beacon on load + tap beacons on call/website/
+        # directions (sendBeacon so it survives navigation). Feeds the owner's dashboard metrics.
+        + f"<script>(function(){{var v='{v}',id={listing_id};"
+          "function bx(k){try{navigator.sendBeacon('/track?v='+v+'&id='+id+'&k='+k)}catch(e){}}"
+          "bx('view');document.querySelectorAll('a.trk').forEach(function(a){"
+          "a.addEventListener('click',function(){bx(a.dataset.k)})});})();</script>")
     facet = seo.primary_facet(r)
     # NOT pre-escaped: _page() html.escape()s the whole `desc` string once, same as the rest of it.
     facet_clause = f" {facet}." if facet else ""

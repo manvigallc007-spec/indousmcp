@@ -44,19 +44,22 @@ def _send_or_show(email: str, purpose: str, subject: str, intro: str) -> str:
 
 
 def _owned(email: str) -> list[dict]:
-    """All listings owned by this email: restaurants they claimed + any listing emailed to them."""
+    """All listings owned by this email: any vertical they CLAIMED (via the claim flow) + any listing
+    whose contact email matches (self-added)."""
     owned: dict[tuple, dict] = {}
-    for r in db.query(
-        "SELECT r.id, r.name, r.city, r.state, r.is_featured, r.featured_until, r.is_active "
-        "FROM claims c JOIN restaurants r ON r.id = c.restaurant_id "
-        "WHERE lower(c.owner_email) = lower(%s) AND c.status = 'claimed' AND r.deleted_at IS NULL",
-        (email,),
-    ):
-        owned[("restaurants", r["id"])] = {"vertical": "restaurants", **r}
+    cols = "id, name, city, state, is_featured, featured_until, is_active"
+    for c in db.query("SELECT vertical, record_id FROM claims "
+                      "WHERE lower(owner_email) = lower(%s) AND status = 'claimed'", (email,)):
+        v = c["vertical"]
+        if v not in verticals.VERTICALS:
+            continue
+        r = db.query_one(f"SELECT {cols} FROM {verticals._table(v)} "
+                         f"WHERE id = %s AND deleted_at IS NULL", (c["record_id"],))
+        if r:
+            owned[(v, r["id"])] = {"vertical": v, **r}
     for v, cfg in verticals.VERTICALS.items():
-        for r in db.query(
-            f"SELECT id, name, city, state, is_featured, featured_until, is_active "
-            f"FROM {cfg['table']} WHERE lower(email) = lower(%s) AND deleted_at IS NULL", (email,)):
+        for r in db.query(f"SELECT {cols} FROM {cfg['table']} "
+                          f"WHERE lower(email) = lower(%s) AND deleted_at IS NULL", (email,)):
             owned[(v, r["id"])] = {"vertical": v, **r}
     return list(owned.values())
 
@@ -331,10 +334,11 @@ def dashboard(request: Request) -> HTMLResponse:
         if not x["is_featured"] and settings.featured_for_sale:   # any vertical, not just restaurants
             upgrade = f" · <a href='/upgrade?id={x['id']}&vertical={x['vertical']}'>Get featured</a>"
         reach = analytics.reach_for(x["vertical"], x["id"], days=30)
-        rows += (f"<tr><td><a href='/portal/edit/{x['vertical']}/{x['id']}'>{esc(x['name'])}</a></td>"
+        views = analytics.listing_metrics(x["vertical"], x["id"], 30)["view"]
+        rows += (f"<tr><td><a href='/portal/listing/{x['vertical']}/{x['id']}'>{esc(x['name'])}</a></td>"
                  f"<td class='muted'>{x['vertical']}</td>"
                  f"<td>{esc(x['city'])}, {esc(x['state'])}</td>"
-                 f"<td>{reach} <span class='muted'>shown (30d)</span></td>"
+                 f"<td>{reach} <span class='muted'>shown</span> · {views} <span class='muted'>views (30d)</span></td>"
                  f"<td>{status}{upgrade}</td></tr>")
     body = (banner + f"<h2>Your listings</h2><p class='muted'>{esc(email)} · "
             f"<a href='/portal/logout'>sign out</a></p>"
@@ -435,11 +439,30 @@ def listing_manage(request: Request) -> HTMLResponse:
     reviews_html = "<h3 style='margin-top:22px'>Reviews</h3>" + ("".join(rblocks) or
                    "<p class='muted'>No reviews yet.</p>")
 
+    m30 = analytics.listing_metrics(vertical, rec_id, 30)
+    m7 = analytics.listing_metrics(vertical, rec_id, 7)
+
+    def _stat(label: str, val30: int, val7: int) -> str:
+        return ("<div style='display:inline-block;min-width:110px;margin:4px 10px 4px 0;padding:10px 14px;"
+                "border:1px solid #ece6dd;border-radius:12px;text-align:center'>"
+                f"<b style='font-size:22px;display:block;line-height:1.1'>{val30}</b>"
+                f"<span class='muted' style='font-size:12px'>{label}<br>{val7} last 7d</span></div>")
+    metrics = (
+        "<h3>Performance <span class='muted' style='font-size:13px;font-weight:400'>· last 30 days</span></h3>"
+        "<div style='margin:8px 0 4px'>"
+        + _stat("shown", analytics.reach_for(vertical, rec_id, 30), analytics.reach_for(vertical, rec_id, 7))
+        + _stat("page views", m30["view"], m7["view"])
+        + _stat("calls", m30["call"], m7["call"])
+        + _stat("website taps", m30["website"], m7["website"])
+        + _stat("directions", m30["directions"], m7["directions"])
+        + "</div><p class='muted' style='font-size:12px'>“Shown” = surfaced by search/AI. Views &amp; taps "
+        "are real visits to your public page.</p>")
+
     body = (f"<h2>{esc(rec['name'])}</h2>"
             f"<p class='muted'><a href='/portal/edit/{vertical}/{rec_id}'>Edit details</a> · "
             f"<a href='/listing/{vertical}/{rec_id}' target='_blank'>View public page</a> · "
             "<a href='/portal'>‹ your listings</a></p>"
-            + offers + reviews_html)
+            + metrics + offers + reviews_html)
     return _page(f"Manage {rec['name']}", body)
 
 

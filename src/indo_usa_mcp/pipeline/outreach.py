@@ -94,23 +94,24 @@ def _requires_human(restaurant: dict) -> bool:
 
 
 # ------------------------------------------------------------------------- claiming
-def create_claim(restaurant_id: int, channel: str, contact_target: str | None = None) -> dict:
-    """Create a pending claim with a single-use token; returns claim row + link."""
+def create_claim(record_id: int, channel: str, contact_target: str | None = None,
+                 vertical: str = "restaurants") -> dict:
+    """Create a pending claim with a single-use token; returns claim row + link. Works for any vertical
+    (restaurants also set restaurant_id for back-compat with the legacy FK/agent)."""
     token = secrets.token_urlsafe(24)
+    rest_id = record_id if vertical == "restaurants" else None
     row = db.query_one(
-        """
-        INSERT INTO claims (restaurant_id, token, channel, contact_target, status)
-        VALUES (%s, %s, %s, %s, 'pending')
-        RETURNING id, restaurant_id, token, channel, status, expires_at
-        """,
-        (restaurant_id, token, channel, contact_target),
+        "INSERT INTO claims (restaurant_id, vertical, record_id, token, channel, contact_target, status) "
+        "VALUES (%s, %s, %s, %s, %s, %s, 'pending') "
+        "RETURNING id, vertical, record_id, token, channel, status, expires_at",
+        (rest_id, vertical, record_id, token, channel, contact_target),
     )
-    row["claim_link"] = claim_link(restaurant_id, token)
+    row["claim_link"] = claim_link(record_id, token, vertical)
     return row
 
 
-def claim_link(restaurant_id: int, token: str) -> str:
-    qs = urlencode({"type": "restaurant", "id": restaurant_id, "token": token})
+def claim_link(record_id: int, token: str, vertical: str = "restaurants") -> str:
+    qs = urlencode({"type": vertical, "id": record_id, "token": token})
     return f"{settings.claim_base_url}?{qs}"
 
 
@@ -128,30 +129,40 @@ def whatsapp_link(phone: str | None, message: str) -> str | None:
 
 
 def owner_listing(token: str) -> dict | None:
-    """Full restaurant row for a *claimed* token — the owner's listing to manage."""
+    """Full listing row for a *claimed* token — the owner's listing to manage (any vertical)."""
+    from .. import verticals
+    c = db.query_one("SELECT vertical, record_id FROM claims WHERE token = %s AND status = 'claimed'",
+                     (token,))
+    if not c or c["vertical"] not in verticals.VERTICALS:
+        return None
     return db.query_one(
-        "SELECT r.* FROM claims c JOIN restaurants r ON r.id = c.restaurant_id "
-        "WHERE c.token = %s AND c.status = 'claimed' AND r.deleted_at IS NULL",
-        (token,),
-    )
+        f"SELECT * FROM {verticals._table(c['vertical'])} WHERE id = %s AND deleted_at IS NULL",
+        (c["record_id"],))
 
 
 def claim_status(token: str) -> dict | None:
-    """Look up a claim by token, joined to its restaurant (for the claim web page)."""
-    return db.query_one(
-        "SELECT c.id, c.token, c.status, c.expires_at, "
-        "r.id AS restaurant_id, r.name AS restaurant_name, r.city, r.state "
-        "FROM claims c JOIN restaurants r ON r.id = c.restaurant_id "
-        "WHERE c.token = %s",
-        (token,),
-    )
+    """Look up a claim by token, joined to its listing in the right vertical (for the claim page).
+    Keeps `restaurant_id`/`restaurant_name` aliases so existing callers keep working."""
+    from .. import verticals
+    c = db.query_one("SELECT id, token, status, expires_at, vertical, record_id FROM claims "
+                     "WHERE token = %s", (token,))
+    if not c or c["vertical"] not in verticals.VERTICALS:
+        return None
+    r = db.query_one(f"SELECT id, name, city, state FROM {verticals._table(c['vertical'])} "
+                     f"WHERE id = %s", (c["record_id"],))
+    if not r:
+        return None
+    return {**c, "restaurant_id": c["record_id"], "restaurant_name": r["name"],
+            "listing_name": r["name"], "city": r["city"], "state": r["state"]}
 
 
 def verify_claim(token: str, owner_email: str | None = None, owner_phone: str | None = None) -> dict:
-    """Owner-facing: verify a token and grant ownership of the restaurant.
+    """Owner-facing: verify a token and grant ownership of the listing (any vertical).
 
-    Returns {"ok": bool, ...}. Marks the claim claimed and flips restaurants.is_claimed.
+    Returns {"ok": bool, vertical, record_id, ...}. Marks the claim claimed and flips is_claimed on
+    the listing's own table.
     """
+    from .. import verticals
     claim = db.query_one("SELECT * FROM claims WHERE token = %s", (token,))
     if claim is None:
         return {"ok": False, "error": "invalid_token"}
@@ -161,17 +172,18 @@ def verify_claim(token: str, owner_email: str | None = None, owner_phone: str | 
     if expired and expired["expired"]:
         db.execute("UPDATE claims SET status='expired' WHERE id=%s", (claim["id"],))
         return {"ok": False, "error": "expired"}
+    vertical, record_id = claim["vertical"], claim["record_id"]
+    if vertical not in verticals.VERTICALS:
+        return {"ok": False, "error": "bad_vertical"}
 
     db.execute(
         "UPDATE claims SET status='claimed', owner_email=%s, owner_phone=%s, "
         "verified_at=now(), claimed_at=now() WHERE id=%s",
-        (owner_email, owner_phone, claim["id"]),
+        ((owner_email or "").strip().lower() or None, owner_phone, claim["id"]),
     )
-    db.execute(
-        "UPDATE restaurants SET is_claimed=true, updated_at=now() WHERE id=%s",
-        (claim["restaurant_id"],),
-    )
-    return {"ok": True, "restaurant_id": claim["restaurant_id"], "claim_id": claim["id"]}
+    verticals.set_claimed(vertical, record_id, True)
+    return {"ok": True, "vertical": vertical, "record_id": record_id,
+            "restaurant_id": record_id, "claim_id": claim["id"]}
 
 
 # ----------------------------------------------------------------------- messaging

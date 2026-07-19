@@ -85,6 +85,38 @@ def log_impressions(tool: str, result) -> None:
         )
 
 
+_LISTING_EVENT_KINDS = {"view", "call", "website", "directions"}
+
+
+def log_listing_event(vertical: str, record_id: int, kind: str) -> bool:
+    """Record one human listing event (view/call/website/directions). Returns False on bad input."""
+    if kind not in _LISTING_EVENT_KINDS:
+        return False
+    try:
+        db.execute(
+            "INSERT INTO listing_events (vertical, record_id, kind, day, count) "
+            "VALUES (%s, %s, %s, current_date, 1) "
+            "ON CONFLICT (vertical, record_id, kind, day) DO UPDATE SET count = listing_events.count + 1",
+            (vertical, int(record_id), kind))
+        return True
+    except Exception:
+        return False
+
+
+def listing_metrics(vertical: str, record_id: int, days: int = 30) -> dict[str, int]:
+    """Per-kind event totals for one listing over the window (0-filled)."""
+    out = {k: 0 for k in _LISTING_EVENT_KINDS}
+    try:
+        for r in db.query(
+            "SELECT kind, sum(count) AS n FROM listing_events "
+            f"WHERE vertical = %s AND record_id = %s AND day > current_date - {int(days)} GROUP BY kind",
+            (vertical, record_id)):
+            out[r["kind"]] = int(r["n"])
+    except Exception:
+        pass
+    return out
+
+
 def top_listings(days: int = 30, limit: int = 15) -> list[dict]:
     return db.query(
         "SELECT vertical, record_id, sum(count) AS impressions FROM impressions "
