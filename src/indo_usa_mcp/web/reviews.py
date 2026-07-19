@@ -18,11 +18,11 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Route
 
-from .. import accounts, db, reviews as reviews_mod, tags as tagsmod, verticals
+from .. import accounts, db, owner_content, reviews as reviews_mod, tags as tagsmod, verticals
 from ..config import settings
 from . import i18n, seo
 from .auth import portal_email, verify_captcha
-from .common import captcha_field
+from .common import captcha_field, share_html
 from .landing import _FEATURED, _cathead, _label, _page
 
 _CSS = """<style>
@@ -37,6 +37,7 @@ _CSS = """<style>
 .rev{background:#fff;border:1px solid #ececec;border-radius:12px;padding:13px 15px;margin:10px 0}
 .rev .rstars{color:#f5a623;font-size:17px;letter-spacing:1px}
 .rev .rbody{margin:5px 0;color:#26303a}.rev .meta{color:#6b7280;font-size:13px}
+.ownerreply{margin:8px 0 0;padding:8px 11px;background:#f3f8f6;border-left:3px solid #0f9b8e;border-radius:8px;font-size:14px;color:#26303a}
 .rform{background:#fff;border:1px solid #ececec;border-radius:14px;padding:16px 18px;margin:14px 0}
 .rform label{display:block;font-weight:600;font-size:14px;margin:12px 0 4px;color:#3a4654}
 .rform textarea,.rform input[type=text]{width:100%;padding:11px 12px;border:1.5px solid #e3ddd3;
@@ -130,10 +131,12 @@ def _reviews_html(items: list[dict], tr: dict) -> str:
                 if hasattr(r.get("created_at"), "strftime") else "")
         title = f"<b>{html.escape(r['title'])}</b><br>" if r.get("title") else ""
         body = html.escape(r.get("body") or "")
+        reply = (f"<div class='ownerreply'>↳ <b>Response from the owner:</b> "
+                 f"{html.escape(r['owner_reply'])}</div>" if r.get("owner_reply") else "")
         out.append(
             f"<div class='rev'><div class='rstars' aria-label='{n} out of 5'>{stars}</div>"
             f"<div class='rbody'>{title}{body}</div>"
-            f"<div class='meta'>— {who}{(' · ' + when) if when else ''}</div></div>")
+            f"<div class='meta'>— {who}{(' · ' + when) if when else ''}</div>{reply}</div>")
     return "".join(out)
 
 
@@ -206,6 +209,22 @@ def _aspects_html(ai: dict) -> str:
             f"{chips}{tag}</div>")
 
 
+def _offers_html(v: str, listing_id: int) -> str:
+    """Owner-posted offers/announcements banner (Phase 5)."""
+    try:
+        posts = owner_content.active_posts(v, listing_id)
+    except Exception:
+        posts = []
+    if not posts:
+        return ""
+    rows = "".join(
+        f"<div style='margin:4px 0'>{'🏷️' if p['kind'] == 'offer' else '📣'} "
+        f"<b>{html.escape(p['title'])}</b>"
+        + (f" — {html.escape(p['body'])}" if p.get("body") else "") + "</div>" for p in posts)
+    return ("<div style='background:#fff3dc;border:1px solid #ffd9a0;border-radius:12px;"
+            f"padding:12px 14px;margin:10px 0'>{rows}</div>")
+
+
 def _save_button(request: Request, v: str, listing_id: int) -> str:
     """♡ Save / ♥ Saved toggle. Anonymous visitors get a link to sign in first. No-JS (form POST +
     redirect back), so it works everywhere."""
@@ -274,7 +293,10 @@ def listing_page(request: Request) -> HTMLResponse:
         + _cathead(v)
         + banner
         + f"<h1>{html.escape(r['name'])}{verified}</h1>"
-        + f"<p style='margin:6px 0 10px'>{_save_button(request, v, listing_id)}</p>"
+        + "<p style='margin:6px 0 10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center'>"
+        + _save_button(request, v, listing_id)
+        + share_html(f"/listing/{v}/{listing_id}", f"{r['name']} on {settings.platform_name}") + "</p>"
+        + _offers_html(v, listing_id)
         + (f"<img src='{html.escape(r['photo_url'])}' alt='{html.escape(r['name'])}' loading='lazy' "
            f"onerror='this.remove()' style='width:100%;max-height:300px;object-fit:cover;"
            f"border-radius:14px;margin:8px 0'>" if r.get("photo_url") else "")

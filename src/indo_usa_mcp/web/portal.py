@@ -10,7 +10,8 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Route
 
-from .. import analytics, db, flyer, onboard, payments, submissions, verticals
+from .. import accounts, analytics, db, flyer, onboard, owner_content, payments, \
+    reviews as reviews_mod, submissions, verticals
 from ..config import settings
 from ..events import pipeline as events
 from ..pipeline import outreach
@@ -126,6 +127,7 @@ def register_get(request: Request) -> HTMLResponse:
                  "people and AI across the USA.</p>"
                  + google +
                  "<form method='post' action='/portal/register'>"
+                 f"<input type='hidden' name='ref' value='{esc(request.query_params.get('ref') or '')}'>"
                  "<label>Email</label><input name='email' type='email' required autofocus>"
                  "<label>Password (min 8 characters)</label>"
                  "<input name='password' type='password' minlength='8' required>"
@@ -164,6 +166,11 @@ async def register_post(request: Request) -> HTMLResponse:
         return _page("Account exists", "<h2>You already have an account</h2>"
                      f"<p>{esc(email)} is already registered. <a href='/portal/login'>Sign in</a> or "
                      "<a href='/portal/forgot'>reset your password</a>.</p>")
+    if (form.get("ref") or "").strip():                    # attribute the referral (first-touch, never self)
+        try:
+            accounts.attribute_referral(email, form.get("ref"))
+        except Exception:
+            pass
     note = _send_or_show(email, "verify", "Verify your email",
                          f"Welcome to {settings.platform_name}! Confirm your email to activate your account:")
     return _page("Check your email", "<h2 class='ok'>Almost there — check your email</h2>"
@@ -370,8 +377,105 @@ def edit_get(request: Request) -> HTMLResponse:
         return resp
     body = (f"<h2>Edit {esc(rec['name'])}</h2>"
             "<p class='muted'>Changes go live immediately. "
+            f"<a href='/portal/listing/{vertical}/{rec_id}'>Offers &amp; reviews</a> · "
             "<a href='/portal'>‹ back to your listings</a></p>" + _edit_form(vertical, rec))
     return _page(f"Edit {rec['name']}", body)
+
+
+# ----------------------------------------------------------------- owner engagement (offers + review replies)
+def listing_manage(request: Request) -> HTMLResponse:
+    vertical, rec_id = request.path_params["vertical"], int(request.path_params["id"])
+    rec, resp = _require_owner(request, vertical, rec_id)
+    if resp:
+        return resp
+    email = portal_email(request)
+    posts = owner_content.owner_posts(vertical, rec_id, email)
+    revs = reviews_mod.list_for_listing(vertical, rec_id, limit=30, status="published")
+    draft_for = request.query_params.get("draft_review")
+
+    plist = "".join(
+        f"<div class='lc'><b>{esc(p['title'])}</b> <span class='muted'>· {esc(p['kind'])}"
+        + (f" · until {esc(str(p['expires_at'])[:10])}" if p.get("expires_at") else "") + "</span>"
+        + (f"<p style='margin:4px 0 0'>{esc(p['body'])}</p>" if p.get("body") else "")
+        + f"<form method='post' action='/portal/listing/{vertical}/{rec_id}/offer/{p['id']}/delete' "
+        "style='display:inline'><button class='linkbtn'>Remove</button></form></div>"
+        for p in posts) or "<p class='muted'>No active offers.</p>"
+    offers = (f"<h3>Offers &amp; announcements</h3>{plist}"
+              f"<form method='post' action='/portal/listing/{vertical}/{rec_id}/offer'>"
+              "<select name='kind'><option value='offer'>Offer / promo</option>"
+              "<option value='announcement'>Announcement</option></select>"
+              "<label>Title</label><input name='title' required maxlength='120' "
+              "placeholder='e.g. 20% off thalis this weekend'>"
+              "<label>Details (optional)</label><input name='body' maxlength='600'>"
+              "<label>Expires (optional)</label><input name='expires_at' type='date'>"
+              "<button type='submit'>Post</button></form>")
+
+    rblocks = []
+    for r in revs:
+        n = int(r["rating"])
+        stars = "★" * n + "☆" * (5 - n)
+        reply = (f"<div class='muted' style='margin:4px 0'>↳ <b>Your reply:</b> {esc(r['owner_reply'])}</div>"
+                 if r.get("owner_reply") else "")
+        draft = ""
+        if draft_for and str(r["id"]) == draft_for:
+            d = owner_content.ai_reply_draft(rec["name"], r)
+            draft = esc(d or "")
+        rblocks.append(
+            f"<div class='lc'><div>{stars} <span class='muted'>· {esc(r.get('author_name') or 'Anonymous')}</span></div>"
+            + (f"<p style='margin:4px 0'>{esc(r.get('body') or '')}</p>" if r.get("body") else "")
+            + reply
+            + f"<form method='post' action='/portal/listing/{vertical}/{rec_id}/reply'>"
+            f"<input type='hidden' name='review_id' value='{r['id']}'>"
+            f"<textarea name='text' rows='2' maxlength='600' style='width:100%' "
+            f"placeholder='Write a public reply…'>{draft}</textarea>"
+            f"<button type='submit'>{'Update reply' if r.get('owner_reply') else 'Reply'}</button> "
+            + (f"<a class='muted' href='/portal/listing/{vertical}/{rec_id}?draft_review={r['id']}#r{r['id']}'>"
+               "✨ Draft with AI</a>" if not draft else "")
+            + f"</form><span id='r{r['id']}'></span></div>")
+    reviews_html = "<h3 style='margin-top:22px'>Reviews</h3>" + ("".join(rblocks) or
+                   "<p class='muted'>No reviews yet.</p>")
+
+    body = (f"<h2>{esc(rec['name'])}</h2>"
+            f"<p class='muted'><a href='/portal/edit/{vertical}/{rec_id}'>Edit details</a> · "
+            f"<a href='/listing/{vertical}/{rec_id}' target='_blank'>View public page</a> · "
+            "<a href='/portal'>‹ your listings</a></p>"
+            + offers + reviews_html)
+    return _page(f"Manage {rec['name']}", body)
+
+
+async def offer_create(request: Request) -> HTMLResponse:
+    vertical, rec_id = request.path_params["vertical"], int(request.path_params["id"])
+    rec, resp = _require_owner(request, vertical, rec_id)
+    if resp:
+        return resp
+    form = await request.form()
+    owner_content.create_post(vertical, rec_id, portal_email(request), kind=(form.get("kind") or "offer"),
+                              title=(form.get("title") or ""), body=(form.get("body") or ""),
+                              expires_at=(form.get("expires_at") or None))
+    return RedirectResponse(f"/portal/listing/{vertical}/{rec_id}", status_code=303)
+
+
+async def offer_delete(request: Request) -> HTMLResponse:
+    vertical, rec_id = request.path_params["vertical"], int(request.path_params["id"])
+    rec, resp = _require_owner(request, vertical, rec_id)
+    if resp:
+        return resp
+    owner_content.remove_post(int(request.path_params["post_id"]), portal_email(request))
+    return RedirectResponse(f"/portal/listing/{vertical}/{rec_id}", status_code=303)
+
+
+async def review_reply(request: Request) -> HTMLResponse:
+    vertical, rec_id = request.path_params["vertical"], int(request.path_params["id"])
+    rec, resp = _require_owner(request, vertical, rec_id)
+    if resp:
+        return resp
+    form = await request.form()
+    try:
+        owner_content.reply_to_review(int(form.get("review_id") or 0), vertical, rec_id,
+                                      (form.get("text") or ""))
+    except (ValueError, TypeError):
+        pass
+    return RedirectResponse(f"/portal/listing/{vertical}/{rec_id}", status_code=303)
 
 
 async def edit_post(request: Request) -> HTMLResponse:
@@ -733,5 +837,9 @@ routes = [
     Route("/portal/flyer/{id:int}/confirm", flyer_confirm_post, methods=["POST"]),
     Route("/portal/edit/{vertical}/{id:int}", edit_get, methods=["GET"]),
     Route("/portal/edit/{vertical}/{id:int}", edit_post, methods=["POST"]),
+    Route("/portal/listing/{vertical}/{id:int}", listing_manage, methods=["GET"]),
+    Route("/portal/listing/{vertical}/{id:int}/offer", offer_create, methods=["POST"]),
+    Route("/portal/listing/{vertical}/{id:int}/offer/{post_id:int}/delete", offer_delete, methods=["POST"]),
+    Route("/portal/listing/{vertical}/{id:int}/reply", review_reply, methods=["POST"]),
     Route("/portal/logout", logout, methods=["GET"]),
 ]

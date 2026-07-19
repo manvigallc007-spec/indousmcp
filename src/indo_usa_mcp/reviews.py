@@ -167,8 +167,8 @@ def list_for_listing(vertical: str, listing_id: int, limit: int = 20,
     """Reviews for one listing, newest first (published only by default)."""
     try:
         return db.query(
-            "SELECT id, rating, title, body, author_name, created_at FROM reviews "
-            "WHERE vertical = %s AND listing_id = %s AND status = %s "
+            "SELECT id, rating, title, body, author_name, created_at, owner_reply, owner_reply_at "
+            "FROM reviews WHERE vertical = %s AND listing_id = %s AND status = %s "
             "ORDER BY created_at DESC LIMIT %s", [vertical, int(listing_id), status, limit])
     except Exception:
         return []
