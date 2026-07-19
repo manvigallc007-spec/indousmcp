@@ -1099,6 +1099,59 @@ async def reviews_action(request: Request) -> HTMLResponse:
     return RedirectResponse(f"/admin/reviews?show={show}", status_code=303)
 
 
+def _qa_act(id: int, op: str, label: str, gray: bool = False) -> str:
+    return (f"<form method='post' action='/admin/qa' class='inline'>"
+            f"<input type='hidden' name='id' value='{id}'>"
+            f"<button class='btn{' gray' if gray else ''}' name='op' value='{op}'>{label}</button></form> ")
+
+
+def qa_page(request: Request) -> HTMLResponse:
+    """Moderate community Q&A. Clean questions/answers auto-publish; spam/abusive ones wait here."""
+    if (r := require_admin(request)):
+        return r
+    from .. import qa
+    pq, pa = qa.list_pending_questions(), qa.list_pending_answers()
+    qrows = "".join(
+        f"<tr><td><a href='/q/{esc(q['slug'])}' target='_blank' rel='noopener'>{esc(q['title'])}</a>"
+        + (f"<div class='warn'>flagged: {esc(q['flagged_reason'])}</div>" if q.get("flagged_reason") else "")
+        + (f"<div class='muted'>{esc((q.get('body') or '')[:300])}</div>" if q.get("body") else "")
+        + f"<span class='muted'>{esc(str(q.get('created_at'))[:16])}</span></td>"
+        f"<td>{_qa_act(q['id'], 'approve_q', 'Approve') + _qa_act(q['id'], 'reject_q', 'Reject', True)}</td></tr>"
+        for q in pq)
+    arows = "".join(
+        f"<tr><td><b>{esc(a['question_title'])}</b>"
+        f"<div>{esc((a.get('body') or '')[:400])}</div>"
+        f"<span class='muted'>— {esc(a.get('author_email') or 'anon')}</span></td>"
+        f"<td>{_qa_act(a['id'], 'approve_a', 'Approve') + _qa_act(a['id'], 'reject_a', 'Reject', True)}</td></tr>"
+        for a in pa)
+    body = ("<p class='muted'>Community questions &amp; answers held for review (spam/abuse screened; "
+            "clean ones auto-publish).</p>"
+            f"<h3>Questions ({len(pq)})</h3>"
+            + (f"<table><tr><th>Question</th><th></th></tr>{qrows}</table>" if qrows
+               else "<p class='muted'>None pending.</p>")
+            + f"<h3 style='margin-top:22px'>Answers ({len(pa)})</h3>"
+            + (f"<table><tr><th>Answer</th><th></th></tr>{arows}</table>" if arows
+               else "<p class='muted'>None pending.</p>"))
+    return admin_page("Q&A", body, active="Q&A")
+
+
+async def qa_action(request: Request) -> HTMLResponse:
+    if (r := require_admin(request)):
+        return r
+    from .. import qa
+    form = await request.form()
+    try:
+        rid = int(form.get("id"))
+    except (TypeError, ValueError):
+        return RedirectResponse("/admin/qa", status_code=303)
+    op = form.get("op")
+    if op in ("approve_q", "reject_q"):
+        qa.moderate_question(rid, op == "approve_q")
+    elif op in ("approve_a", "reject_a"):
+        qa.moderate_answer(rid, op == "approve_a")
+    return RedirectResponse("/admin/qa", status_code=303)
+
+
 def _ago(ts) -> str:
     import datetime
     if not ts:
@@ -1464,6 +1517,8 @@ routes = [
     Route("/admin/submissions", submissions_action, methods=["POST"]),
     Route("/admin/reviews", reviews_page, methods=["GET"]),
     Route("/admin/reviews", reviews_action, methods=["POST"]),
+    Route("/admin/qa", qa_page, methods=["GET"]),
+    Route("/admin/qa", qa_action, methods=["POST"]),
     Route("/admin/agents", agents_page, methods=["GET"]),
     Route("/admin/agents", agents_action, methods=["POST"]),
     Route("/admin/agents/{name}", agent_detail, methods=["GET"]),

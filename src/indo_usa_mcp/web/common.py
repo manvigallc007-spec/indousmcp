@@ -153,7 +153,7 @@ _ADMIN_NAV = [
     ("Content", [("Movies", "/admin/movies"), ("Employers", "/admin/employers"),
                  ("Knowledge", "/admin/knowledge")]),
     ("Inbox", [("Messages", "/admin/messages"), ("Submissions", "/admin/submissions"),
-               ("Reviews", "/admin/reviews"), ("Approvals", "/admin/approvals"),
+               ("Reviews", "/admin/reviews"), ("Q&A", "/admin/qa"), ("Approvals", "/admin/approvals"),
                ("Feedback", "/admin/feedback"), ("Claims", "/admin/claims")]),
     ("Growth", [("Events", "/admin/events"), ("Recommendations", "/admin/recommendations"),
                 ("Misses", "/admin/misses"), ("Payments", "/admin/payments")]),
@@ -171,6 +171,8 @@ def _nav_badges() -> dict[str, int]:
         "Approvals": "SELECT count(*) FROM approval_queue WHERE status = 'pending'",
         "Submissions": "SELECT count(*) FROM submissions WHERE status = 'pending'",
         "Reviews": "SELECT count(*) FROM reviews WHERE status = 'pending'",
+        "Q&A": "SELECT (SELECT count(*) FROM questions WHERE status='pending') "
+               "+ (SELECT count(*) FROM answers WHERE status='pending')",
         "Feedback": "SELECT count(*) FROM feedback WHERE status = 'pending'",
     }
     for label, sql in q.items():

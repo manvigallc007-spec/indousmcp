@@ -162,6 +162,48 @@ def trending(limit: int = 5) -> list[dict]:
         "ORDER BY (answer_count*3 + view_count) DESC, created_at DESC LIMIT %s", (limit,))
 
 
+# --------------------------------------------------------------------------- moderation (admin)
+def list_pending_questions(limit: int = 200) -> list[dict]:
+    return db.query("SELECT id, slug, title, body, city, state, vertical, flagged_reason, created_at "
+                    "FROM questions WHERE status = 'pending' ORDER BY created_at LIMIT %s", (limit,))
+
+
+def list_pending_answers(limit: int = 200) -> list[dict]:
+    return db.query(
+        "SELECT a.id, a.body, a.author_email, a.created_at, q.title AS question_title, q.slug "
+        "FROM answers a JOIN questions q ON q.id = a.question_id "
+        "WHERE a.status = 'pending' ORDER BY a.created_at LIMIT %s", (limit,))
+
+
+def pending_count() -> int:
+    r = db.query_one("SELECT (SELECT count(*) FROM questions WHERE status='pending') "
+                     "+ (SELECT count(*) FROM answers WHERE status='pending') AS n")
+    return int(r["n"]) if r else 0
+
+
+def moderate_question(question_id: int, approve: bool) -> None:
+    """Publish (and let Dost answer) or reject a held question."""
+    if not approve:
+        db.execute("UPDATE questions SET status='rejected', updated_at=now() WHERE id=%s", (question_id,))
+        return
+    q = db.query_one("SELECT id, title, body, city, state, status FROM questions WHERE id=%s", (question_id,))
+    if not q or q["status"] != "pending":
+        return
+    db.execute("UPDATE questions SET status='published', flagged_reason=NULL, updated_at=now() WHERE id=%s",
+               (question_id,))
+    _dost_answer(question_id, q["title"], q.get("body") or "", city=q.get("city"), state=q.get("state"))
+
+
+def moderate_answer(answer_id: int, approve: bool) -> None:
+    row = db.query_one("SELECT question_id, status FROM answers WHERE id=%s", (answer_id,))
+    if not row or row["status"] != "pending":
+        return
+    db.execute("UPDATE answers SET status=%s WHERE id=%s",
+               ("published" if approve else "rejected", answer_id))
+    if approve:
+        _bump_answer_count(row["question_id"])
+
+
 def unanswered(limit: int = 50) -> list[dict]:
     """Published questions with no community (non-AI) answer — a demand signal for outreach."""
     return db.query(
