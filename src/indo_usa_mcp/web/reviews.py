@@ -18,10 +18,10 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Route
 
-from .. import db, reviews as reviews_mod, tags as tagsmod, verticals
+from .. import accounts, db, reviews as reviews_mod, tags as tagsmod, verticals
 from ..config import settings
 from . import i18n, seo
-from .auth import verify_captcha
+from .auth import portal_email, verify_captcha
 from .common import captcha_field
 from .landing import _FEATURED, _cathead, _label, _page
 
@@ -185,6 +185,27 @@ def _jsonld(vertical: str, r: dict, items: list[dict]) -> str:
     return json.dumps(biz, ensure_ascii=False, default=str)
 
 
+_SAVE_CSS = ("display:inline-block;border:1.5px solid #e57373;border-radius:999px;padding:5px 14px;"
+             "font-size:14px;font-weight:600;text-decoration:none;cursor:pointer;background:#fff;color:#c5221f")
+
+
+def _save_button(request: Request, v: str, listing_id: int) -> str:
+    """♡ Save / ♥ Saved toggle. Anonymous visitors get a link to sign in first. No-JS (form POST +
+    redirect back), so it works everywhere."""
+    email = portal_email(request)
+    back = f"/listing/{v}/{listing_id}"
+    if not email:
+        return (f"<a href='/portal/login' style='{_SAVE_CSS}' title='Sign in to save'>♡ Save</a>")
+    hidden = (f"<input type='hidden' name='vertical' value='{v}'>"
+              f"<input type='hidden' name='id' value='{listing_id}'>"
+              f"<input type='hidden' name='next' value='{html.escape(back)}'>")
+    if accounts.is_saved(email, v, listing_id):
+        return (f"<form method='post' action='/me/unsave' style='display:inline'>{hidden}"
+                f"<button style='{_SAVE_CSS};background:#c5221f;color:#fff'>♥ Saved</button></form>")
+    return (f"<form method='post' action='/me/save' style='display:inline'>{hidden}"
+            f"<button style='{_SAVE_CSS}'>♡ Save</button></form>")
+
+
 def listing_page(request: Request) -> HTMLResponse:
     v = request.path_params["vertical"]
     if v == "events":                          # events are date-based + agent-managed -> calendar
@@ -236,6 +257,7 @@ def listing_page(request: Request) -> HTMLResponse:
         + _cathead(v)
         + banner
         + f"<h1>{html.escape(r['name'])}{verified}</h1>"
+        + f"<p style='margin:6px 0 10px'>{_save_button(request, v, listing_id)}</p>"
         + (f"<img src='{html.escape(r['photo_url'])}' alt='{html.escape(r['name'])}' loading='lazy' "
            f"onerror='this.remove()' style='width:100%;max-height:300px;object-fit:cover;"
            f"border-radius:14px;margin:8px 0'>" if r.get("photo_url") else "")

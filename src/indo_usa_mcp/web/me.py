@@ -1,0 +1,164 @@
+"""Consumer account hub (/me): saved places, followed cities/categories, and personalization
+preferences. Same login/session as the business portal (session 'owner_email'); see accounts.py.
+This is the foundation the personalized "Today" feed + digests build on."""
+
+from __future__ import annotations
+
+from starlette.requests import Request
+from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
+from starlette.routing import Route
+
+from .. import accounts, verticals
+from .auth import portal_email
+from .common import _page, esc, state_select
+
+
+def _safe_next(raw: str | None, fallback: str = "/me") -> str:
+    """Only allow same-site relative redirects (no open-redirect via //host or scheme)."""
+    n = (raw or "").strip()
+    return n if n.startswith("/") and not n.startswith("//") else fallback
+
+
+def me_home(request: Request) -> HTMLResponse:
+    email = portal_email(request)
+    if not email:
+        return RedirectResponse("/me/login", status_code=303)
+    prof = accounts.get_profile(email) or {}
+    saved = accounts.list_saved(email)
+    follows = accounts.list_follows(email)
+
+    saved_html = "".join(
+        f"<div class='lc'><a href='/listing/{s['vertical']}/{s['id']}'>{esc(s['name'])}</a> "
+        f"<span class='muted'>· {esc(verticals.VERTICALS[s['vertical']]['label'])}"
+        + (f" · {esc(s['city'])}, {esc(s['state'])}" if s.get('city') else "") + "</span> "
+        f"<form method='post' action='/me/unsave' style='display:inline'>"
+        f"<input type='hidden' name='vertical' value='{s['vertical']}'>"
+        f"<input type='hidden' name='id' value='{s['id']}'>"
+        f"<button class='linkbtn' title='Remove'>✕</button></form></div>"
+        for s in saved)
+    saved_block = (f"<h3>♥ Saved places ({len(saved)})</h3>" + (saved_html or
+                   "<p class='muted'>Nothing saved yet — tap ♡ Save on any listing.</p>"))
+
+    cities = [f for f in follows if f["kind"] == "city"]
+    city_html = "".join(
+        f"<span class='pill'>{esc(c['value'])} "
+        f"<form method='post' action='/me/unfollow' style='display:inline'>"
+        f"<input type='hidden' name='kind' value='city'><input type='hidden' name='value' value=\"{esc(c['value'])}\">"
+        f"<button class='linkbtn'>✕</button></form></span>" for c in cities)
+    follow_block = (
+        "<h3 style='margin-top:22px'>📍 Cities you follow</h3>"
+        f"<div class='pills'>{city_html or '<span class=muted>None yet.</span>'}</div>"
+        "<form method='post' action='/me/follow' style='display:flex;gap:8px;margin-top:8px'>"
+        "<input type='hidden' name='kind' value='city'>"
+        "<input name='value' placeholder='e.g. Plano, TX' style='flex:1'>"
+        "<button type='submit'>Follow city</button></form>")
+
+    langs = ", ".join(prof.get("languages") or [])
+    fvs = set(prof.get("followed_verticals") or [])
+    vchecks = "".join(
+        f"<label style='font-weight:400;display:inline-flex;gap:6px;align-items:center;margin:2px 10px 2px 0'>"
+        f"<input type='checkbox' name='followed_verticals' value='{k}'{' checked' if k in fvs else ''} "
+        f"style='width:auto'> {esc(cfg['label'])}</label>"
+        for k, cfg in verticals.VERTICALS.items() if k != "events")
+    freq = prof.get("digest_freq") or "weekly"
+    freq_opts = "".join(f"<option value='{f}'{' selected' if f == freq else ''}>{f.title()}</option>"
+                        for f in ("weekly", "daily", "off"))
+    prefs = (
+        "<h3 style='margin-top:22px'>⚙ Your preferences</h3>"
+        "<form method='post' action='/me/prefs'>"
+        f"<label>Display name</label><input name='display_name' value='{esc(prof.get('display_name'))}'>"
+        f"<label>Home city</label><input name='home_city' value='{esc(prof.get('home_city'))}' placeholder='e.g. Plano'>"
+        f"<label>Home state</label>{state_select('home_state', prof.get('home_state') or '')}"
+        f"<label>Languages you speak (comma-separated)</label>"
+        f"<input name='languages' value='{esc(langs)}' placeholder='Telugu, Hindi, English'>"
+        "<label>Categories you care about</label>"
+        f"<div style='margin:6px 0 12px'>{vchecks}</div>"
+        "<label style='font-weight:400;display:flex;gap:8px;align-items:center'>"
+        f"<input type='checkbox' name='notify_email' value='1'{' checked' if prof.get('notify_email', True) else ''} "
+        "style='width:auto'> Email me a digest</label>"
+        f"<label>Digest frequency</label><select name='digest_freq'>{freq_opts}</select>"
+        "<button type='submit' style='margin-top:12px'>Save preferences</button></form>")
+
+    body = (f"<h2>Welcome{', ' + esc(prof.get('display_name')) if prof.get('display_name') else ''}! 🙏</h2>"
+            f"<p class='muted'>{esc(email)} · <a href='/portal'>your business listings</a> · "
+            "<a href='/portal/logout'>sign out</a></p>"
+            + (f"<div class='ok' style='background:#e7f6ec;border-radius:10px;padding:10px 13px;margin:10px 0'>✓ Saved.</div>"
+               if request.query_params.get("ok") else "")
+            + saved_block + follow_block + prefs)
+    return _page("Your account", body)
+
+
+def me_login(request: Request) -> RedirectResponse:
+    # Consumers use the same auth as owners; bounce through the existing login, returning to /me.
+    return RedirectResponse("/portal/login", status_code=303)
+
+
+async def prefs_post(request: Request) -> RedirectResponse:
+    email = portal_email(request)
+    if not email:
+        return RedirectResponse("/me/login", status_code=303)
+    form = await request.form()
+    langs = [s.strip() for s in (form.get("languages") or "").split(",") if s.strip()]
+    accounts.upsert_profile(
+        email,
+        display_name=form.get("display_name"),
+        home_city=form.get("home_city"),
+        home_state=form.get("home_state"),
+        languages=langs,
+        followed_verticals=form.getlist("followed_verticals"),
+        notify_email=bool(form.get("notify_email")),
+        digest_freq=(form.get("digest_freq") or "weekly"),
+    )
+    return RedirectResponse("/me?ok=1", status_code=303)
+
+
+async def save_post(request: Request) -> RedirectResponse | JSONResponse:
+    email = portal_email(request)
+    form = await request.form()
+    nxt = _safe_next(form.get("next"))
+    if not email:
+        return RedirectResponse("/me/login", status_code=303)
+    try:
+        accounts.save_place(email, (form.get("vertical") or "").strip(), int(form.get("id") or 0))
+    except (ValueError, TypeError):
+        pass
+    return RedirectResponse(nxt, status_code=303)
+
+
+async def unsave_post(request: Request) -> RedirectResponse:
+    email = portal_email(request)
+    form = await request.form()
+    nxt = _safe_next(form.get("next"))
+    if email:
+        try:
+            accounts.unsave_place(email, (form.get("vertical") or "").strip(), int(form.get("id") or 0))
+        except (ValueError, TypeError):
+            pass
+    return RedirectResponse(nxt, status_code=303)
+
+
+async def follow_post(request: Request) -> RedirectResponse:
+    email = portal_email(request)
+    form = await request.form()
+    if email:
+        accounts.follow(email, (form.get("kind") or "").strip(), form.get("value") or "")
+    return RedirectResponse("/me", status_code=303)
+
+
+async def unfollow_post(request: Request) -> RedirectResponse:
+    email = portal_email(request)
+    form = await request.form()
+    if email:
+        accounts.unfollow(email, (form.get("kind") or "").strip(), form.get("value") or "")
+    return RedirectResponse("/me", status_code=303)
+
+
+routes = [
+    Route("/me", me_home, methods=["GET"]),
+    Route("/me/login", me_login, methods=["GET"]),
+    Route("/me/prefs", prefs_post, methods=["POST"]),
+    Route("/me/save", save_post, methods=["POST"]),
+    Route("/me/unsave", unsave_post, methods=["POST"]),
+    Route("/me/follow", follow_post, methods=["POST"]),
+    Route("/me/unfollow", unfollow_post, methods=["POST"]),
+]

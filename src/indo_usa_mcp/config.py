@@ -13,6 +13,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 #  - ollama: self-hosted, truly $0 forever, slow on CPU. Key is ignored ("ollama").
 #  - groq:   free tier, ~1s, no credit card. Fast + good quality. Needs a free LLM_API_KEY.
 #  - gemini: Google AI Studio free tier, OpenAI-compatible endpoint. Needs a free LLM_API_KEY.
+# NEWER FREE MODELS (opt in without a redeploy — set LLM_MODEL in .env after confirming the exact id
+# in your provider dashboard, since ids churn): gemini -> `gemini-2.5-flash` (newer, also multimodal so
+# flyer vision keeps working); groq -> its current flagship free model. The preset defaults below stay
+# on known-good ids so a bad/renamed id can't break the live chat; LLM_MODEL overrides instantly.
 _LLM_PRESETS: dict[str, dict] = {
     "ollama": {"llm_base_url": "http://localhost:11434/v1",
                "llm_model": "gemma2:2b", "llm_use_tools": False},
