@@ -300,6 +300,18 @@ class Settings(BaseSettings):
     upload_dir: str = "uploads"
     max_upload_mb: int = 8
 
+    # Web push (free browser notifications for the Today digest). Generate a VAPID keypair once with
+    # `python -m indo_usa_mcp.cli vapid-keys` and put the two values in .env: VAPID_PUBLIC_KEY (shared
+    # with the browser) and VAPID_PRIVATE_KEY (base64 of the PEM, kept secret). Blank = disabled (the
+    # enable-notifications button hides and no push is sent) — same idiom as the other integrations.
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_subject: str = "mailto:admin@namasteamerica.us"   # contact the push service can reach
+
+    @property
+    def web_push_enabled(self) -> bool:
+        return bool(self.vapid_public_key and self.vapid_private_key)
+
     @property
     def flyer_uploads_enabled(self) -> bool:
         return self.llm_provider.strip().lower() == "gemini" and bool(self.llm_api_key)

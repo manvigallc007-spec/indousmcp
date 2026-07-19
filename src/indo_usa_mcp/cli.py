@@ -54,6 +54,14 @@ def cmd_init_db(_: argparse.Namespace) -> None:
     print("Schema applied.")
 
 
+def cmd_vapid_keys(_: argparse.Namespace) -> None:
+    from . import webpush
+    pub, priv = webpush.generate_keys()
+    print("# Web push VAPID keypair — add these to your .env (private key is a secret):")
+    print(f"VAPID_PUBLIC_KEY={pub}")
+    print(f"VAPID_PRIVATE_KEY={priv}")
+
+
 def cmd_scrape(args: argparse.Namespace) -> None:
     print(f"Scraping source={args.source} metro={args.metro} ...")
     n = ingest.scrape_to_raw(args.source, args.metro)
@@ -605,6 +613,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command", required=True)
 
     sub.add_parser("init-db", help="Apply SQL migrations").set_defaults(func=cmd_init_db)
+    sub.add_parser("vapid-keys", help="Generate a VAPID keypair for web push (.env values)").set_defaults(
+        func=cmd_vapid_keys)
 
     sp = sub.add_parser("scrape", help="Run a scraper into restaurant_raw")
     sp.add_argument("--metro", required=True, choices=SCRAPE_REGIONS,

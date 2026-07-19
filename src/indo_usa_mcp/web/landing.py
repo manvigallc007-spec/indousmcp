@@ -809,7 +809,7 @@ def manifest(request: Request) -> Response:
 
 
 _SW_JS = """
-const C='na-shell-v6';
+const C='na-shell-v7';
 const SHELL=['/','/browse','/events','/icon.svg','/manifest.webmanifest'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==C).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
@@ -821,6 +821,19 @@ self.addEventListener('fetch',e=>{
     fetch(req).then(res=>{const cp=res.clone();caches.open(C).then(c=>c.put(req,cp));return res;})
               .catch(()=>caches.match(req).then(m=>m||caches.match('/')))
   );
+});
+self.addEventListener('push',e=>{
+  let d={}; try{d=e.data?e.data.json():{}}catch(x){}
+  e.waitUntil(self.registration.showNotification(d.title||'Namaste America',
+    {body:d.body||'',icon:'/icon.svg',badge:'/icon.svg',data:{url:d.url||'/today'}}));
+});
+self.addEventListener('notificationclick',e=>{
+  e.notification.close();
+  const url=(e.notification.data&&e.notification.data.url)||'/today';
+  e.waitUntil(clients.matchAll({type:'window'}).then(cs=>{
+    for(const c of cs){if(c.url.indexOf(url)>-1&&'focus'in c)return c.focus();}
+    return clients.openWindow(url);
+  }));
 });
 """
 

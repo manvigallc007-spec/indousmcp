@@ -84,7 +84,7 @@ def test_digest_agent_sends_respects_cadence_and_unsubscribe(monkeypatch):
                                 notify_email=True, digest_freq="daily")
         assert _E in [p["email"] for p in accounts.due_for_digest()]
         out = ConsumerDigestAgent().run()
-        assert out["sent"] == 1 and len(sink) == 1
+        assert out["emails"] == 1 and len(sink) == 1
         assert "/me/unsubscribe?t=" in sink[0][2] and sink[0][3]        # unsub link + List-Unsubscribe
         # cadence: not due again the same day
         assert _E not in [p["email"] for p in accounts.due_for_digest()]
@@ -99,9 +99,10 @@ def test_digest_agent_sends_respects_cadence_and_unsubscribe(monkeypatch):
         _clean()
 
 
-def test_digest_agent_noop_without_email(monkeypatch):
-    monkeypatch.setattr(settings, "smtp_host", "")
-    assert ConsumerDigestAgent().run() == {"skipped": "email_disabled"}
+def test_digest_agent_noop_without_channels(monkeypatch):
+    monkeypatch.setattr(settings, "smtp_host", "")            # email off
+    monkeypatch.setattr(settings, "vapid_public_key", "")    # push off
+    assert ConsumerDigestAgent().run() == {"skipped": "no_channels"}
 
 
 def test_unsubscribe_rejects_bad_token():

@@ -121,7 +121,7 @@ def due_for_digest(limit: int = 500) -> list[dict]:
     """Consumers whose email digest is due now: opted in, not 'off', and past their cadence window
     (daily = not sent today; weekly = not sent in 7 days)."""
     return db.query(
-        "SELECT * FROM user_profiles WHERE notify_email AND digest_freq <> 'off' AND ("
+        "SELECT * FROM user_profiles WHERE (notify_email OR notify_web) AND digest_freq <> 'off' AND ("
         "  digest_sent_at IS NULL"
         "  OR (digest_freq = 'daily'  AND digest_sent_at < date_trunc('day', now()))"
         "  OR (digest_freq = 'weekly' AND digest_sent_at < now() - interval '7 days')"

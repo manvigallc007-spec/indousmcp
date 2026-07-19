@@ -108,6 +108,10 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
+      # Web push for the consumer_digest agent (blank = email-only digests).
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@namasteamerica.us}
     depends_on:
       db:
         condition: service_healthy
@@ -219,6 +223,10 @@ services:
       # UI stays hidden. Images are stored locally under UPLOAD_DIR (zero-budget, no object storage).
       UPLOAD_DIR: ${UPLOAD_DIR:-uploads}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-8}
+      # Web push (free browser notifications). Generate once: `cli vapid-keys`. Blank = disabled.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@namasteamerica.us}
     volumes:
       - ./uploads:/app/uploads
     ports:

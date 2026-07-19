@@ -8,7 +8,9 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.routing import Route
 
-from .. import accounts, verticals
+import json
+
+from .. import accounts, verticals, webpush
 from ..config import settings
 from .auth import portal_email, verify_action_token
 from .common import _page, esc, share_html, state_select
@@ -98,6 +100,29 @@ def me_home(request: Request) -> HTMLResponse:
                    "the community and earn contributor status.</span> "
                    "<a href='/submit'>Add a place →</a></div>")
 
+    push_block = ""
+    if settings.web_push_enabled:
+        push_block = (
+            "<div style='margin:10px 0'>"
+            "<button id='pushbtn' type='button' style='display:inline-block;border:1px solid #b8e6df;"
+            "background:#e7f6f4;color:#0c7e74;border-radius:999px;padding:6px 15px;font-size:13px;"
+            "font-weight:600;cursor:pointer'>🔔 Enable notifications</button> "
+            "<span id='pushmsg' class='muted' style='font-size:13px'></span></div>"
+            "<script>(function(){var KEY=" + json.dumps(settings.vapid_public_key) + ";"
+            "var b=document.getElementById('pushbtn'),m=document.getElementById('pushmsg');"
+            "if(!('serviceWorker'in navigator)||!('PushManager'in window)){if(b)b.style.display='none';return;}"
+            "function u2a(s){var p='='.repeat((4-s.length%4)%4);var x=(s+p).replace(/-/g,'+').replace(/_/g,'/');"
+            "var r=atob(x),a=new Uint8Array(r.length);for(var i=0;i<r.length;i++)a[i]=r.charCodeAt(i);return a;}"
+            "navigator.serviceWorker.ready.then(function(reg){reg.pushManager.getSubscription().then(function(s){"
+            "if(s){b.textContent='🔔 Notifications on';b.disabled=true;}})});"
+            "b.addEventListener('click',function(){Notification.requestPermission().then(function(perm){"
+            "if(perm!=='granted'){m.textContent='Permission blocked in your browser.';return;}"
+            "navigator.serviceWorker.ready.then(function(reg){reg.pushManager.subscribe({userVisibleOnly:true,"
+            "applicationServerKey:u2a(KEY)}).then(function(sub){fetch('/push/subscribe',{method:'POST',"
+            "headers:{'Content-Type':'application/json'},body:JSON.stringify({subscription:sub})}).then(function(){"
+            "b.textContent='🔔 Notifications on';b.disabled=true;})}).catch(function(){"
+            "m.textContent='Could not enable — try again.';})})})});})();</script>")
+
     code = accounts.ensure_referral_code(email)
     invite = f"{settings.public_web_url.rstrip('/')}/portal/register?ref={code}"
     joined = accounts.referral_count(email)
@@ -112,8 +137,29 @@ def me_home(request: Request) -> HTMLResponse:
             "<a href='/portal/logout'>sign out</a></p>"
             + (f"<div class='ok' style='background:#e7f6ec;border-radius:10px;padding:10px 13px;margin:10px 0'>✓ Saved.</div>"
                if request.query_params.get("ok") else "")
-            + contrib + referral + saved_block + follow_block + prefs)
+            + contrib + referral + push_block + saved_block + follow_block + prefs)
     return _page("Your account", body)
+
+
+async def push_subscribe(request: Request) -> JSONResponse:
+    email = portal_email(request)
+    if not email:
+        return JSONResponse({"ok": False}, status_code=401)
+    try:
+        sub = (await request.json()).get("subscription")
+    except Exception:
+        sub = None
+    return JSONResponse({"ok": bool(sub and webpush.subscribe(email, sub))})
+
+
+async def push_unsubscribe(request: Request) -> JSONResponse:
+    try:
+        endpoint = (await request.json()).get("endpoint")
+    except Exception:
+        endpoint = None
+    if endpoint:
+        webpush.unsubscribe(endpoint)
+    return JSONResponse({"ok": True})
 
 
 def me_login(request: Request) -> RedirectResponse:
@@ -202,6 +248,8 @@ routes = [
     Route("/me/login", me_login, methods=["GET"]),
     Route("/me/unsubscribe", unsubscribe, methods=["GET"]),
     Route("/me/unsubscribe", unsubscribe_post, methods=["POST"]),
+    Route("/push/subscribe", push_subscribe, methods=["POST"]),
+    Route("/push/unsubscribe", push_unsubscribe, methods=["POST"]),
     Route("/me/prefs", prefs_post, methods=["POST"]),
     Route("/me/save", save_post, methods=["POST"]),
     Route("/me/unsave", unsave_post, methods=["POST"]),

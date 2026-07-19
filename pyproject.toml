@@ -16,6 +16,7 @@ dependencies = [
     "reverse_geocoder>=1.5",
     "openpyxl>=3.1",   # read the DOL H-1B disclosure .xlsx (streamed, read-only); .csv needs no dep
     "pillow>=10.2",    # render raster (PNG) social-share cards -- SVG OG images don't show on FB/LinkedIn/WhatsApp/X
+    "pywebpush>=1.14",  # free browser push notifications (VAPID) for the Today digest; blank keys = disabled
 ]
 
 [project.optional-dependencies]
