@@ -1110,6 +1110,61 @@ class ConsumerDigestAgent(Agent):
         return {"due": len(due), "emails": emails, "pushes": pushes}
 
 
+class NotificationAgent(Agent):
+    name = "notification"
+    description = ("Turns pull into push: generates event-driven nudges (new offer on a place you saved, "
+                   "new event in a city you follow) and drains the notification outbox — answers to your "
+                   "questions and replies to your reviews — over email/web push. No-op without channels.")
+    default_interval_s = 1800  # every 30 min
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from ..config import settings
+        from .. import notify
+        # Generate periodic follow-based nudges first (idempotent via dedupe_key), then deliver.
+        offers = self._enqueue_saved_offers(params.get("lookback_days", 3))
+        events_n = self._enqueue_followed_events(params.get("lookback_days", 3))
+        if not (settings.email_enabled or settings.web_push_enabled):
+            return {"skipped": "no_channels", "offer_nudges": offers, "event_nudges": events_n}
+        drained = notify.drain(limit=params.get("limit", 200))
+        return {"offer_nudges": offers, "event_nudges": events_n, **drained}
+
+    # -- new offer on a place you saved --------------------------------------------------------
+    def _enqueue_saved_offers(self, days: int) -> int:
+        rows = db.query(
+            "SELECT s.email, p.id AS post_id, p.title, p.vertical, p.listing_id "
+            "FROM owner_posts p JOIN saved_places s "
+            "  ON s.vertical = p.vertical AND s.listing_id = p.listing_id "
+            f"WHERE p.status='active' AND p.kind='offer' AND p.created_at > now() - interval '{int(days)} days' "
+            "  AND (p.expires_at IS NULL OR p.expires_at > now()) "
+            "  AND lower(s.email) <> lower(p.owner_email)", ())
+        from .. import notify
+        n = 0
+        for r in rows:
+            if notify.enqueue(r["email"], "New offer at a place you saved", r["title"],
+                              url=f"/listing/{r['vertical']}/{r['listing_id']}", kind="saved_offer",
+                              dedupe_key=f"saved_offer:{r['post_id']}:{r['email'].lower()}"):
+                n += 1
+        return n
+
+    # -- new event in a city you follow --------------------------------------------------------
+    def _enqueue_followed_events(self, days: int) -> int:
+        rows = db.query(
+            "SELECT f.email, e.id AS event_id, e.name "
+            "FROM events e JOIN follows f "
+            "  ON f.kind='city' AND lower(f.value) = lower(e.city || ', ' || e.state) "
+            "WHERE e.status='approved' AND e.is_active AND e.deleted_at IS NULL "
+            f"  AND e.created_at > now() - interval '{int(days)} days' "
+            "  AND (e.start_at IS NULL OR e.start_at > now())", ())
+        from .. import notify
+        n = 0
+        for r in rows:
+            if notify.enqueue(r["email"], "New event in a city you follow", r["name"],
+                              url="/events", kind="follow_event",
+                              dedupe_key=f"follow_event:{r['event_id']}:{r['email'].lower()}"):
+                n += 1
+        return n
+
+
 ALL_AGENTS = [
     DiscoveryAgent(),
     ScraperAgent(),
@@ -1175,4 +1230,5 @@ ALL_AGENTS = [
     OsmVerifyAgent(),
     TelegramDigestAgent(),
     ConsumerDigestAgent(),
+    NotificationAgent(),
 ]

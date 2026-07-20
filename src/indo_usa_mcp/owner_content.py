@@ -71,9 +71,30 @@ def reply_to_review(review_id: int, vertical: str, listing_id: int, text: str) -
         return {"ok": False, "error": "flagged", "reason": reason}
     row = db.query_one(
         "UPDATE reviews SET owner_reply=%s, owner_reply_at=now() "
-        "WHERE id=%s AND vertical=%s AND listing_id=%s AND status='published' RETURNING id",
+        "WHERE id=%s AND vertical=%s AND listing_id=%s AND status='published' "
+        "RETURNING id, author_email",
         (text, review_id, vertical, listing_id))
-    return {"ok": True} if row else {"ok": False, "error": "not_found"}
+    if row:
+        _notify_reviewer(row.get("author_email"), vertical, listing_id, review_id)
+        return {"ok": True}
+    return {"ok": False, "error": "not_found"}
+
+
+def _notify_reviewer(author_email: str | None, vertical: str, listing_id: int, review_id: int) -> None:
+    """Let the reviewer know the business replied (once per review; anonymous reviews have no email)."""
+    author = (author_email or "").strip().lower()
+    if not author:
+        return
+    try:
+        from . import notify, verticals
+        r = db.query_one(f"SELECT name FROM {verticals._table(vertical)} WHERE id=%s", (listing_id,))
+        name = (r or {}).get("name") or "A business you reviewed"
+        notify.enqueue(
+            author, "The business replied to your review", f"{name} responded to your review.",
+            url=f"/listing/{vertical}/{listing_id}", kind="review_reply",
+            dedupe_key=f"review_reply:{review_id}")
+    except Exception:
+        pass
 
 
 def clear_reply(review_id: int, vertical: str, listing_id: int) -> None:

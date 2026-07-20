@@ -39,7 +39,8 @@ _RUN_ORDER = [
     "event_feed_discovery", "event_scraper", "event_cleaner",
     "web_enrichment", "osm_verify", "curation", "geo_backfill", "llm_enrichment", "embedding_backfill",
     "featured_expiry", "link_check", "recommendation", "lifecycle", "learning", "knowledge_indexer",
-    "demographics", "h1b", "movies", "telegram_digest", "consumer_digest", "intelligence", "contact_reply", "submission_review",
+    "demographics", "h1b", "movies", "telegram_digest", "consumer_digest", "notification",
+    "intelligence", "contact_reply", "submission_review",
     "review_moderation", "review_aggregator", "irs_eo",
     "discovery", "outreach", "reporting", "monitoring", "submission",
 ]

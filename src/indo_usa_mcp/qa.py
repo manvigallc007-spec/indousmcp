@@ -79,7 +79,8 @@ def _dost_answer(question_id: int, title: str, body: str, *, city=None, state=No
 def add_answer(question_id: int, body: str, author_email: str, ip: str | None = None) -> dict[str, Any]:
     if not enabled():
         return {"ok": False, "error": "qa_disabled"}
-    q = db.query_one("SELECT id FROM questions WHERE id=%s AND status='published'", (question_id,))
+    q = db.query_one("SELECT id, slug, title, asker_email FROM questions "
+                     "WHERE id=%s AND status='published'", (question_id,))
     if not q:
         return {"ok": False, "error": "not_found"}
     body = (body or "").strip()
@@ -87,14 +88,32 @@ def add_answer(question_id: int, body: str, author_email: str, ip: str | None = 
         return {"ok": False, "error": "too_short"}
     if len(body) > _MAX_BODY:
         return {"ok": False, "error": "too_long"}
+    author = (author_email or "").strip().lower() or None
     ok, reason = reviews._screen(body)
     status = "published" if ok else "pending"
     row = db.query_one(
         "INSERT INTO answers (question_id, body, author_email, status) VALUES (%s,%s,%s,%s) RETURNING id",
-        (question_id, body, (author_email or "").strip().lower() or None, status))
+        (question_id, body, author, status))
     if status == "published":
         _bump_answer_count(question_id)
+        _notify_asker(q, row["id"], author)
     return {"ok": True, "id": row["id"], "status": status}
+
+
+def _notify_asker(q: dict, answer_id: int, author_email: str | None) -> None:
+    """Tell the person who asked that their question got an answer (never notify self-answers)."""
+    asker = (q.get("asker_email") or "").strip().lower()
+    if not asker or asker == author_email:
+        return
+    try:
+        from . import notify
+        notify.enqueue(
+            asker, "Someone answered your question",
+            (q.get("title") or "Your question")[:160],
+            url=f"/q/{q['slug']}", kind="answer",
+            dedupe_key=f"answer:{answer_id}")
+    except Exception:
+        pass
 
 
 def vote_answer(answer_id: int, email: str) -> dict[str, Any]:
