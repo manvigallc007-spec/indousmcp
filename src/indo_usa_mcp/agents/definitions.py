@@ -820,7 +820,7 @@ class MonitoringAgent(Agent):
     # condition clears, so the open-alerts list always reflects what ACTUALLY needs a human now.
     MANAGED = {"raw_backlog", "approval_backlog", "stale_data", "agent_failure",
                "messages_waiting", "smtp_unconfigured", "submissions_pending", "feedback_pending",
-               "reviews_pending"}
+               "reviews_pending", "festival_calendar_low"}
 
     def run(self, **params: Any) -> dict[str, Any]:
         from ..config import settings
@@ -834,6 +834,16 @@ class MonitoringAgent(Agent):
                         "AND last_seen_at < now() - interval '30 days'")
         if stale > params.get("stale_threshold", 1000):
             cand.append(_alert("info", "stale_data", f"{stale} listings not re-seen in 30d"))
+
+        # --- festival calendar running dry (curated dates; needs a manual yearly extend) ---
+        from .. import festivals
+        runway = festivals.days_of_runway()
+        if festivals.next_festival() is None or runway < params.get("festival_runway_days", 60):
+            cand.append(_alert(
+                "warning", "festival_calendar_low",
+                f"Festival calendar has only {max(runway, 0)}d of dates left — extend "
+                f"FESTIVAL_DATES in festivals.py with the next year (countdown/Today/digest go blank "
+                f"when it dries up)"))
 
         # --- HUMAN ATTENTION (escalations: things only a person can clear) ---
         msgs = _scalar("SELECT count(*) FROM contact_messages WHERE status IN ('new','drafted')")
@@ -1072,7 +1082,8 @@ class ConsumerDigestAgent(Agent):
         from ..web.auth import make_action_token
         base = settings.public_web_url.rstrip("/")
         emails = pushes = 0
-        due = accounts.due_for_digest(limit=params.get("limit", 300))
+        due = accounts.due_for_digest(limit=params.get("limit", 300),
+                                      email_ok=settings.email_enabled, push_ok=settings.web_push_enabled)
         for p in due:
             try:
                 feed = today.assemble(city=p.get("home_city"), state=p.get("home_state"),

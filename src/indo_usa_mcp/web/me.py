@@ -79,7 +79,10 @@ def me_home(request: Request) -> HTMLResponse:
         "<label style='font-weight:400;display:flex;gap:8px;align-items:center'>"
         f"<input type='checkbox' name='notify_email' value='1'{' checked' if prof.get('notify_email', True) else ''} "
         "style='width:auto'> Email me a digest</label>"
-        f"<label>Digest frequency</label><select name='digest_freq'>{freq_opts}</select>"
+        + ("<label style='font-weight:400;display:flex;gap:8px;align-items:center'>"
+           f"<input type='checkbox' name='notify_web' value='1'{' checked' if prof.get('notify_web') else ''} "
+           "style='width:auto'> Browser push notifications</label>" if settings.web_push_enabled else "")
+        + f"<label>Digest frequency</label><select name='digest_freq'>{freq_opts}</select>"
         "<button type='submit' style='margin-top:12px'>Save preferences</button></form>")
 
     st = accounts.contributor_stats(email)
@@ -149,7 +152,10 @@ async def push_subscribe(request: Request) -> JSONResponse:
         sub = (await request.json()).get("subscription")
     except Exception:
         sub = None
-    return JSONResponse({"ok": bool(sub and webpush.subscribe(email, sub))})
+    ok = bool(sub and webpush.subscribe(email, sub))
+    if ok:
+        accounts.set_notify_web(email, True)   # enabling on a device opts them into push delivery
+    return JSONResponse({"ok": ok})
 
 
 async def push_unsubscribe(request: Request) -> JSONResponse:
@@ -181,6 +187,7 @@ async def prefs_post(request: Request) -> RedirectResponse:
         languages=langs,
         followed_verticals=form.getlist("followed_verticals"),
         notify_email=bool(form.get("notify_email")),
+        notify_web=bool(form.get("notify_web")),
         digest_freq=(form.get("digest_freq") or "weekly"),
     )
     return RedirectResponse("/me?ok=1", status_code=303)

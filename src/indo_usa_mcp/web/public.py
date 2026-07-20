@@ -324,6 +324,11 @@ _SUB_HITS: dict[str, list[float]] = {}
 
 
 _TRACK_HITS: dict[str, list[float]] = {}
+# Per-(ip,vertical,id) 'view' de-dupe so a reload/return visit within the day doesn't inflate a listing's
+# view count. In-proc + best-effort (resets on restart); taps (call/website/directions) are NOT deduped
+# since each is a genuine intent. Key -> last-seen epoch; pruned lazily against _VIEW_WINDOW.
+_TRACK_VIEWS: dict[str, float] = {}
+_VIEW_WINDOW = 12 * 3600
 
 
 def _track_rate_ok(ip: str, limit: int = 120, window: int = 60) -> bool:
@@ -337,19 +342,48 @@ def _track_rate_ok(ip: str, limit: int = 120, window: int = 60) -> bool:
     return True
 
 
+def _view_is_fresh(ip: str, vertical: str, record_id: int) -> bool:
+    """True (and records) the first 'view' from this IP for this listing within _VIEW_WINDOW; False on
+    repeats. Prunes expired keys opportunistically so the dict stays bounded."""
+    now = time.time()
+    if len(_TRACK_VIEWS) > 20000:                       # safety bound: drop everything expired
+        for k, t in list(_TRACK_VIEWS.items()):
+            if now - t >= _VIEW_WINDOW:
+                _TRACK_VIEWS.pop(k, None)
+    key = f"{ip}|{vertical}|{record_id}"
+    last = _TRACK_VIEWS.get(key)
+    if last is not None and now - last < _VIEW_WINDOW:
+        return False
+    _TRACK_VIEWS[key] = now
+    return True
+
+
 async def track(request: Request) -> Response:
     """Client beacon for real per-listing analytics (view + call/website/directions taps). Params in the
-    query string so navigator.sendBeacon works with an empty body. Best-effort; always 204."""
+    query string so navigator.sendBeacon works with an empty body. Best-effort; always 204.
+
+    Guards against inflated owner analytics: the listing must actually exist + be live, and repeat 'view'
+    beacons from the same IP within the day are dropped."""
     ip = (request.client.host if request.client else "?") or "?"
     if _track_rate_ok(ip):
         q = request.query_params
         vertical = (q.get("v") or "").strip()
+        kind = (q.get("k") or "").strip()
         if vertical in verticals.VERTICALS:
             try:
-                from .. import analytics
-                analytics.log_listing_event(vertical, int(q.get("id") or 0), (q.get("k") or "").strip())
+                record_id = int(q.get("id") or 0)
             except (ValueError, TypeError):
-                pass
+                record_id = 0
+            if record_id > 0 and (kind != "view" or _view_is_fresh(ip, vertical, record_id)):
+                try:
+                    from .. import analytics, db
+                    exists = db.query_one(
+                        f"SELECT 1 FROM {verticals._table(vertical)} "
+                        f"WHERE id = %s AND deleted_at IS NULL AND is_active", (record_id,))
+                    if exists:
+                        analytics.log_listing_event(vertical, record_id, kind)
+                except Exception:
+                    pass
     return Response(status_code=204)
 
 

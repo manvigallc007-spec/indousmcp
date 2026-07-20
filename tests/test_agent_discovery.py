@@ -20,6 +20,8 @@ def test_llms_txt_advertises_mcp_and_api():
     assert "/mcp" in t and "streamable-http" in t
     assert "/api/v1/search" in t and "/for-agents" in t and "/openapi.json" in t
     assert "get_indian_movies_in_theaters" in t and "search_h1b_sponsors" in t   # new tools advertised
+    assert "search_community_questions" in t and "get_today_highlights" in t     # Q&A + Today tools
+    assert "/questions" in t and "/today" in t                                   # human pages too
 
 
 def test_for_agents_page_renders():

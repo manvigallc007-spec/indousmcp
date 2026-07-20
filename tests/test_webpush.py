@@ -107,6 +107,17 @@ def test_me_shows_enable_button_only_when_enabled(monkeypatch):
         _clean()
 
 
+def test_due_for_digest_skips_undeliverable_channels():
+    try:
+        accounts.upsert_profile(_E, home_city="Plano", notify_email=True, notify_web=False, digest_freq="daily")
+        assert _E in [p["email"] for p in accounts.due_for_digest()]                 # email deliverable
+        # SMTP off + no push subscription -> their only channel is dead, so don't churn today.assemble
+        assert _E not in [p["email"] for p in accounts.due_for_digest(email_ok=False, push_ok=True)]
+        assert _E not in [p["email"] for p in accounts.due_for_digest(email_ok=False, push_ok=False)]
+    finally:
+        _clean()
+
+
 def test_service_worker_has_push_handler():
     sw = _client.get("/sw.js").text
     assert "'push'" in sw and "showNotification" in sw and "notificationclick" in sw

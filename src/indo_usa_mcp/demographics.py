@@ -50,8 +50,11 @@ def _fetch(year: str, geo_clause: str) -> list[dict]:
     return [dict(zip(header, row)) for row in data]
 
 
-def refresh(year: str = "2022") -> dict:
-    """Pull state + metro Asian-Indian counts into the demographics table. Best-effort per level."""
+def refresh(year: str = "2023") -> dict:
+    """Pull state + metro Asian-Indian counts into the demographics table. Best-effort per level.
+
+    `year` is the ACS 5-year vintage; bump it as the Census Bureau releases newer 5-year data (each
+    vintage is published ~Dec of the following year). Failures per level are captured, never raised."""
     upserted, errors = 0, []
     for level, clause in _GEO.items():
         try:

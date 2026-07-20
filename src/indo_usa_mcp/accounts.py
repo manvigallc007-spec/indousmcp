@@ -117,11 +117,19 @@ def list_follows(email: str, kind: str | None = None) -> list[dict]:
 
 
 # --------------------------------------------------------------------------- digest (Today email)
-def due_for_digest(limit: int = 500) -> list[dict]:
-    """Consumers whose email digest is due now: opted in, not 'off', and past their cadence window
-    (daily = not sent today; weekly = not sent in 7 days)."""
+def due_for_digest(limit: int = 500, *, email_ok: bool = True, push_ok: bool = True) -> list[dict]:
+    """Consumers whose digest is due now: opted in, not 'off', past their cadence window (daily = not
+    sent today; weekly = not sent in 7 days).
+
+    `email_ok`/`push_ok` reflect whether each channel is actually deliverable right now (SMTP / VAPID
+    configured). A user is only returned if at least one of their opted-in channels is live — so we don't
+    rebuild `today.assemble` every tick for someone whose only channel is dead."""
+    if not (email_ok or push_ok):
+        return []
+    deliverable = " OR ".join(
+        c for c, ok in (("notify_email", email_ok), ("notify_web", push_ok)) if ok)
     return db.query(
-        "SELECT * FROM user_profiles WHERE (notify_email OR notify_web) AND digest_freq <> 'off' AND ("
+        f"SELECT * FROM user_profiles WHERE ({deliverable}) AND digest_freq <> 'off' AND ("
         "  digest_sent_at IS NULL"
         "  OR (digest_freq = 'daily'  AND digest_sent_at < date_trunc('day', now()))"
         "  OR (digest_freq = 'weekly' AND digest_sent_at < now() - interval '7 days')"
@@ -137,6 +145,15 @@ def set_notify_email(email: str, on: bool) -> None:
     email = _norm(email)
     db.execute("INSERT INTO user_profiles (email, notify_email) VALUES (%s, %s) "
                "ON CONFLICT (email) DO UPDATE SET notify_email = EXCLUDED.notify_email, updated_at=now()",
+               (email, on))
+
+
+def set_notify_web(email: str, on: bool) -> None:
+    """Turn browser-push delivery on/off. Called when a device subscribes so the digest push branch is
+    actually reachable (otherwise notify_web stays False and no push is ever sent)."""
+    email = _norm(email)
+    db.execute("INSERT INTO user_profiles (email, notify_web) VALUES (%s, %s) "
+               "ON CONFLICT (email) DO UPDATE SET notify_web = EXCLUDED.notify_web, updated_at=now()",
                (email, on))
 
 

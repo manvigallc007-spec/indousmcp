@@ -21,17 +21,19 @@ def _row(**over):
 
 
 def test_festival_article_is_grounded():
+    year = datetime.date.today().year                # kb_article now derives the year from today
     art = festivals.kb_article()
-    assert art["slug"] == f"festival-calendar-{festivals.YEAR}"
-    assert str(festivals.YEAR) in art["title"]
+    assert art["slug"] == f"festival-calendar-{year}"
+    assert str(year) in art["title"]
     assert "Diwali" in art["text"]
     assert "confirm" in art["text"].lower()          # tells users to verify the exact date
 
 
 def test_seed_includes_festival_article():
+    year = datetime.date.today().year
     arts = knowledge_seed._all_articles()
     assert len(arts) == len(knowledge_seed.ARTICLES) + 1
-    assert f"festival-calendar-{festivals.YEAR}" in {a["slug"] for a in arts}
+    assert f"festival-calendar-{year}" in {a["slug"] for a in arts}
 
 
 def test_listing_shows_trust_line(monkeypatch):

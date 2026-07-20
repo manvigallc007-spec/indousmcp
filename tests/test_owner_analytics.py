@@ -51,6 +51,22 @@ def test_track_records_and_ignores_bad_input():
         _cleanup(rid)
 
 
+def test_track_dedupes_repeat_views_and_rejects_missing_listing():
+    rid = _mk_owned()
+    try:
+        for _ in range(4):                                          # same IP reloads the page 4x...
+            _client.post(f"/track?v=restaurants&id={rid}&k=view")
+        _client.post(f"/track?v=restaurants&id={rid}&k=call")       # taps are NOT deduped
+        _client.post(f"/track?v=restaurants&id={rid}&k=call")
+        _client.post("/track?v=restaurants&id=999999999&k=view")    # non-existent listing -> dropped
+        m = analytics.listing_metrics("restaurants", rid, 30)
+        assert m["view"] == 1                                       # ...counts as a single view
+        assert m["call"] == 2                                       # genuine intent taps each count
+        assert analytics.listing_metrics("restaurants", 999999999, 30)["view"] == 0
+    finally:
+        _cleanup(rid)
+
+
 def test_listing_page_emits_view_beacon_and_trackable_links():
     rid = _mk_owned()
     try:

@@ -23,6 +23,14 @@ def test_next_festival():
     assert festivals.next_festival(_T)["name"] == "Dhanteras"
 
 
+def test_calendar_has_multiyear_runway():
+    # 2027 and 2028 are fully populated so the countdown never silently dries up mid-2027.
+    years = {e["date"].year for e in festivals._all_dated()}
+    assert {2027, 2028} <= years
+    assert festivals.days_of_runway(_T) > 365          # well over a year of dated entries remain
+    assert festivals.next_festival(datetime.date(2028, 6, 1)) is not None   # still answers deep into 2028
+
+
 def test_find_matches_and_rolls_to_next_year():
     assert festivals.find("when is diwali", _T)["name"] == "Diwali (Deepavali)"
     holi = festivals.find("holi", _T)                     # 2026 Holi already passed -> next year's
