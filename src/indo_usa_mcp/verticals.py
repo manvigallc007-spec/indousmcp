@@ -875,13 +875,16 @@ def merge_duplicates(vertical: str, keep_id: int, drop_ids: list[int]) -> dict[s
 
 
 def search_all(query: str, city: str | None = None, state: str | None = None,
-               limit: int = 20, lat: float | None = None, lng: float | None = None) -> dict[str, Any]:
+               limit: int = 20, offset: int = 0, lat: float | None = None,
+               lng: float | None = None) -> dict[str, Any]:
     """Search every vertical at once and merge by the hybrid score (exact-match first, then
     relevance/proximity/freshness — see ranking.py).
 
     Each result is tagged with its `vertical`. Optional `lat`/`lng` enable proximity ranking.
+    `offset` pages the merged results (each vertical is fetched deep enough to cover the page).
     """
     from . import embeddings
+    offset = max(int(offset), 0)
     qvec = embeddings.to_vector_literal(embeddings.embed(query)) if embeddings.enabled() else None
     point = (lat, lng) if lat is not None and lng is not None else None
 
@@ -891,15 +894,17 @@ def search_all(query: str, city: str | None = None, state: str | None = None,
         fn = getattr(cfg["queries"], f"search_{key}_by_text", None)
         if fn is None:
             continue
-        res = fn(query, city=city, state=state, limit=limit, point=point, precomputed_qvec=qvec)
+        # Pull offset+limit from each so the merged page is complete after the global sort.
+        res = fn(query, city=city, state=state, limit=offset + limit, point=point, precomputed_qvec=qvec)
         ranking_mode = res.get("ranking", ranking_mode)
         for r in res["results"]:
             r.setdefault("vertical", key)
             merged.append(r)
     # Hybrid-ranked verticals carry `score`; events (date-first) carry only `match_score`.
     merged.sort(key=lambda r: r.get("score", r.get("match_score") or 0.0), reverse=True)
-    merged = merged[:limit]
-    return {"count": len(merged), "query": query, "ranking": ranking_mode, "results": merged}
+    page = merged[offset:offset + limit]
+    return {"count": len(page), "query": query, "ranking": ranking_mode, "results": page,
+            "offset": offset, "has_more": len(merged) > offset + limit}
 
 
 def featured_summary() -> dict[str, Any]:

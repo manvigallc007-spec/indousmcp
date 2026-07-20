@@ -108,3 +108,20 @@ def test_restaurant_tools_support_offset():
     finally:
         for rid in ids:
             db.execute("DELETE FROM restaurants WHERE id=%s", (rid,))
+
+
+def test_offset_rolled_out_to_all_verticals():
+    # every vertical get_/search_ tool accepts offset and echoes it back (centralized in ranking)
+    for get_tool, search_tool in [
+        (server.get_indian_temples, server.search_temples_by_text),
+        (server.get_indian_groceries, server.search_groceries_by_text),
+        (server.get_indian_salons, server.search_salons_by_text),
+        (server.get_indian_finance, server.search_finance_by_text),
+    ]:
+        assert get_tool(city="Plano", limit=1, offset=0)["offset"] == 0
+        assert "has_more" in search_tool("indian", city="Plano", limit=1, offset=1)
+    # events (custom impl) and the cross-vertical aggregator page too
+    assert server.get_indian_events(city="Plano", limit=1, offset=0)["offset"] == 0
+    assert "has_more" in server.search_events_by_text("festival", city="Plano", limit=1, offset=1)
+    assert server.search_all("indian", city="Plano", limit=2, offset=0)["offset"] == 0
+    assert "has_more" in server.search_all("indian", city="Plano", limit=2, offset=2)

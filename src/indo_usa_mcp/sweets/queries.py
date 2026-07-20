@@ -20,12 +20,12 @@ _COLS_SQL = (", ".join(_PUBLIC_COLS)
 def get_indian_sweets(
     *, lat: float | None = None, lng: float | None = None, radius_miles: float = 15.0,
     city: str | None = None, state: str | None = None, tag: str | None = None,
-    open_now: bool = False, limit: int = 25,
+    open_now: bool = False, limit: int = 25, offset: int = 0,
 ) -> dict[str, Any]:
     """List active Indian sweets shops / bakeries, ranked by proximity + freshness + Featured."""
     point = (lat, lng) if lat is not None and lng is not None else None
     return ranking.geo_list("sweets", _COLS_SQL, point=point, city=city, state=state,
-                            tag=tag, open_now=open_now, limit=limit, radius_miles=radius_miles)
+                            tag=tag, open_now=open_now, limit=limit, offset=offset, radius_miles=radius_miles)
 
 
 def get_sweets_details(sweets_id: int) -> dict[str, Any] | None:
@@ -40,11 +40,11 @@ def get_sweets_details(sweets_id: int) -> dict[str, Any] | None:
 
 
 def search_sweets_by_text(
-    query_text: str, *, city: str | None = None, state: str | None = None, limit: int = 25,
+    query_text: str, *, city: str | None = None, state: str | None = None, limit: int = 25, offset: int = 0,
     point: tuple[float, float] | None = None, precomputed_qvec: str | None = None,
 ) -> dict[str, Any]:
     return ranking.text_search("sweets", _COLS_SQL, query_text, city=city, state=state,
-                               point=point, limit=limit, precomputed_qvec=precomputed_qvec)
+                               point=point, limit=limit, offset=offset, precomputed_qvec=precomputed_qvec)
 
 
 def stats() -> dict[str, Any]:

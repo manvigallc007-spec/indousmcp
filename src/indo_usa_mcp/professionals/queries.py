@@ -21,7 +21,7 @@ def get_indian_professionals(
     *, lat: float | None = None, lng: float | None = None, radius_miles: float = 15.0,
     city: str | None = None, state: str | None = None, profession_type: str | None = None,
     speciality: str | None = None, tag: str | None = None, open_now: bool = False,
-    limit: int = 25,
+    limit: int = 25, offset: int = 0,
 ) -> dict[str, Any]:
     """List active Indian-American healthcare professionals, ranked by proximity + freshness
     + Featured (filters: profession_type, speciality, city, tag, open_now)."""
@@ -32,7 +32,7 @@ def get_indian_professionals(
         extra.append(("LOWER(speciality) = LOWER(%s)", [speciality]))
     point = (lat, lng) if lat is not None and lng is not None else None
     return ranking.geo_list("professionals", _COLS_SQL, point=point, city=city, state=state,
-                            tag=tag, open_now=open_now, limit=limit,
+                            tag=tag, open_now=open_now, limit=limit, offset=offset,
                             radius_miles=radius_miles, extra_where=extra)
 
 
@@ -49,11 +49,11 @@ def get_professional_details(professional_id: int) -> dict[str, Any] | None:
 
 
 def search_professionals_by_text(
-    query_text: str, *, city: str | None = None, state: str | None = None, limit: int = 25,
+    query_text: str, *, city: str | None = None, state: str | None = None, limit: int = 25, offset: int = 0,
     point: tuple[float, float] | None = None, precomputed_qvec: str | None = None,
 ) -> dict[str, Any]:
     return ranking.text_search("professionals", _COLS_SQL, query_text, city=city, state=state,
-                               point=point, limit=limit, precomputed_qvec=precomputed_qvec)
+                               point=point, limit=limit, offset=offset, precomputed_qvec=precomputed_qvec)
 
 
 def stats() -> dict[str, Any]:

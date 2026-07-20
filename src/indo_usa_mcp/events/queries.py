@@ -32,9 +32,11 @@ def _haversine_miles(lat1, lng1, lat2, lng2) -> float:
 def get_indian_events(
     *, lat: float | None = None, lng: float | None = None, radius_miles: float = 25.0,
     city: str | None = None, state: str | None = None, category: str | None = None,
-    tag: str | None = None, include_past: bool = False, limit: int = 25,
+    tag: str | None = None, include_past: bool = False, limit: int = 25, offset: int = 0,
 ) -> dict[str, Any]:
-    """List approved Indian-American events. Upcoming by default; set include_past=true for history."""
+    """List approved Indian-American events. Upcoming by default; set include_past=true for history.
+    `offset` pages the results."""
+    offset = max(int(offset), 0)
     where = [_BASE]
     params: list[Any] = []
     if not include_past:
@@ -59,7 +61,7 @@ def get_indian_events(
     order = "start_at DESC" if include_past else "start_at ASC"
     sql = (f"SELECT {_COLS_SQL} FROM events WHERE {' AND '.join(where)} "
            f"ORDER BY {_FEATURED} DESC, {order} LIMIT %s")
-    params.append(max(limit * 4, limit))
+    params.append(max(limit * 4, offset + limit))
     rows = db.query(sql, params)
 
     if lat is not None and lng is not None:
@@ -72,7 +74,9 @@ def get_indian_events(
                 row["distance_miles"] = round(d, 2)
                 kept.append(row)
         rows = kept
-    return {"count": len(rows[:limit]), "results": rows[:limit]}
+    page = rows[offset:offset + limit]
+    return {"count": len(page), "results": page,
+            "offset": offset, "has_more": len(rows) > offset + limit}
 
 
 def get_event_details(event_id: int) -> dict[str, Any] | None:
@@ -88,9 +92,10 @@ def get_event_details(event_id: int) -> dict[str, Any] | None:
 
 def search_events_by_text(
     query_text: str, *, city: str | None = None, state: str | None = None, limit: int = 25,
-    point: tuple[float, float] | None = None, precomputed_qvec: str | None = None,
+    offset: int = 0, point: tuple[float, float] | None = None, precomputed_qvec: str | None = None,
 ) -> dict[str, Any]:
     # `point` accepted for a uniform search_all signature; events stay date-first (not reranked).
+    offset = max(int(offset), 0)
     filters = [_BASE]
     geo: list[Any] = []
     if city:
@@ -99,21 +104,26 @@ def search_events_by_text(
     if state:
         filters.append("LOWER(state) = LOWER(%s)")
         geo.append(state)
+    fetch = offset + limit
 
     if embeddings.enabled():
         qvec = precomputed_qvec or embeddings.to_vector_literal(embeddings.embed(query_text))
         where = " AND ".join([*filters, "embedding IS NOT NULL"])
         sql = (f"SELECT {_COLS_SQL}, 1 - (embedding <=> %s::vector) AS match_score "
                f"FROM events WHERE {where} ORDER BY {_FEATURED} DESC, embedding <=> %s::vector LIMIT %s")
-        rows = db.query(sql, [qvec, *geo, qvec, limit])
+        rows = db.query(sql, [qvec, *geo, qvec, fetch])
         if rows:
-            return {"count": len(rows), "query": query_text, "ranking": "semantic", "results": rows}
+            page = rows[offset:offset + limit]
+            return {"count": len(page), "query": query_text, "ranking": "semantic", "results": page,
+                    "offset": offset, "has_more": len(rows) > offset + limit}
 
     where = " AND ".join(filters)
     sql = (f"SELECT {_COLS_SQL}, similarity(name, %s) AS match_score FROM events "
            f"WHERE {where} ORDER BY {_FEATURED} DESC, match_score DESC LIMIT %s")
-    rows = db.query(sql, [query_text, *geo, limit])
-    return {"count": len(rows), "query": query_text, "ranking": "trigram", "results": rows}
+    rows = db.query(sql, [query_text, *geo, fetch])
+    page = rows[offset:offset + limit]
+    return {"count": len(page), "query": query_text, "ranking": "trigram", "results": page,
+            "offset": offset, "has_more": len(rows) > offset + limit}
 
 
 def stats() -> dict[str, Any]:

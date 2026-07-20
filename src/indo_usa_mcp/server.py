@@ -213,6 +213,7 @@ def get_indian_temples(
     tag: str | None = None,
     open_now: bool = False,
     limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Find Indian-American temples (Hindu/Sikh/Jain places of worship).
 
@@ -222,7 +223,7 @@ def get_indian_temples(
     """
     return temple_queries.get_indian_temples(
         lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
-        religion=religion, denomination=denomination, tag=tag, open_now=open_now, limit=limit)
+        religion=religion, denomination=denomination, tag=tag, open_now=open_now, limit=limit, offset=offset)
 
 
 @mcp.tool()
@@ -237,9 +238,10 @@ def get_temple_details(temple_id: int) -> dict[str, Any]:
 @mcp.tool()
 def search_temples_by_text(
     query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Free-text/semantic search over temples (name/deity/denomination/region)."""
-    return temple_queries.search_temples_by_text(query, city=city, state=state, limit=limit)
+    return temple_queries.search_temples_by_text(query, city=city, state=state, limit=limit, offset=offset)
 
 
 # ------------------------------------------------------------- groceries (Phase 2)
@@ -254,6 +256,7 @@ def get_indian_groceries(
     tag: str | None = None,
     open_now: bool = False,
     limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Find Indian grocery stores (desi groceries / supermarkets).
 
@@ -263,7 +266,7 @@ def get_indian_groceries(
     """
     return grocery_queries.get_indian_groceries(
         lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
-        region_tag=region_tag, tag=tag, open_now=open_now, limit=limit)
+        region_tag=region_tag, tag=tag, open_now=open_now, limit=limit, offset=offset)
 
 
 @mcp.tool()
@@ -278,9 +281,10 @@ def get_grocery_details(grocery_id: int) -> dict[str, Any]:
 @mcp.tool()
 def search_groceries_by_text(
     query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Free-text/semantic search over Indian grocery stores (name/region/store type)."""
-    return grocery_queries.search_groceries_by_text(query, city=city, state=state, limit=limit)
+    return grocery_queries.search_groceries_by_text(query, city=city, state=state, limit=limit, offset=offset)
 
 
 # -------------------------------------------------------- professionals (Phase 2)
@@ -296,6 +300,7 @@ def get_indian_professionals(
     tag: str | None = None,
     open_now: bool = False,
     limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Find Indian-American healthcare professionals (doctors, dentists, clinics, pharmacies).
 
@@ -307,7 +312,7 @@ def get_indian_professionals(
     return professional_queries.get_indian_professionals(
         lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
         profession_type=profession_type, speciality=speciality, tag=tag, open_now=open_now,
-        limit=limit)
+        limit=limit, offset=offset)
 
 
 @mcp.tool()
@@ -322,9 +327,10 @@ def get_professional_details(professional_id: int) -> dict[str, Any]:
 @mcp.tool()
 def search_professionals_by_text(
     query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Free-text/semantic search over Indian-American healthcare professionals."""
-    return professional_queries.search_professionals_by_text(query, city=city, state=state, limit=limit)
+    return professional_queries.search_professionals_by_text(query, city=city, state=state, limit=limit, offset=offset)
 
 
 # --------------------------------------------------------------- salons (Phase 2)
@@ -338,6 +344,7 @@ def get_indian_salons(
     tag: str | None = None,
     open_now: bool = False,
     limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Find Indian beauty salons (threading, henna/mehndi, hair, bridal).
 
@@ -347,7 +354,7 @@ def get_indian_salons(
     """
     return salon_queries.get_indian_salons(
         lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
-        tag=tag, open_now=open_now, limit=limit)
+        tag=tag, open_now=open_now, limit=limit, offset=offset)
 
 
 @mcp.tool()
@@ -362,9 +369,10 @@ def get_salon_details(salon_id: int) -> dict[str, Any]:
 @mcp.tool()
 def search_salons_by_text(
     query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Free-text/semantic search over Indian beauty salons."""
-    return salon_queries.search_salons_by_text(query, city=city, state=state, limit=limit)
+    return salon_queries.search_salons_by_text(query, city=city, state=state, limit=limit, offset=offset)
 
 
 # --------------------------------------------------------------- events (Phase 2)
@@ -379,17 +387,19 @@ def get_indian_events(
     tag: str | None = None,
     include_past: bool = False,
     limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Find upcoming Indian-American community events (festivals, garba, concerts, puja).
 
     Provide a point (`lat`+`lng`, optional `radius_miles`) or `city`/`state`. Filter by
     `category` ("festival", "garba", "concert", "puja", …) or `tag` ("diwali", "holi", …).
     Returns UPCOMING events by default (soonest first); set `include_past=true` for history.
-    Each event has `start_at`/`end_at`, venue, category and a description.
+    Each event has `start_at`/`end_at`, venue, category and a description. Use `offset` to page
+    (the response's `has_more` says whether another page exists).
     """
     return event_queries.get_indian_events(
         lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
-        category=category, tag=tag, include_past=include_past, limit=limit)
+        category=category, tag=tag, include_past=include_past, limit=limit, offset=offset)
 
 
 @mcp.tool()
@@ -403,10 +413,10 @@ def get_event_details(event_id: int) -> dict[str, Any]:
 
 @mcp.tool()
 def search_events_by_text(
-    query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+    query: str, city: str | None = None, state: str | None = None, limit: int = 25, offset: int = 0,
 ) -> dict[str, Any]:
-    """Free-text/semantic search over Indian-American events (incl. past, for history)."""
-    return event_queries.search_events_by_text(query, city=city, state=state, limit=limit)
+    """Free-text/semantic search over Indian-American events (incl. past, for history). `offset` pages."""
+    return event_queries.search_events_by_text(query, city=city, state=state, limit=limit, offset=offset)
 
 
 # --------------------------------------------------------------- apparel & jewelry
@@ -415,6 +425,7 @@ def get_indian_apparel(
     lat: float | None = None, lng: float | None = None, radius_miles: float = 15.0,
     city: str | None = None, state: str | None = None, tag: str | None = None,
     open_now: bool = False, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Find Indian apparel & jewelry stores (sarees, lehengas, ethnic wear, gold jewelers).
 
@@ -423,7 +434,7 @@ def get_indian_apparel(
     """
     return apparel_queries.get_indian_apparel(
         lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
-        tag=tag, open_now=open_now, limit=limit)
+        tag=tag, open_now=open_now, limit=limit, offset=offset)
 
 
 @mcp.tool()
@@ -438,9 +449,10 @@ def get_apparel_details(apparel_id: int) -> dict[str, Any]:
 @mcp.tool()
 def search_apparel_by_text(
     query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Free-text/semantic search over Indian apparel & jewelry stores."""
-    return apparel_queries.search_apparel_by_text(query, city=city, state=state, limit=limit)
+    return apparel_queries.search_apparel_by_text(query, city=city, state=state, limit=limit, offset=offset)
 
 
 # --------------------------------------------------------------- sweets & bakeries
@@ -449,6 +461,7 @@ def get_indian_sweets(
     lat: float | None = None, lng: float | None = None, radius_miles: float = 15.0,
     city: str | None = None, state: str | None = None, tag: str | None = None,
     open_now: bool = False, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Find Indian sweets shops (mithai) & bakeries.
 
@@ -457,7 +470,7 @@ def get_indian_sweets(
     """
     return sweets_queries.get_indian_sweets(
         lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
-        tag=tag, open_now=open_now, limit=limit)
+        tag=tag, open_now=open_now, limit=limit, offset=offset)
 
 
 @mcp.tool()
@@ -472,9 +485,10 @@ def get_sweets_details(sweets_id: int) -> dict[str, Any]:
 @mcp.tool()
 def search_sweets_by_text(
     query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Free-text/semantic search over Indian sweets shops & bakeries."""
-    return sweets_queries.search_sweets_by_text(query, city=city, state=state, limit=limit)
+    return sweets_queries.search_sweets_by_text(query, city=city, state=state, limit=limit, offset=offset)
 
 
 # --------------------------------------------------------------- yoga & dance studios
@@ -483,6 +497,7 @@ def get_indian_studios(
     lat: float | None = None, lng: float | None = None, radius_miles: float = 15.0,
     city: str | None = None, state: str | None = None, tag: str | None = None,
     open_now: bool = False, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Find Indian yoga & cultural studios (yoga, classical dance, music, language classes).
 
@@ -491,7 +506,7 @@ def get_indian_studios(
     """
     return studio_queries.get_indian_studios(
         lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
-        tag=tag, open_now=open_now, limit=limit)
+        tag=tag, open_now=open_now, limit=limit, offset=offset)
 
 
 @mcp.tool()
@@ -506,9 +521,10 @@ def get_studio_details(studio_id: int) -> dict[str, Any]:
 @mcp.tool()
 def search_studios_by_text(
     query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Free-text/semantic search over Indian yoga/dance/music studios."""
-    return studio_queries.search_studios_by_text(query, city=city, state=state, limit=limit)
+    return studio_queries.search_studios_by_text(query, city=city, state=state, limit=limit, offset=offset)
 
 
 # --------------------------------------------------------------- community services
@@ -517,6 +533,7 @@ def get_indian_services(
     lat: float | None = None, lng: float | None = None, radius_miles: float = 15.0,
     city: str | None = None, state: str | None = None, tag: str | None = None,
     open_now: bool = False, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Find Indian community services (money transfer/remittance, banks, immigration/visa,
     travel agents, tax/insurance).
@@ -526,7 +543,7 @@ def get_indian_services(
     """
     return service_queries.get_indian_services(
         lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
-        tag=tag, open_now=open_now, limit=limit)
+        tag=tag, open_now=open_now, limit=limit, offset=offset)
 
 
 @mcp.tool()
@@ -541,9 +558,10 @@ def get_service_details(service_id: int) -> dict[str, Any]:
 @mcp.tool()
 def search_services_by_text(
     query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Free-text/semantic search over Indian community services."""
-    return service_queries.search_services_by_text(query, city=city, state=state, limit=limit)
+    return service_queries.search_services_by_text(query, city=city, state=state, limit=limit, offset=offset)
 
 
 # --------------------------------------------------------------- community orgs
@@ -552,6 +570,7 @@ def get_indian_community(
     lat: float | None = None, lng: float | None = None, radius_miles: float = 25.0,
     city: str | None = None, state: str | None = None, tag: str | None = None,
     open_now: bool = False, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Find Indian community organizations & cultural associations (regional samaj/sangam,
     cultural centers, Indo-American associations).
@@ -561,7 +580,7 @@ def get_indian_community(
     """
     return community_queries.get_indian_community(
         lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
-        tag=tag, open_now=open_now, limit=limit)
+        tag=tag, open_now=open_now, limit=limit, offset=offset)
 
 
 @mcp.tool()
@@ -576,9 +595,10 @@ def get_community_details(community_id: int) -> dict[str, Any]:
 @mcp.tool()
 def search_community_by_text(
     query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Free-text/semantic search over Indian community organizations & associations."""
-    return community_queries.search_community_by_text(query, city=city, state=state, limit=limit)
+    return community_queries.search_community_by_text(query, city=city, state=state, limit=limit, offset=offset)
 
 
 # --------------------------------------------------------------- immigration & legal
@@ -587,6 +607,7 @@ def get_indian_legal(
     lat: float | None = None, lng: float | None = None, radius_miles: float = 25.0,
     city: str | None = None, state: str | None = None, tag: str | None = None,
     open_now: bool = False, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Find Indian-American immigration attorneys & law firms.
 
@@ -595,7 +616,7 @@ def get_indian_legal(
     """
     return legal_queries.get_indian_legal(
         lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
-        tag=tag, open_now=open_now, limit=limit)
+        tag=tag, open_now=open_now, limit=limit, offset=offset)
 
 
 @mcp.tool()
@@ -610,9 +631,10 @@ def get_legal_details(legal_id: int) -> dict[str, Any]:
 @mcp.tool()
 def search_legal_by_text(
     query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Free-text/semantic search over Indian-American immigration attorneys & law firms."""
-    return legal_queries.search_legal_by_text(query, city=city, state=state, limit=limit)
+    return legal_queries.search_legal_by_text(query, city=city, state=state, limit=limit, offset=offset)
 
 
 # --------------------------------------------------------------- education & tutoring
@@ -621,6 +643,7 @@ def get_indian_education(
     lat: float | None = None, lng: float | None = None, radius_miles: float = 25.0,
     city: str | None = None, state: str | None = None, tag: str | None = None,
     open_now: bool = False, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Find Indian-American education & tutoring (heritage/language schools, Bal Vihar, coaching).
 
@@ -629,7 +652,7 @@ def get_indian_education(
     """
     return education_queries.get_indian_education(
         lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
-        tag=tag, open_now=open_now, limit=limit)
+        tag=tag, open_now=open_now, limit=limit, offset=offset)
 
 
 @mcp.tool()
@@ -644,9 +667,10 @@ def get_education_details(education_id: int) -> dict[str, Any]:
 @mcp.tool()
 def search_education_by_text(
     query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Free-text/semantic search over Indian-American education & tutoring."""
-    return education_queries.search_education_by_text(query, city=city, state=state, limit=limit)
+    return education_queries.search_education_by_text(query, city=city, state=state, limit=limit, offset=offset)
 
 
 # --------------------------------------------------------------- real estate
@@ -655,6 +679,7 @@ def get_indian_realestate(
     lat: float | None = None, lng: float | None = None, radius_miles: float = 25.0,
     city: str | None = None, state: str | None = None, tag: str | None = None,
     open_now: bool = False, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Find Indian-American realtors & real-estate agencies.
 
@@ -663,7 +688,7 @@ def get_indian_realestate(
     """
     return realestate_queries.get_indian_realestate(
         lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
-        tag=tag, open_now=open_now, limit=limit)
+        tag=tag, open_now=open_now, limit=limit, offset=offset)
 
 
 @mcp.tool()
@@ -678,9 +703,10 @@ def get_realestate_details(realestate_id: int) -> dict[str, Any]:
 @mcp.tool()
 def search_realestate_by_text(
     query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Free-text/semantic search over Indian-American realtors & real-estate agencies."""
-    return realestate_queries.search_realestate_by_text(query, city=city, state=state, limit=limit)
+    return realestate_queries.search_realestate_by_text(query, city=city, state=state, limit=limit, offset=offset)
 
 
 # --------------------------------------------------------------- finance & tax
@@ -689,6 +715,7 @@ def get_indian_finance(
     lat: float | None = None, lng: float | None = None, radius_miles: float = 25.0,
     city: str | None = None, state: str | None = None, tag: str | None = None,
     open_now: bool = False, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Find Indian-American CPAs, tax preparers & financial advisors.
 
@@ -697,7 +724,7 @@ def get_indian_finance(
     """
     return finance_queries.get_indian_finance(
         lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
-        tag=tag, open_now=open_now, limit=limit)
+        tag=tag, open_now=open_now, limit=limit, offset=offset)
 
 
 @mcp.tool()
@@ -712,15 +739,16 @@ def get_finance_details(finance_id: int) -> dict[str, Any]:
 @mcp.tool()
 def search_finance_by_text(
     query: str, city: str | None = None, state: str | None = None, limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Free-text/semantic search over Indian-American CPAs, tax preparers & financial advisors."""
-    return finance_queries.search_finance_by_text(query, city=city, state=state, limit=limit)
+    return finance_queries.search_finance_by_text(query, city=city, state=state, limit=limit, offset=offset)
 
 
 @mcp.tool()
 def search_all(
     query: str, city: str | None = None, state: str | None = None,
-    lat: float | None = None, lng: float | None = None, limit: int = 20,
+    lat: float | None = None, lng: float | None = None, limit: int = 20, offset: int = 0,
 ) -> dict[str, Any]:
     """Search across ALL Indian-American verticals at once — restaurants, temples, groceries,
     healthcare professionals, beauty salons, events, apparel & jewelry, sweets & bakeries,
@@ -731,7 +759,8 @@ def search_all(
     keyword/semantic similarity, proximity (pass `lat`+`lng`) and freshness. Each result is
     tagged with its `vertical`. Optionally constrain by `city`/`state`.
     """
-    return verticals.search_all(query, city=city, state=state, lat=lat, lng=lng, limit=limit)
+    return verticals.search_all(query, city=city, state=state, lat=lat, lng=lng, limit=limit,
+                                offset=offset)
 
 
 # --------------------------------------------------- festivals, knowledge base, submission, details

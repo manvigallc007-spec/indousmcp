@@ -20,13 +20,13 @@ _COLS_SQL = (", ".join(_PUBLIC_COLS)
 def get_indian_groceries(
     *, lat: float | None = None, lng: float | None = None, radius_miles: float = 15.0,
     city: str | None = None, state: str | None = None, region_tag: str | None = None,
-    tag: str | None = None, open_now: bool = False, limit: int = 25,
+    tag: str | None = None, open_now: bool = False, limit: int = 25, offset: int = 0,
 ) -> dict[str, Any]:
     """List active Indian grocery stores, ranked by proximity + freshness + Featured."""
     extra = [("region_tag = %s", [region_tag])] if region_tag else []
     point = (lat, lng) if lat is not None and lng is not None else None
     return ranking.geo_list("groceries", _COLS_SQL, point=point, city=city, state=state,
-                            tag=tag, open_now=open_now, limit=limit,
+                            tag=tag, open_now=open_now, limit=limit, offset=offset,
                             radius_miles=radius_miles, extra_where=extra)
 
 
@@ -42,11 +42,11 @@ def get_grocery_details(grocery_id: int) -> dict[str, Any] | None:
 
 
 def search_groceries_by_text(
-    query_text: str, *, city: str | None = None, state: str | None = None, limit: int = 25,
+    query_text: str, *, city: str | None = None, state: str | None = None, limit: int = 25, offset: int = 0,
     point: tuple[float, float] | None = None, precomputed_qvec: str | None = None,
 ) -> dict[str, Any]:
     return ranking.text_search("groceries", _COLS_SQL, query_text, city=city, state=state,
-                               point=point, limit=limit, precomputed_qvec=precomputed_qvec)
+                               point=point, limit=limit, offset=offset, precomputed_qvec=precomputed_qvec)
 
 
 def stats() -> dict[str, Any]:
