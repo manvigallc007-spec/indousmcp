@@ -807,6 +807,62 @@ def get_h1b_sponsor_details(sponsor_id: int) -> dict[str, Any]:
     return rec or {"error": "not_found", "sponsor_id": sponsor_id}
 
 
+# --------------------------------------------------- community Q&A + today (agent-first surface)
+@mcp.tool()
+def search_community_questions(query: str, limit: int = 8) -> dict[str, Any]:
+    """Search the Namaste America community Q&A — real questions Indians in the USA ask and answer
+    ("Telugu-speaking pediatrician in Plano?", "best sweets for Diwali in Edison?").
+
+    Returns published questions matching the query, most-answered first, each with a `slug` you can pass
+    to get_community_answers. A grounded, community-sourced complement to the listings + knowledge base.
+    Returns {'count', 'results': [{slug, title, city, state, vertical, answer_count}]}.
+    """
+    from . import qa
+    rows = qa.search_questions(query, limit=limit)
+    return {"count": len(rows), "results": rows}
+
+
+@mcp.tool()
+def get_community_answers(slug: str) -> dict[str, Any]:
+    """A community question + its published answers (Dost's AI answer first, then community answers by
+    upvotes). `slug` comes from search_community_questions. Returns the question with an `answers` list,
+    or {'error': 'not_found'}.
+    """
+    from . import qa
+    q = qa.get_question((slug or "").strip())
+    if not q:
+        return {"error": "not_found", "slug": slug}
+    return {"slug": q["slug"], "title": q["title"], "body": q.get("body"),
+            "city": q.get("city"), "state": q.get("state"),
+            "answers": [{"body": a["body"], "by": "Dost (AI)" if a["is_ai"] else "community",
+                         "upvotes": int(a.get("upvotes") or 0)} for a in q["answers"]]}
+
+
+@mcp.tool()
+def get_today_highlights(city: str = "", state: str = "", languages: str = "") -> dict[str, Any]:
+    """What's happening in Indian America today, optionally for a city + languages — the upcoming
+    festival (+ approximate tithi), soonest events nearby, Indian movies in theaters, places newly added
+    in the city, a culture/immigration nugget, and trending community questions.
+
+    `languages` is a comma-separated list (e.g. "Telugu,Hindi"). Great for a daily briefing. Returns the
+    assembled feed; date fields are ISO. Lunar festival/tithi dates are approximate — tell users to
+    confirm locally.
+    """
+    from . import today
+    langs = [s.strip() for s in (languages or "").split(",") if s.strip()]
+    feed = today.assemble(city=(city or "").strip() or None, state=(state or "").strip() or None,
+                          languages=langs)
+    for e in feed.get("events") or []:            # datetimes -> ISO strings for JSON transport
+        if e.get("start_at") is not None:
+            e["start_at"] = str(e["start_at"])
+    for p in feed.get("new_places") or []:
+        if p.get("created_at") is not None:
+            p["created_at"] = str(p["created_at"])
+    # Keep the readable highlights; drop internal shapes not useful to an agent.
+    return {k: feed.get(k) for k in ("date", "city", "festival", "tithi", "events", "movies",
+                                     "new_places", "nugget", "questions")}
+
+
 # ---------------------------------------------------- agent traffic analytics
 def _client_name() -> str | None:
     """Best-effort MCP client/agent identity (name/version) for the current call."""

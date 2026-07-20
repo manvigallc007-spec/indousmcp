@@ -154,6 +154,18 @@ def list_questions(limit: int = 50, city: str | None = None) -> list[dict]:
     return db.query(sql, params)
 
 
+def search_questions(query: str, limit: int = 8) -> list[dict]:
+    """Published questions matching a free-text query (title/body), most-answered first. For agents +
+    the answer-engine surface."""
+    q = (query or "").strip()
+    if not q:
+        return []
+    return db.query(
+        "SELECT slug, title, city, state, vertical, answer_count FROM questions "
+        "WHERE status='published' AND (title ILIKE %s OR body ILIKE %s) "
+        "ORDER BY answer_count DESC, created_at DESC LIMIT %s", (f"%{q}%", f"%{q}%", limit))
+
+
 def trending(limit: int = 5) -> list[dict]:
     """Recent published questions with the most engagement — for the Today feed."""
     return db.query(
