@@ -544,6 +544,65 @@ def _grounded_reply(messages: list[dict], geo: dict | None, filters: dict | None
             "cards": _cards(res), "provider": "llm"}
 
 
+# --------------------------------------------------------------- streaming (grounded, English only)
+def _chat_stream(messages: list[dict]):
+    """Yield content deltas from a streaming chat-completion. Blocking httpx — run in a worker."""
+    payload = {"model": settings.effective_llm_model, "messages": messages,
+               "temperature": 0.3, "stream": True}
+    with httpx.stream("POST", f"{settings.effective_llm_base_url.rstrip('/')}/chat/completions",
+                      headers={"Authorization": f"Bearer {settings.llm_api_key}"},
+                      json=payload, timeout=settings.llm_timeout_s) as r:
+        r.raise_for_status()
+        for line in r.iter_lines():
+            if not line or not line.startswith("data:"):
+                continue
+            data = line[5:].strip()
+            if data == "[DONE]":
+                break
+            try:
+                delta = (json.loads(data).get("choices") or [{}])[0].get("delta", {}).get("content")
+            except Exception:
+                continue
+            if delta:
+                yield delta
+
+
+def can_stream(filters: dict | None) -> bool:
+    """Streaming is only offered for the clean case: English (no post-hoc translation) + an active,
+    grounded (non-tool) model. Everything else falls back to the blocking reply()."""
+    lang = (filters or {}).get("lang") or "en"
+    return lang == "en" and llm_active() and not settings.effective_llm_use_tools
+
+
+def stream_reply(messages: list[dict], geo: dict | None = None, filters: dict | None = None):
+    """Generator mirroring _grounded_reply but streaming the answer. Yields ('delta', text) chunks then
+    ('final', {cards, provider}). Yields ('fallback', None) for any case the caller should hand to the
+    blocking reply() instead (no query, no directory hit, or an error) — so behavior never diverges."""
+    try:
+        query = _search_query(messages)
+        res = _run_search({"query": query}, filters, geo) if query else {"results": [], "count": 0}
+        if not res.get("results"):
+            yield ("fallback", None)          # let reply() run knowledge/web-fallback/discovery/decline
+            return
+        convo: list[dict] = [{"role": "system", "content": _SYSTEM_GROUNDED}]
+        for extra in (_location_note(geo), _filter_note(filters), _lang_note(filters)):
+            if extra:
+                convo.append({"role": "system", "content": extra})
+        convo += [{"role": m["role"], "content": m.get("content", "")} for m in messages]
+        convo.append({"role": "system", "content":
+                      "Listings found for the latest request:\n" + _results_for_llm(res)})
+        any_delta = False
+        for chunk in _chat_stream(convo):
+            any_delta = True
+            yield ("delta", chunk)
+        if not any_delta:
+            yield ("fallback", None)          # model returned nothing streamed -> fall back cleanly
+            return
+        yield ("final", {"cards": _cards(res), "provider": "llm"})
+    except Exception:
+        yield ("fallback", None)
+
+
 # --------------------------------------------------------------- no-LLM fallback
 def _last_user(messages: list[dict]) -> str:
     for m in reversed(messages):

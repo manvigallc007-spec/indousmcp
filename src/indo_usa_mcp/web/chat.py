@@ -11,7 +11,7 @@ import json
 import time
 
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
+from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from starlette.routing import Route
 
 from .. import assistant, flyer, verticals
@@ -558,17 +558,49 @@ function submitContribute(content,name,city,vertical,website){
     .catch(function(){content.innerHTML='';
       content.appendChild(el('div','bubble','Sorry, that didn’t go through — please try again.'));scroll();});
 }
+// The proven blocking path (unchanged behavior) — also the fallback for anything streaming can't handle.
+function sendBlocking(content,isRerun){
+  return fetch('/chat/api',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({messages:history,geo:geo,filters:filters,lang:lang})})
+    .then(function(r){return r.json();})
+    .then(function(data){fillBot(content,data.reply,data.cards,data.suggest_add,data.contribute);
+      speak(data.reply);if(!isRerun)history.push({role:'assistant',content:data.reply||''});})
+    .catch(function(){fillBot(content,'Sorry, something went wrong. Please try again.',[]);});
+}
 async function send(text,isRerun){
   hideWelcome();let content;
   if(!isRerun){addUser(text);history.push({role:'user',content:text});lastQuery=text;content=addBot();lastBot=content;}
   else{content=lastBot;content.innerHTML='';const b=el('div','bubble');b.appendChild(typing());content.appendChild(b);scroll();}
+  // Try streaming first (English + grounded model); ANY hiccup degrades to the blocking path.
   try{
-    const r=await fetch('/chat/api',{method:'POST',headers:{'Content-Type':'application/json'},
+    const r=await fetch('/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({messages:history,geo:geo,filters:filters,lang:lang})});
-    const data=await r.json();fillBot(content,data.reply,data.cards,data.suggest_add,data.contribute);
-    speak(data.reply);
-    if(!isRerun)history.push({role:'assistant',content:data.reply||''});
-  }catch(e){fillBot(content,'Sorry, something went wrong. Please try again.',[]);}
+    if(!r.ok||(r.headers.get('content-type')||'').indexOf('text/event-stream')<0||!r.body){
+      return sendBlocking(content,isRerun);
+    }
+    const reader=r.body.getReader(),dec=new TextDecoder();
+    let buf='',acc='',cards=null,started=false,fell=false,bubble=null;
+    while(true){
+      const rd=await reader.read(); if(rd.done)break;
+      buf+=dec.decode(rd.value,{stream:true});
+      let i;
+      while((i=buf.indexOf('\\n\\n'))>=0){
+        const raw=buf.slice(0,i);buf=buf.slice(i+2);
+        const d=raw.indexOf('data:'); if(d<0)continue;
+        let obj;try{obj=JSON.parse(raw.slice(d+5).trim());}catch(e){continue;}
+        if(obj.fallback){fell=true;break;}
+        if(obj.delta!=null){
+          if(!started){content.innerHTML='';bubble=el('div','bubble');content.appendChild(bubble);started=true;}
+          acc+=obj.delta;bubble.textContent=acc;scroll();
+        }
+        if(obj.final){cards=(obj.final&&obj.final.cards)||null;}
+      }
+      if(fell)break;
+    }
+    if(fell||!started){return sendBlocking(content,isRerun);}
+    fillBot(content,acc,cards);speak(acc);
+    if(!isRerun)history.push({role:'assistant',content:acc});
+  }catch(e){return sendBlocking(content,isRerun);}
 }
 function submitForm(e){if(e&&e.preventDefault)e.preventDefault();const t=ta.value.trim();if(!t)return false;
   ta.value='';ta.style.height='auto';send(t,false);return false;}
@@ -717,6 +749,81 @@ async def chat_api(request: Request) -> JSONResponse:
     return JSONResponse(result)
 
 
+async def chat_stream(request: Request) -> "JSONResponse | StreamingResponse":
+    """Server-Sent-Events streaming of a chat reply, ONLY for the clean case (English + grounded model +
+    a directory hit). Any other case returns {"fallback": true} so the browser calls the proven blocking
+    /chat/api instead — that endpoint is untouched. The blocking LLM read runs in a worker thread that
+    feeds an asyncio.Queue, so the event loop is never blocked."""
+    import asyncio
+
+    from starlette.concurrency import run_in_threadpool
+
+    if not assistant.enabled():
+        return JSONResponse({"fallback": True})
+    ip = (request.client.host if request.client else "?") or "?"
+    if not _rate_ok(ip):
+        return JSONResponse({"fallback": True})
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    messages = body.get("messages") or []
+    geo = body.get("geo") if isinstance(body.get("geo"), dict) else None
+    raw = body.get("filters") if isinstance(body.get("filters"), dict) else {}
+    lang = body.get("lang") if body.get("lang") in ("en", "hi", "te") else "en"
+    filters = {"vertical": raw.get("vertical") if isinstance(raw.get("vertical"), str) else None,
+               "open_now": bool(raw.get("open_now")), "lang": lang}
+    if not isinstance(messages, list):
+        messages = []
+    for m in messages:
+        if isinstance(m, dict) and isinstance(m.get("content"), str):
+            m["content"] = m["content"][:1000]
+    if not assistant.can_stream(filters):
+        return JSONResponse({"fallback": True})
+
+    q: "asyncio.Queue" = asyncio.Queue()
+    loop = asyncio.get_running_loop()
+
+    def worker():
+        try:
+            for item in assistant.stream_reply(messages, geo, filters):
+                loop.call_soon_threadsafe(q.put_nowait, item)
+        except Exception:
+            loop.call_soon_threadsafe(q.put_nowait, ("fallback", None))
+        finally:
+            loop.call_soon_threadsafe(q.put_nowait, None)
+
+    async def sse():
+        task = asyncio.create_task(run_in_threadpool(worker))
+        cards = None
+        try:
+            while True:
+                item = await q.get()
+                if item is None:
+                    break
+                kind, val = item
+                if kind == "fallback":
+                    yield "data: " + json.dumps({"fallback": True}) + "\n\n"
+                    break
+                if kind == "delta":
+                    yield "data: " + json.dumps({"delta": val}) + "\n\n"
+                elif kind == "final":
+                    cards = (val or {}).get("cards")
+                    yield "data: " + json.dumps({"final": val}) + "\n\n"
+        finally:
+            await task
+        try:                                              # best-effort turn log (mirrors /chat/api)
+            from .. import analytics
+            uq = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
+            analytics.log_call("chat", {"query": uq[:200], "provider": "llm-stream"},
+                               len(cards or []), "web-chat")
+        except Exception:
+            pass
+
+    return StreamingResponse(sse(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 async def chat_contribute(request: Request) -> JSONResponse:
     """In-chat contribution: a visitor names a place they know -> a pending submission for the
     portal (admin moderates). This is how the discovery conversation + 'add your favorite' turn
@@ -797,6 +904,7 @@ routes = [
     Route("/", chat_page, methods=["GET"]),          # the chatbot is the primary homepage
     Route("/chat", chat_redirect, methods=["GET"]),  # legacy path -> /
     Route("/chat/api", chat_api, methods=["POST"]),
+    Route("/chat/stream", chat_stream, methods=["POST"]),
     Route("/chat/contribute", chat_contribute, methods=["POST"]),
     Route("/chat/flyer", chat_flyer, methods=["POST"]),
 ]
