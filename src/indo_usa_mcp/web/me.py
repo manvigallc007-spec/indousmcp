@@ -96,7 +96,9 @@ def me_home(request: Request) -> HTMLResponse:
             f"<div class='muted' style='font-size:13px;margin-top:4px'>"
             f"{st['added']} added · {st['flyers']} flyers · {st['reviews']} reviews · "
             f"{st['asked']} asked · {st['answered']} answered"
-            + (f" · {st['pending']} pending review" if st['pending'] else "") + "</div></div>")
+            + (f" · {st['pending']} pending review" if st['pending'] else "") + "</div>"
+            f"<div style='margin-top:8px'><a href='/u/{esc(accounts.ensure_referral_code(email))}'>"
+            "View your public profile</a> · <a href='/leaderboard'>Leaderboard</a></div></div>")
     else:
         contrib = ("<div style='background:#fff7ef;border:1px solid #ffe0c2;border-radius:14px;padding:14px 16px;margin:12px 0'>"
                    "<b>🌱 Start contributing</b> <span class='muted'>— add a place or write a review to help "

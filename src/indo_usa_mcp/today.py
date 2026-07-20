@@ -56,6 +56,36 @@ def daily_nugget(today: _dt.date | None = None) -> dict | None:
         return None
 
 
+# ------------------------------------------------------------------ popular-near-you fallback
+def popular_near(city: str | None, state: str | None = None, limit: int = 6) -> list[dict]:
+    """Top community-rated listings in a city, across reviewable verticals — the fallback for the
+    'new places' section so Today is never empty in a thin/quiet city. Never raises."""
+    if not city:
+        return []
+    try:
+        from . import reviews, verticals
+        from . import db
+        out: list[dict] = []
+        for v in reviews.REVIEWABLE:
+            try:
+                rows = db.query(
+                    f"SELECT id, name, community_rating, community_rating_count FROM {verticals._table(v)} "
+                    f"WHERE deleted_at IS NULL AND is_active AND lower(city) = lower(%s) "
+                    f"AND community_rating_count > 0 "
+                    f"ORDER BY community_rating DESC NULLS LAST, community_rating_count DESC LIMIT %s",
+                    (city, limit))
+            except Exception:
+                continue
+            for r in rows:
+                out.append({"vertical": v, "id": r["id"], "name": r["name"],
+                            "rating": float(r["community_rating"]) if r.get("community_rating") else None,
+                            "rating_count": int(r.get("community_rating_count") or 0)})
+        out.sort(key=lambda x: (x["rating"] or 0, x["rating_count"]), reverse=True)
+        return out[:limit]
+    except Exception:
+        return []
+
+
 # ------------------------------------------------------------------ the feed
 def assemble(*, city: str | None = None, state: str | None = None, languages: list[str] | None = None,
              lat: float | None = None, lng: float | None = None,
@@ -101,7 +131,7 @@ def assemble(*, city: str | None = None, state: str | None = None, languages: li
     except Exception:
         out["movies"] = []
 
-    # Places newly added in the viewer's city
+    # Places newly added in the viewer's city; fall back to top-rated nearby so it's never empty.
     try:
         if city:
             from .telegram_bot import _recent_listings
@@ -110,15 +140,23 @@ def assemble(*, city: str | None = None, state: str | None = None, languages: li
             out["new_places"] = []
     except Exception:
         out["new_places"] = []
+    out["popular"] = popular_near(city, state, limit=6) if not out["new_places"] else []
 
     out["nugget"] = daily_nugget(today)
 
     # Trending community questions (Ask-the-community, Phase 3)
     try:
         from . import qa
-        out["questions"] = qa.trending(limit=4) if qa.enabled() else []
+        if qa.enabled():
+            out["questions"] = qa.trending(limit=4)
+            # "Help answer this": one unanswered question the viewer could answer today. Deterministic
+            # by day so it's stable across a day's page loads. Never just the festival line.
+            un = qa.unanswered(limit=20)
+            out["help_answer"] = un[today.toordinal() % len(un)] if un else None
+        else:
+            out["questions"], out["help_answer"] = [], None
     except Exception:
-        out["questions"] = []
+        out["questions"], out["help_answer"] = [], None
     return out
 
 
@@ -149,6 +187,15 @@ def render_digest_text(feed: dict, base_url: str) -> str:
     if np and feed.get("city"):
         lines += ["", f"🆕 New in {feed['city']}:"]
         lines += [f"• {p['name']} ({p['vertical']})" for p in np[:6]]
+    pop = feed.get("popular") or []
+    if pop and feed.get("city"):
+        lines += ["", f"⭐ Popular in {feed['city']}:"]
+        lines += [f"• {p['name']} ({p['vertical']})"
+                  + (f" — {p['rating']:.1f}★" if p.get("rating") else "") for p in pop[:6]]
+    ha = feed.get("help_answer")
+    if ha:
+        lines += ["", "🙋 Help a neighbor — answer this:",
+                  f"• {ha['title']}  {base}/q/{ha['slug']}"]
     qs = feed.get("questions") or []
     if qs:
         lines += ["", "💬 Community questions:"]

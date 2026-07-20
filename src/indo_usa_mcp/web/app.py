@@ -7,14 +7,14 @@ from starlette.middleware import Middleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from ..config import settings
-from . import (admin, admin_content, api, chat, errors, landing, me, pages, portal, public,
-               qa_web, reviews, today_web)
+from . import (admin, admin_content, api, chat, community_web, errors, landing, me, pages, portal,
+               public, qa_web, reviews, today_web)
 from .pageviews import PageviewMiddleware
 from .security import SecurityHeadersMiddleware
 
 routes = [*public.routes, *chat.routes, *landing.routes, *admin.routes, *admin_content.routes,
           *portal.routes, *me.routes, *today_web.routes, *qa_web.routes, *api.routes, *pages.routes,
-          *reviews.routes, *errors.routes]
+          *reviews.routes, *community_web.routes, *errors.routes]
 
 middleware = [
     Middleware(SecurityHeadersMiddleware),

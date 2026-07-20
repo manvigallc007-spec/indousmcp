@@ -225,3 +225,40 @@ def contributor_stats(email: str) -> dict[str, Any]:
             else "🌱 New Contributor" if points > 0 else "")
     return {"added": added, "pending": pending, "flyers": flyers, "reviews": reviews,
             "asked": asked, "answered": answered, "saved": saved, "points": points, "tier": tier}
+
+
+def profile_by_code(code: str) -> dict | None:
+    """Public-profile lookup by the member's share code (their referral_code doubles as a handle)."""
+    code = (code or "").strip()
+    if not code:
+        return None
+    return db.query_one("SELECT email, display_name, home_city, home_state, referral_code, created_at "
+                        "FROM user_profiles WHERE referral_code = %s", (code,))
+
+
+def leaderboard(city: str | None = None, state: str | None = None, limit: int = 20) -> list[dict]:
+    """Top contributors by points, optionally scoped to a city/state. Computes contributor_stats over
+    candidate members (those with a profile) and ranks by points>0 — turns the private tier into social
+    proof. Candidate set is bounded so this stays cheap at our scale."""
+    where, params = [], []
+    if city:
+        where.append("lower(home_city) = lower(%s)")
+        params.append(city)
+    if state:
+        where.append("upper(home_state) = upper(%s)")
+        params.append(state)
+    clause = (" WHERE " + " AND ".join(where)) if where else ""
+    cands = db.query(
+        f"SELECT email, display_name, referral_code, home_city, home_state FROM user_profiles"
+        f"{clause} ORDER BY updated_at DESC LIMIT 500", tuple(params))
+    ranked: list[dict] = []
+    for c in cands:
+        st = contributor_stats(c["email"])
+        if st["points"] <= 0:
+            continue
+        ranked.append({"display_name": c.get("display_name"), "code": c.get("referral_code"),
+                       "home_city": c.get("home_city"), "home_state": c.get("home_state"),
+                       "points": st["points"], "tier": st["tier"], "added": st["added"],
+                       "reviews": st["reviews"], "answered": st["answered"]})
+    ranked.sort(key=lambda r: r["points"], reverse=True)
+    return ranked[:limit]

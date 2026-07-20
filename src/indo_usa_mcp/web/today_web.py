@@ -70,13 +70,30 @@ def _render(feed: dict, *, signed_in: bool, has_city: bool) -> str:
         parts.append(_section("🎬 Indian movies in theaters",
                               rows + "<p><a href='/movies'>All movies + showtimes →</a></p>"))
 
-    # New places in your city
+    # New places in your city; else the top-rated fallback so the section is never empty
     np = feed.get("new_places") or []
     if np:
         rows = "".join(
             f"<div class='lc'>{_esc(p['name'])} "
             f"<span class='muted'>· {_esc(_label(p['vertical']))}</span></div>" for p in np)
         parts.append(_section(f"🆕 New in {_esc(feed.get('city'))}", rows))
+    else:
+        pop = feed.get("popular") or []
+        if pop:
+            rows = "".join(
+                f"<div class='lc'><a href='/listing/{p['vertical']}/{p['id']}'>{_esc(p['name'])}</a> "
+                f"<span class='muted'>· {_esc(_label(p['vertical']))}"
+                + (f" · {p['rating']:.1f}★" if p.get("rating") else "") + "</span></div>" for p in pop)
+            parts.append(_section(f"⭐ Popular in {_esc(feed.get('city'))}", rows))
+
+    # Help answer this — one unanswered question the viewer could answer today
+    ha = feed.get("help_answer")
+    if ha:
+        parts.append(_section(
+            "🙋 Help a neighbor",
+            f"<div class='lc'><a href='/q/{_esc(ha['slug'])}'>{_esc(ha['title'])}</a> "
+            "<span class='muted'>· no answers yet</span></div>"
+            "<p><a href='/questions'>Answer this →</a></p>"))
 
     # Trending community questions
     qs = feed.get("questions") or []

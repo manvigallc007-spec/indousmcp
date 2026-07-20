@@ -53,8 +53,9 @@ def test_drain_delivers_via_email_and_stamps_sent(monkeypatch):
         accounts.upsert_profile(_ASKER, notify_email=True, notify_web=False)
         notify.enqueue(_ASKER, "Hello", "body", url="/me", kind="generic", dedupe_key="zzt-drain-1")
         out = notify.drain()
-        assert out["sent"] == 1 and sent
-        assert notify.drain()["sent"] == 0                          # already stamped -> nothing left
+        assert out["sent"] >= 1 and sent                            # our row delivered (count is global)
+        row = next(r for r in notify.recent_for(_ASKER) if r["kind"] == "generic")
+        assert row["sent_at"] is not None                          # stamped, won't re-send
     finally:
         db.execute("DELETE FROM notifications WHERE dedupe_key='zzt-drain-1'")
         _clean()

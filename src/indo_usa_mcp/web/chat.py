@@ -641,23 +641,40 @@ def chat_page(request: Request) -> HTMLResponse:
     chips = "".join(f"<button class='chip' onclick=\"ask(this.textContent)\">{html.escape(s)}</button>"
                     for s in _SUGGESTIONS)
     base = settings.public_web_url.rstrip("/")
-    # Festival countdown strip in the hero (links to the /festivals page). Empty when none upcoming.
+    # "Today" strip in the hero: festival countdown + one upcoming event + one community question.
+    # A daily-habit hook right on the homepage; each pill links deeper. Degrades to empty gracefully.
+    def _pill(href: str, inner: str) -> str:
+        return (f"<a href='{href}' style='display:inline-block;background:#fff3dc;"
+                "border:1px solid #ffd9a0;border-radius:999px;padding:7px 15px;margin:2px 4px 6px 0;"
+                f"color:#b4530f;font-weight:600;font-size:14px;text-decoration:none'>{inner}</a>")
+    _pills = []
     try:
         from .. import festivals
         _nf = festivals.next_festival()
         if _nf:
             _d = _nf["days_until"]
             _when = "today! 🎉" if _d == 0 else ("tomorrow" if _d == 1 else f"in {_d} days")
-            festival_html = (
-                "<a href='/today' style='display:inline-block;background:#fff3dc;"
-                "border:1px solid #ffd9a0;border-radius:999px;padding:7px 15px;margin:2px 0 8px;"
-                "color:#b4530f;font-weight:600;font-size:14px;text-decoration:none'>"
-                f"{html.escape(_nf['emoji'])} <b>{html.escape(_nf['name'])}</b> is {_when} · "
-                "see today →</a>")
-        else:
-            festival_html = ""
+            _pills.append(_pill(
+                "/today", f"{html.escape(_nf['emoji'])} <b>{html.escape(_nf['name'])}</b> is {_when}"))
     except Exception:
-        festival_html = ""
+        pass
+    try:
+        from ..events import queries as eq
+        _ev = eq.get_indian_events(limit=1).get("results", [])
+        if _ev:
+            _pills.append(_pill("/events", f"📅 {html.escape((_ev[0].get('name') or '')[:44])}"))
+    except Exception:
+        pass
+    try:
+        from .. import qa
+        if qa.enabled():
+            _tq = qa.trending(limit=1)
+            if _tq:
+                _pills.append(_pill(f"/q/{html.escape(_tq[0]['slug'])}",
+                                    f"💬 {html.escape((_tq[0]['title'] or '')[:44])}"))
+    except Exception:
+        pass
+    festival_html = (f"<div style='margin:2px 0 8px'>{''.join(_pills)}</div>" if _pills else "")
     flyerbtn_html = (
         '<button class="micbtn" id="flyerbtn" type="button" onclick="document.getElementById(\'flyerfile\').click()" '
         'title="Upload an event or business flyer" aria-label="Upload a flyer">📎</button>'
