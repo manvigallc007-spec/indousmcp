@@ -50,6 +50,44 @@ def active_posts(vertical: str, listing_id: int) -> list[dict]:
         (vertical, listing_id))
 
 
+def live_offers(city: str | None = None, state: str | None = None, vertical: str | None = None,
+                limit: int = 20) -> list[dict]:
+    """Current, non-expired owner posts across all listings, joined to the listing (name/city/state),
+    optionally filtered by city/state/vertical. Powers the get_offers MCP tool + any 'deals near me'
+    surface. Newest first. Only reviewable verticals carry listings; unknown filters return []."""
+    from . import verticals
+    verts = [vertical] if vertical else [v for v in verticals.VERTICALS if v != "events"]
+    verts = [v for v in verts if v in verticals.VERTICALS]
+    out: list[dict] = []
+    for v in verts:
+        try:
+            conds = ["p.status='active'", "(p.expires_at IS NULL OR p.expires_at > now())"]
+            params: list[Any] = []
+            if city:
+                conds.append("lower(l.city) = lower(%s)")
+                params.append(city)
+            if state:
+                conds.append("upper(l.state) = upper(%s)")
+                params.append(state)
+            params.append(limit)
+            rows = db.query(
+                f"SELECT p.id, p.kind, p.title, p.body, p.created_at, p.expires_at, "
+                f"       l.id AS listing_id, l.name, l.city, l.state "
+                f"FROM owner_posts p JOIN {verticals._table(v)} l "
+                f"  ON l.id = p.listing_id AND p.vertical = %s "
+                f"WHERE l.deleted_at IS NULL AND l.is_active AND {' AND '.join(conds)} "
+                f"ORDER BY p.created_at DESC LIMIT %s", (v, *params))
+        except Exception:
+            continue
+        for r in rows:
+            out.append({"title": r["title"], "body": r.get("body"), "kind": r["kind"], "vertical": v,
+                        "listing_id": r["listing_id"], "name": r["name"], "city": r.get("city"),
+                        "state": r.get("state"), "created_at": str(r["created_at"]),
+                        "expires_at": str(r["expires_at"]) if r.get("expires_at") else None})
+    out.sort(key=lambda x: x["created_at"], reverse=True)
+    return out[:limit]
+
+
 def owner_posts(vertical: str, listing_id: int, owner_email: str) -> list[dict]:
     """All of an owner's posts for a listing (for the manage view — includes expired)."""
     return db.query(

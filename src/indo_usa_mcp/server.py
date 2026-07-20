@@ -47,6 +47,7 @@ def get_indian_restaurants(
     open_now: bool = False,
     featured_only: bool = False,
     limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Find Indian restaurants by location and/or filters.
 
@@ -54,6 +55,8 @@ def get_indian_restaurants(
     Optional filters: `region_tag` (e.g. "Gujarati", "South Indian"), `dietary_tags`
     (any of "vegetarian", "vegan", "halal", "jain"), `tag` (a keyword/dish like "biryani",
     "dosa", "catering"), `open_now` (only places open at the current time), `featured_only`.
+    Use `offset` (e.g. offset=25 after a limit=25 page) to page further; the response's
+    `has_more` says whether another page exists.
 
     Each record includes a `description`, `tags`, a `confidence_score` (0-1), an `is_featured`
     flag, an `open_now` flag (true/false/null), and `distance_miles` when a point was supplied.
@@ -61,7 +64,7 @@ def get_indian_restaurants(
     return queries.get_indian_restaurants(
         lat=lat, lng=lng, radius_miles=radius_miles, city=city, state=state,
         region_tag=region_tag, dietary_tags=dietary_tags, tag=tag, open_now=open_now,
-        featured_only=featured_only, limit=limit)
+        featured_only=featured_only, limit=limit, offset=offset)
 
 
 @mcp.tool()
@@ -107,12 +110,14 @@ def search_restaurants_by_text(
     city: str | None = None,
     state: str | None = None,
     limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """Free-text search over restaurant name/cuisine/region, ranked by relevance.
 
-    Optionally constrain to a `city`/`state`. Featured listings are surfaced first.
+    Optionally constrain to a `city`/`state`. Featured listings are surfaced first. Use `offset`
+    to page further (the response's `has_more` says whether another page exists).
     """
-    return queries.search_restaurants_by_text(query, city=city, state=state, limit=limit)
+    return queries.search_restaurants_by_text(query, city=city, state=state, limit=limit, offset=offset)
 
 
 # Internal growth/ops tools — these WRITE state (create claims + outreach drafts), so they are
@@ -182,12 +187,15 @@ def get_reviews(vertical: str, listing_id: int, limit: int = 20) -> dict[str, An
     """Published community reviews for a listing (newest first) + its rolled-up community rating.
 
     The community rating is first-party (visitor-submitted) and is separate from any web-harvested
-    `rating` returned by the get_/search_ tools. Returns {'community_rating', 'community_rating_count',
-    'reviews': [{rating, title, body, author, created_at}]}.
+    `rating` returned by the get_/search_ tools. Each review includes the business owner's public reply
+    when they've responded. Returns {'community_rating', 'community_rating_count',
+    'reviews': [{rating, title, body, author, created_at, owner_reply, owner_reply_at}]}.
     """
     summary = reviews.rating_summary(vertical, listing_id)
     items = [{"rating": int(r["rating"]), "title": r.get("title"), "body": r.get("body"),
-              "author": r.get("author_name") or "Anonymous", "created_at": str(r.get("created_at"))}
+              "author": r.get("author_name") or "Anonymous", "created_at": str(r.get("created_at")),
+              "owner_reply": r.get("owner_reply"),
+              "owner_reply_at": str(r["owner_reply_at"]) if r.get("owner_reply_at") else None}
              for r in reviews.list_for_listing(vertical, listing_id, limit=limit)]
     return {**summary, "reviews": items}
 
@@ -860,7 +868,99 @@ def get_today_highlights(city: str = "", state: str = "", languages: str = "") -
             p["created_at"] = str(p["created_at"])
     # Keep the readable highlights; drop internal shapes not useful to an agent.
     return {k: feed.get(k) for k in ("date", "city", "festival", "tithi", "events", "movies",
-                                     "new_places", "nugget", "questions")}
+                                     "new_places", "popular", "help_answer", "nugget", "questions")}
+
+
+@mcp.tool()
+def get_offers(city: str = "", state: str = "", vertical: str = "", limit: int = 20) -> dict[str, Any]:
+    """Live offers & announcements posted by Indian-American business owners (e.g. "20% off thalis this
+    week", "new weekend Garba class"), optionally filtered by city/state/vertical.
+
+    Returns current, non-expired owner posts with the listing they belong to. Great for "any deals near
+    me this week". Returns {'count', 'results': [{title, body, kind, vertical, listing_id, name, city,
+    state, created_at, expires_at}]}.
+    """
+    from . import owner_content
+    rows = owner_content.live_offers(city=(city or "").strip() or None,
+                                     state=(state or "").strip() or None,
+                                     vertical=(vertical or "").strip() or None, limit=limit)
+    return {"count": len(rows), "results": rows}
+
+
+@mcp.tool()
+def ask_community_question(question: str, member_email: str, city: str = "",
+                           vertical: str = "") -> dict[str, Any]:
+    """Ask the Namaste America community a question on behalf of a signed-in member. `member_email` must
+    be the authenticated member's email (not free text) — it attributes the question and guards against
+    spam. Questions are moderated: clean ones publish immediately, others are held for review.
+
+    Returns {'ok', 'id', 'slug', 'status'} or {'ok': False, 'error'}.
+    """
+    from . import qa
+    if not (member_email or "").strip():
+        return {"ok": False, "error": "member_email_required"}
+    return qa.create_question((question or "").strip(), asker_email=member_email.strip().lower(),
+                              city=(city or "").strip() or None, vertical=(vertical or "").strip() or None)
+
+
+@mcp.tool()
+def save_place(member_email: str, vertical: str, listing_id: int) -> dict[str, Any]:
+    """Save a listing to a signed-in member's list. `member_email` must be the authenticated member's
+    email. `vertical` + `listing_id` come from the get_/search_ tools. Returns {'ok', 'name'} or
+    {'ok': False, 'error'}.
+    """
+    from . import accounts
+    if not (member_email or "").strip():
+        return {"ok": False, "error": "member_email_required"}
+    return accounts.save_place(member_email.strip().lower(), vertical, listing_id)
+
+
+@mcp.tool()
+def unsave_place(member_email: str, vertical: str, listing_id: int) -> dict[str, Any]:
+    """Remove a listing from a member's saved list. `member_email` must be the authenticated member's
+    email. Returns {'ok': True}.
+    """
+    from . import accounts
+    if not (member_email or "").strip():
+        return {"ok": False, "error": "member_email_required"}
+    accounts.unsave_place(member_email.strip().lower(), vertical, listing_id)
+    return {"ok": True}
+
+
+@mcp.tool()
+def list_saved_places(member_email: str, limit: int = 100) -> dict[str, Any]:
+    """A member's saved places (each joined to its live listing). `member_email` must be the
+    authenticated member's email. Returns {'count', 'results': [{vertical, id, name, city, state}]}.
+    """
+    from . import accounts
+    if not (member_email or "").strip():
+        return {"count": 0, "results": [], "error": "member_email_required"}
+    rows = accounts.list_saved(member_email.strip().lower(), limit=limit)
+    return {"count": len(rows), "results": [{k: (str(v) if k == "saved_at" else v)
+                                             for k, v in r.items()} for r in rows]}
+
+
+@mcp.tool()
+def follow_city(member_email: str, city: str) -> dict[str, Any]:
+    """Follow a city so the member is notified of new events there (e.g. "Plano, TX"). `member_email`
+    must be the authenticated member's email. Returns {'ok'} or {'ok': False, 'error'}.
+    """
+    from . import accounts
+    if not (member_email or "").strip():
+        return {"ok": False, "error": "member_email_required"}
+    return accounts.follow(member_email.strip().lower(), "city", (city or "").strip())
+
+
+@mcp.tool()
+def list_follows(member_email: str) -> dict[str, Any]:
+    """What a member follows (cities + categories). `member_email` must be the authenticated member's
+    email. Returns {'count', 'results': [{kind, value}]}.
+    """
+    from . import accounts
+    if not (member_email or "").strip():
+        return {"count": 0, "results": [], "error": "member_email_required"}
+    rows = accounts.list_follows(member_email.strip().lower())
+    return {"count": len(rows), "results": [{"kind": r["kind"], "value": r["value"]} for r in rows]}
 
 
 # ---------------------------------------------------- agent traffic analytics

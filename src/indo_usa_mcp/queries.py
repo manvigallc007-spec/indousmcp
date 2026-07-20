@@ -34,10 +34,11 @@ def get_indian_restaurants(
     open_now: bool = False,
     featured_only: bool = False,
     limit: int = 25,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """List active restaurants by geo-radius and/or filters, ranked by proximity decay +
     freshness + Featured (no hard featured-first override). `tag` filters a keyword;
-    `open_now` keeps only places open now."""
+    `open_now` keeps only places open now. `offset` pages the results."""
     extra = []
     if region_tag:
         extra.append(("region_tag = %s", [region_tag]))
@@ -47,7 +48,7 @@ def get_indian_restaurants(
         extra.append((_FEATURED, []))
     point = (lat, lng) if lat is not None and lng is not None else None
     return ranking.geo_list("restaurants", _COLS_SQL, point=point, city=city, state=state,
-                            tag=tag, open_now=open_now, limit=limit,
+                            tag=tag, open_now=open_now, limit=limit, offset=offset,
                             radius_miles=radius_miles, extra_where=extra)
 
 
@@ -74,13 +75,15 @@ def search_restaurants_by_text(
     city: str | None = None,
     state: str | None = None,
     limit: int = 25,
+    offset: int = 0,
     point: tuple[float, float] | None = None,
     precomputed_qvec: str | None = None,
 ) -> dict[str, Any]:
     """Hybrid text search over restaurants (exact-name + keyword + vector + proximity +
-    freshness). See `ranking.text_search`."""
+    freshness). `offset` pages the reranked results. See `ranking.text_search`."""
     return ranking.text_search("restaurants", _COLS_SQL, query_text, city=city, state=state,
-                               point=point, limit=limit, precomputed_qvec=precomputed_qvec)
+                               point=point, limit=limit, offset=offset,
+                               precomputed_qvec=precomputed_qvec)
 
 
 def stats() -> dict[str, Any]:

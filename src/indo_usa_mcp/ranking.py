@@ -223,7 +223,7 @@ def _filters(city, state, extra_where):
 
 def text_search(table: str, cols_sql: str, query: str, *, city: str | None = None,
                 state: str | None = None, point: tuple[float, float] | None = None,
-                limit: int = 25, extra_where: list | None = None,
+                limit: int = 25, offset: int = 0, extra_where: list | None = None,
                 precomputed_qvec: str | None = None,
                 nearest_first: bool | None = None) -> dict[str, Any]:
     """Hybrid text search: relevance candidates (vector or trigram) UNION an exact/keyword
@@ -233,6 +233,7 @@ def text_search(table: str, cols_sql: str, query: str, *, city: str | None = Non
     "show the nearest, distance doesn't matter"): relevance picks the candidates, distance orders
     them, so a wider pool is gathered to avoid missing the genuinely-closest matches. Pass
     `nearest_first=False` to force pure hybrid-relevance ordering."""
+    offset = max(int(offset), 0)
     near = (point is not None) if nearest_first is None else nearest_first
     # An explicit "best/top-rated" request ranks by quality (rating-weighted score), not pure
     # distance — proximity still contributes to the score, so it's "best among the nearby ones".
@@ -241,7 +242,9 @@ def text_search(table: str, cols_sql: str, query: str, *, city: str | None = Non
     where, params = _filters(city, state, extra_where)
     where_sql = " AND ".join(where)
     cand: dict[Any, dict] = {}
-    n_cand = 300 if (near and point) else _CANDIDATES  # wider net when ordering by distance
+    # Widen the candidate net when paging so an agent can reach offset+limit within the reranked pool.
+    n_cand = 300 if (near and point) else _CANDIDATES
+    n_cand = max(n_cand, offset + limit)
 
     if embeddings.enabled():
         qvec = precomputed_qvec or embeddings.to_vector_literal(embeddings.embed(query))
@@ -263,17 +266,21 @@ def text_search(table: str, cols_sql: str, query: str, *, city: str | None = Non
     for r in db.query(kw, [query, *params, f"%{query}%", [query.lower()]]):
         cand.setdefault(r["id"], r)  # keep vector match_score if already present
 
-    results = rerank(list(cand.values()), query, point, nearest_first=near)[:limit]
-    return {"count": len(results), "query": query, "ranking": ranking, "results": results}
+    ranked = rerank(list(cand.values()), query, point, nearest_first=near)
+    results = ranked[offset:offset + limit]
+    return {"count": len(results), "query": query, "ranking": ranking, "results": results,
+            "offset": offset, "has_more": len(ranked) > offset + limit}
 
 
 def geo_list(table: str, cols_sql: str, *, point: tuple[float, float] | None = None,
              city: str | None = None, state: str | None = None, tag: str | None = None,
-             open_now: bool = False, limit: int = 25, radius_miles: float = 150.0,
+             open_now: bool = False, limit: int = 25, offset: int = 0, radius_miles: float = 150.0,
              extra_where: list | None = None) -> dict[str, Any]:
     """Geo/filter listing ordered NEAREST-FIRST when a point is given (distance doesn't matter —
     show the closest). `radius_miles` is a generous prefilter (default 150) so we don't pull the
-    whole table, not a hard 'too far' cutoff; pass a smaller value to bound it tightly."""
+    whole table, not a hard 'too far' cutoff; pass a smaller value to bound it tightly.
+    `offset` pages through the reranked results (agents can fetch limit, then offset=limit for more)."""
+    offset = max(int(offset), 0)
     ew = list(extra_where or [])
     if tag:
         ew.append(("tags @> %s", [[tag.lower()]]))
@@ -282,13 +289,16 @@ def geo_list(table: str, cols_sql: str, *, point: tuple[float, float] | None = N
         deg = radius_miles / 69.0
         where.append("lat BETWEEN %s AND %s AND lng BETWEEN %s AND %s")
         params += [point[0] - deg, point[0] + deg, point[1] - deg * 1.5, point[1] + deg * 1.5]
+    pool = max(limit * 12, 400, offset + limit)
     sql = f"SELECT {cols_sql} FROM {table} WHERE {' AND '.join(where)} LIMIT %s"
-    rows = db.query(sql, params + [max(limit * 12, 400)])
+    rows = db.query(sql, params + [pool])
 
     if point:
         rows = [r for r in rows if r.get("lat") is not None and r.get("lng") is not None]
     hours.annotate(rows)
     if open_now:
         rows = [r for r in rows if r.get("open_now")]
-    results = rerank(rows, "", point, nearest_first=bool(point))[:limit]
-    return {"count": len(results), "results": results}
+    ranked = rerank(rows, "", point, nearest_first=bool(point))
+    results = ranked[offset:offset + limit]
+    return {"count": len(results), "results": results,
+            "offset": offset, "has_more": len(ranked) > offset + limit}
