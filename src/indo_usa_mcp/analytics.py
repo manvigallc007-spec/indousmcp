@@ -117,6 +117,102 @@ def listing_metrics(vertical: str, record_id: int, days: int = 30) -> dict[str, 
     return out
 
 
+def _db_today():
+    """The database server's current_date, so daily-series buckets align with the SQL aggregates
+    (Postgres current_date can differ from the app host's local date across timezones/midnight)."""
+    import datetime
+    try:
+        row = db.query_one("SELECT current_date AS d")
+        return row["d"] if row else datetime.date.today()
+    except Exception:
+        return datetime.date.today()
+
+
+def _fill_series(rows: list[dict], days: int) -> list[int]:
+    import datetime
+    today = _db_today()
+    by_day = {r["day"]: int(r["n"]) for r in rows}
+    return [by_day.get(today - datetime.timedelta(days=days - 1 - i), 0) for i in range(days)]
+
+
+def listing_daily_views(vertical: str, record_id: int, days: int = 30) -> list[int]:
+    """Per-day 'view' counts for a listing over the last `days` (oldest→newest, 0-filled) — feeds an
+    inline sparkline on the owner's page. Never raises."""
+    try:
+        rows = db.query(
+            "SELECT day, sum(count) AS n FROM listing_events "
+            f"WHERE vertical=%s AND record_id=%s AND kind='view' AND day > current_date - {int(days)} "
+            "GROUP BY day", (vertical, record_id))
+    except Exception:
+        return [0] * days
+    return _fill_series(rows, days)
+
+
+def listing_trend(vertical: str, record_id: int, days: int = 30) -> dict[str, Any]:
+    """Views + engagement (call/website/directions taps) this period vs the previous same-length
+    period, with a click-through rate. Powers the owner's 'is it working?' signal."""
+    cur = listing_metrics(vertical, record_id, days)
+    taps = cur["call"] + cur["website"] + cur["directions"]
+    ctr = round(100 * taps / cur["view"]) if cur["view"] else 0
+    # Previous window = the `days` before the current window.
+    prev_view = 0
+    try:
+        row = db.query_one(
+            "SELECT COALESCE(sum(count),0) AS n FROM listing_events "
+            f"WHERE vertical=%s AND record_id=%s AND kind='view' "
+            f"AND day > current_date - {int(days) * 2} AND day <= current_date - {int(days)}",
+            (vertical, record_id))
+        prev_view = int(row["n"]) if row else 0
+    except Exception:
+        pass
+    if prev_view:
+        delta_pct = round(100 * (cur["view"] - prev_view) / prev_view)
+    else:
+        delta_pct = 100 if cur["view"] else 0
+    return {"views": cur["view"], "taps": taps, "ctr": ctr,
+            "prev_views": prev_view, "delta_pct": delta_pct}
+
+
+def conversion_summary(days: int = 30) -> dict[str, int]:
+    """Site-wide view→action funnel across all listings: total views and each tap kind, plus an
+    overall click-through rate. A health signal for the admin traffic page."""
+    out = {"view": 0, "call": 0, "website": 0, "directions": 0}
+    try:
+        for r in db.query(
+            "SELECT kind, sum(count) AS n FROM listing_events "
+            f"WHERE day > current_date - {int(days)} GROUP BY kind"):
+            if r["kind"] in out:
+                out[r["kind"]] = int(r["n"])
+    except Exception:
+        pass
+    taps = out["call"] + out["website"] + out["directions"]
+    out["taps"] = taps
+    out["ctr"] = round(100 * taps / out["view"]) if out["view"] else 0
+    return out
+
+
+def calls_daily(days: int = 30) -> list[int]:
+    """Per-day MCP tool-call counts (oldest→newest, 0-filled) for the admin sparkline."""
+    try:
+        rows = db.query(
+            "SELECT created_at::date AS day, count(*) AS n FROM tool_log "
+            f"WHERE created_at > now() - interval '{int(days)} days' GROUP BY day")
+    except Exception:
+        return [0] * days
+    return _fill_series(rows, days)
+
+
+def pageviews_daily(days: int = 30) -> list[int]:
+    """Per-day first-party pageview counts (oldest→newest, 0-filled) for the admin sparkline."""
+    try:
+        rows = db.query(
+            "SELECT day, sum(count) AS n FROM pageviews "
+            f"WHERE day > current_date - {int(days)} GROUP BY day")
+    except Exception:
+        return [0] * days
+    return _fill_series(rows, days)
+
+
 def top_listings(days: int = 30, limit: int = 15) -> list[dict]:
     return db.query(
         "SELECT vertical, record_id, sum(count) AS impressions FROM impressions "

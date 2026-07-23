@@ -18,7 +18,7 @@ from ..pipeline import outreach
 from .auth import (check_login, create_user, get_user, google_auth_url, google_exchange,
                    make_action_token, portal_email, set_password, set_verified,
                    verify_action_token, verify_captcha, verify_magic_token)
-from .common import _page, captcha_field, esc, state_select
+from .common import _page, captcha_field, esc, sparkline, state_select, trend_badge
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -334,11 +334,13 @@ def dashboard(request: Request) -> HTMLResponse:
         if not x["is_featured"] and settings.featured_for_sale:   # any vertical, not just restaurants
             upgrade = f" · <a href='/upgrade?id={x['id']}&vertical={x['vertical']}'>Get featured</a>"
         reach = analytics.reach_for(x["vertical"], x["id"], days=30)
-        views = analytics.listing_metrics(x["vertical"], x["id"], 30)["view"]
+        tr_ = analytics.listing_trend(x["vertical"], x["id"], 30)
+        badge = trend_badge(tr_["delta_pct"]) if tr_["views"] or tr_["prev_views"] else ""
         rows += (f"<tr><td><a href='/portal/listing/{x['vertical']}/{x['id']}'>{esc(x['name'])}</a></td>"
                  f"<td class='muted'>{x['vertical']}</td>"
                  f"<td>{esc(x['city'])}, {esc(x['state'])}</td>"
-                 f"<td>{reach} <span class='muted'>shown</span> · {views} <span class='muted'>views (30d)</span></td>"
+                 f"<td>{reach} <span class='muted'>shown</span> · {tr_['views']} "
+                 f"<span class='muted'>views (30d)</span> {badge}</td>"
                  f"<td>{status}{upgrade}</td></tr>")
     body = (banner + f"<h2>Your listings</h2><p class='muted'>{esc(email)} · "
             f"<a href='/portal/logout'>sign out</a></p>"
@@ -441,22 +443,38 @@ def listing_manage(request: Request) -> HTMLResponse:
 
     m30 = analytics.listing_metrics(vertical, rec_id, 30)
     m7 = analytics.listing_metrics(vertical, rec_id, 7)
+    trend = analytics.listing_trend(vertical, rec_id, 30)
+    spark = sparkline(analytics.listing_daily_views(vertical, rec_id, 30), width=260, height=44)
 
     def _stat(label: str, val30: int, val7: int) -> str:
         return ("<div style='display:inline-block;min-width:110px;margin:4px 10px 4px 0;padding:10px 14px;"
                 "border:1px solid #ece6dd;border-radius:12px;text-align:center'>"
                 f"<b style='font-size:22px;display:block;line-height:1.1'>{val30}</b>"
                 f"<span class='muted' style='font-size:12px'>{label}<br>{val7} last 7d</span></div>")
+    # Headline: views with a period-over-period trend, and a click-through rate (taps ÷ views).
+    headline = (
+        "<div style='display:flex;flex-wrap:wrap;gap:20px;align-items:center;margin:8px 0 6px'>"
+        "<div><b style='font-size:30px'>" + str(trend["views"]) + "</b> "
+        f"<span class='muted'>views (30d)</span> {trend_badge(trend['delta_pct'])} "
+        f"<span class='muted' style='font-size:12px'>vs prior 30d ({trend['prev_views']})</span></div>"
+        + (f"<div><b style='font-size:30px'>{trend['ctr']}%</b> "
+           "<span class='muted'>click-through</span><br>"
+           f"<span class='muted' style='font-size:12px'>{trend['taps']} calls/website/directions taps</span></div>")
+        + (f"<div style='margin-left:auto'>{spark}<div class='muted' style='font-size:11px;"
+           "text-align:center'>daily views</div></div>" if spark else "")
+        + "</div>")
     metrics = (
         "<h3>Performance <span class='muted' style='font-size:13px;font-weight:400'>· last 30 days</span></h3>"
-        "<div style='margin:8px 0 4px'>"
+        + headline
+        + "<div style='margin:8px 0 4px'>"
         + _stat("shown", analytics.reach_for(vertical, rec_id, 30), analytics.reach_for(vertical, rec_id, 7))
         + _stat("page views", m30["view"], m7["view"])
         + _stat("calls", m30["call"], m7["call"])
         + _stat("website taps", m30["website"], m7["website"])
         + _stat("directions", m30["directions"], m7["directions"])
         + "</div><p class='muted' style='font-size:12px'>“Shown” = surfaced by search/AI. Views &amp; taps "
-        "are real visits to your public page.</p>")
+        "are real visits to your public page. Click-through = how many viewers then called, tapped your "
+        "website, or got directions.</p>")
 
     body = (f"<h2>{esc(rec['name'])}</h2>"
             f"<p class='muted'><a href='/portal/edit/{vertical}/{rec_id}'>Edit details</a> · "

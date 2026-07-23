@@ -17,9 +17,9 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 from starlette.routing import Route
 
-from .. import db, tags as tagsmod, verticals
+from .. import db, hours, tags as tagsmod, verticals
 from ..config import settings
-from . import i18n, seo
+from . import i18n, seo, staticmap
 from .chat import _CAT_BLURB, _CAT_COLOR, _CAT_ICON
 from .common import analytics_tag, partner_bar, share_html
 
@@ -172,12 +172,33 @@ def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200,
  .chips{{display:flex;flex-wrap:wrap;gap:9px;margin:16px 0}}
  .chip{{background:#fff;border:1px solid #e2e0dd;border-radius:999px;padding:8px 13px;font-size:14px}}
  .fbar{{background:#fff;border:1px solid #ececec;border-radius:14px;padding:12px 14px;margin:14px 0;
-   display:flex;flex-wrap:wrap;gap:14px;align-items:center}}
+   display:flex;flex-wrap:wrap;gap:12px;align-items:center;position:sticky;top:8px;z-index:20;
+   box-shadow:0 2px 10px rgba(16,24,40,.05)}}
  .fgrp{{display:flex;flex-wrap:wrap;gap:7px;align-items:center}}
  .flabel{{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#98a2b3;font-weight:700;margin-right:2px}}
  .fbar .chip{{padding:5px 11px;font-size:13px;cursor:pointer}}
+ .fsearch{{display:flex;align-items:center;gap:0;margin:0;flex:1 1 220px;min-width:180px}}
+ .fsearch input{{flex:1;border:1px solid #e2e0dd;border-radius:9px 0 0 9px;border-right:0;
+   padding:8px 12px;font:inherit;font-size:14px;min-width:0}}
+ .fsearch button{{border:1px solid #e2e0dd;border-radius:0 9px 9px 0;background:#faf7f3;
+   padding:8px 12px;cursor:pointer;font-size:15px}}
  .fsort{{display:inline-flex;align-items:center;gap:6px;margin:0}}
  .fsort select{{border:1px solid #e2e0dd;border-radius:8px;padding:6px 9px;font:inherit;font-size:13px;background:#fff}}
+ .rcount{{color:#4b5563;font-size:14px;margin:12px 0 6px}}
+ .rcount b{{color:#1f2430}}
+ .opennow{{color:#0f8a4f;font-weight:600;font-size:13px}}
+ @media(max-width:640px){{.fbar{{position:static;gap:10px}} .fsearch{{flex:1 1 100%}}}}
+ .shero{{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 20px;align-items:stretch}}
+ .shero input{{border:1px solid #dcd9d4;border-radius:10px;padding:12px 14px;font:inherit;font-size:15px}}
+ .shero input[name=q]{{flex:2 1 260px;min-width:0}}
+ .shero-city{{flex:1 1 140px;min-width:0}}
+ .shero button{{border:0;border-radius:10px;padding:12px 18px;font:inherit;font-size:15px;font-weight:600;
+   cursor:pointer;background:{_BRAND};color:#fff}}
+ .shero-near{{background:#fff !important;color:{_BRAND} !important;border:1px solid #dcd9d4 !important}}
+ .vtag{{font-size:12px;font-weight:600;color:#7a6a58;background:#f3efe9;border-radius:999px;
+   padding:2px 9px;vertical-align:middle}}
+ @media(max-width:640px){{.shero input,.shero button{{flex:1 1 100%}}}}
+{staticmap.CSS}
  .lc{{background:#fff;border:1px solid #ececec;border-left:4px solid {_BRAND};border-radius:12px;
    padding:14px 16px;margin:10px 0;transition:.15s}}
  .lc:hover{{transform:translateY(-2px);box-shadow:0 10px 24px rgba(16,24,40,.08);border-color:#e0dcd5}}
@@ -200,11 +221,127 @@ def _label(v: str) -> str:
     return verticals.VERTICALS.get(v, {}).get("label", v)
 
 
+# ---------------------------------------------------------------- top search / near-me
+def _search_hero(q: str = "", city: str = "", state: str = "") -> str:
+    """The prominent search box + 'near me' button shown atop /browse and /find, so users can jump
+    straight to results instead of drilling category → state → city."""
+    return (
+        "<form method='get' action='/find' class='shero'>"
+        f"<input type='search' name='q' value='{html.escape(q)}' "
+        "placeholder='Search restaurants, temples, doctors, groceries…' aria-label='Search'>"
+        f"<input type='text' name='city' value='{html.escape(city)}' placeholder='City (optional)' "
+        "class='shero-city' aria-label='City'>"
+        f"<input type='hidden' name='state' value='{html.escape(state)}'>"
+        "<button type='submit'>Search</button>"
+        "<button type='button' class='shero-near' id='nearbtn'>📍 Near me</button>"
+        "</form>"
+        "<script>(function(){var b=document.getElementById('nearbtn');if(!b||!navigator.geolocation)"
+        "{if(b)b.style.display='none';return;}b.addEventListener('click',function(){"
+        "b.textContent='📍 Locating…';navigator.geolocation.getCurrentPosition(function(p){"
+        "location.href='/find?lat='+p.coords.latitude.toFixed(4)+'&lng='+p.coords.longitude.toFixed(4);"
+        "},function(){b.textContent='📍 Near me';alert('Location unavailable — search by city instead.');});"
+        "});})();</script>")
+
+
+def _mixed_cards(rows: list[dict]) -> str:
+    """Compact cards for a mixed-vertical result set (each row tagged with its `vertical`)."""
+    out = ""
+    for r in rows:
+        v = r.get("vertical") or "restaurants"
+        loc = ", ".join(x for x in ((r.get("city") or "").title(), (r.get("state") or "").upper()) if x)
+        dist = (f" · {r['distance_miles']:.1f} mi" if r.get("distance_miles") is not None else "")
+        rating = r.get("community_rating") or r.get("rating")
+        rate = f" · ★ {float(rating):.1f}" if rating else ""
+        openb = " · <span class='opennow'>● Open now</span>" if r.get("open_now") is True else ""
+        links = " · ".join(x for x in (
+            (f"<a href='{html.escape(r['website'])}' rel='nofollow'>Website</a>" if r.get("website") else ""),
+            (f"<a href='tel:{html.escape(r['phone'])}'>{html.escape(r['phone'])}</a>" if r.get("phone") else ""),
+        ) if x)
+        out += (f"<div class='lc'><h3><a href='/listing/{v}/{r['id']}'>{html.escape(r['name'])}</a> "
+                f"<span class='vtag'>{html.escape(_label(v))}</span></h3>"
+                f"<div class='meta'>{html.escape(loc)}{dist}{rate}{openb}</div>"
+                + (f"<p>{html.escape((r.get('description') or '')[:160])}</p>" if r.get("description") else "")
+                + (f"<div class='meta'>{links} · <a href='/listing/{v}/{r['id']}'>Details →</a></div>"
+                   if links else f"<div class='meta'><a href='/listing/{v}/{r['id']}'>Details →</a></div>")
+                + "</div>")
+    return out
+
+
+_NEARME_VERTICALS = ["restaurants", "groceries", "temples", "sweets", "salons", "professionals"]
+
+
+def _near_me(lat: float, lng: float, limit: int = 24) -> list[dict]:
+    """Discovery when there's no query: nearest listings across a few popular verticals, merged and
+    sorted by distance. Reuses each vertical's get_indian_* geo query."""
+    merged: list[dict] = []
+    for v in _NEARME_VERTICALS:
+        fn = getattr(verticals.VERTICALS.get(v, {}).get("queries"), f"get_indian_{v}", None)
+        if not fn:
+            continue
+        try:
+            for r in fn(lat=lat, lng=lng, radius_miles=25.0, limit=8).get("results", []):
+                r.setdefault("vertical", v)
+                merged.append(r)
+        except Exception:
+            continue
+    merged.sort(key=lambda r: r.get("distance_miles") if r.get("distance_miles") is not None else 1e9)
+    return merged[:limit]
+
+
+def find_page(request: Request) -> HTMLResponse:
+    """Cross-vertical search results + 'near me' discovery — the fast path that skips the drill-down."""
+    qp = request.query_params
+    q = (qp.get("q") or "").strip()
+    city = (qp.get("city") or "").strip()
+    state = (qp.get("state") or "").strip()
+    try:
+        lat = float(qp["lat"]) if qp.get("lat") else None
+        lng = float(qp["lng"]) if qp.get("lng") else None
+    except (ValueError, TypeError):
+        lat = lng = None
+    # Resolve a friendly place name for the "near me" header.
+    if lat is not None and lng is not None and not city:
+        try:
+            from .. import geocode
+            city, _st = geocode.city_state(lat, lng)
+            city = city or ""
+        except Exception:
+            pass
+
+    if q:
+        res = verticals.search_all(q, city=city or None, state=state or None, lat=lat, lng=lng, limit=30)
+        rows = res.get("results", [])
+        heading = f"Results for “{html.escape(q)}”" + (f" in {html.escape(city)}" if city else "")
+    elif lat is not None and lng is not None:
+        rows = _near_me(lat, lng)
+        heading = "Near you" + (f" · {html.escape(city)}" if city else "")
+    else:
+        rows = []
+        heading = "Search Indian America"
+
+    hero = _search_hero(q, city, state)
+    if q or (lat is not None):
+        count = (f"<p class='rcount'><b>{len(rows)}</b> result{'s' if len(rows) != 1 else ''}</p>"
+                 if rows else "<p class='muted'>No matches. Try a broader keyword or "
+                              "<a href='/browse'>browse by category</a>.</p>")
+        # Mixed-vertical rows each carry their own `vertical`; the map links each pin correctly.
+        count += staticmap.render(rows, "restaurants", title=heading) if rows else ""
+        cards = _mixed_cards(rows)
+    else:
+        count, cards = "", f"{category_grid()}"
+    body = (f"<h1>{heading}</h1>{hero}{count}{cards}"
+            "<p style='margin-top:14px'><a class='cta' href='/chat'>Ask Dost to help find it →</a></p>")
+    return _page(f"Search · {settings.platform_name}",
+                 "Search Indian restaurants, temples, groceries, doctors and more near you across the USA.",
+                 body, canonical=f"{_base()}/find", noindex=True)
+
+
 # ---------------------------------------------------------------- browse indexes
 def browse_root(request: Request) -> HTMLResponse:
     tr = i18n.t(request)
     body = (f"<div class='bhero'><h1>{html.escape(tr['browse'])}</h1>"
             f"<p>{html.escape(tr['browse_intro'])}</p></div>"
+            f"{_search_hero()}"
             f"{category_grid()}"
             "<p style='margin-top:6px;display:flex;gap:10px;flex-wrap:wrap'>"
             "<a class='cta' href='/events'>📅 Upcoming events &amp; festivals →</a>"
@@ -266,7 +403,7 @@ _SORTS = {
 
 
 def _listings(v: str, state: str, city: str, *, region=None, lang=None, diet=None, min_rating=None,
-              q=None, sort: str = "best", limit: int = 200) -> list[dict]:
+              q=None, open_now=False, sort: str = "best", limit: int = 200) -> list[dict]:
     table = verticals._table(v)
     where = ["deleted_at IS NULL", "is_active", "LOWER(state) = LOWER(%s)", "LOWER(city) = LOWER(%s)"]
     params: list = [state, city]
@@ -279,19 +416,27 @@ def _listings(v: str, state: str, city: str, *, region=None, lang=None, diet=Non
     if min_rating:
         where.append(f"{_RATING_EXPR} >= %s"); params.append(min_rating)
     if q:
-        where.append("name ILIKE %s"); params.append(f"%{q}%")
+        # match on name OR any tag, so "biryani"/"catering" work as keyword search, not just names
+        where.append("(name ILIKE %s OR EXISTS (SELECT 1 FROM unnest(tags) tt WHERE tt ILIKE %s))")
+        params += [f"%{q}%", f"%{q}%"]
     order = _SORTS.get(sort, _SORTS["best"])
     # Vertical-specific facet columns (cuisine_type, religion, ...) if this table has them -- needed
     # for the data-derived meta-description clause (seo.top_facets); the base column list is generic
     # across every vertical, so these aren't in it otherwise.
     facet_cols = seo.facet_select_cols(verticals._table_columns(table))
     facet_sel = ("," + ",".join(facet_cols)) if facet_cols else ""
-    return db.query(
+    # Over-fetch a little when filtering to "open now", since that's applied after hours annotation.
+    fetch = limit * 3 if open_now else limit
+    rows = db.query(
         f"SELECT id, name, address_full, city, state, lat, lng, phone, website, description, tags, "
         f"languages, is_claimed, rating, rating_count, community_rating, community_rating_count, "
-        f"photo_url{facet_sel}, {_FEATURED} AS is_featured "
+        f"photo_url, hours_json{facet_sel}, {_FEATURED} AS is_featured "
         f"FROM {table} WHERE {' AND '.join(where)} "
-        f"ORDER BY {order} LIMIT %s", params + [limit])
+        f"ORDER BY {order} LIMIT %s", params + [fetch])
+    hours.annotate(rows)                                    # adds an `open_now` flag from hours_json
+    if open_now:
+        rows = [r for r in rows if r.get("open_now")]
+    return rows[:limit]
 
 
 def _facets(v: str, state: str, city: str) -> dict[str, list]:
@@ -321,9 +466,12 @@ def _filter_qs(current: dict, **changes) -> str:
     return ("?" + "&".join(f"{k}={quote(str(v))}" for k, v in params.items())) if params else ""
 
 
+_FILTER_KEYS = ("region", "lang", "diet", "q", "open", "minr", "sort")
+
+
 def _filter_bar(path: str, facets: dict, current: dict) -> str:
-    """Toggle chips (region / language / dietary) + a sort dropdown. Each chip preserves the other
-    active filters; clicking an active chip clears it."""
+    """A search box + quick toggles (Open now, 4★+) + facet chips (region/language/dietary) + a sort
+    dropdown. Each control preserves the other active filters; clicking an active chip clears it."""
     on = "background:#c1440e;color:#fff;border-color:#c1440e"
 
     def group(key: str, label: str, values: list) -> str:
@@ -337,10 +485,29 @@ def _filter_bar(path: str, facets: dict, current: dict) -> str:
                       + (f" style='{on}'" if active else "") + f">{html.escape(val)}</a>")
         return f"<div class='fgrp'><span class='flabel'>{label}</span>{chips}</div>"
 
-    bar = group("region", "Cuisine/Region", facets["region"]) + group("diet", "Dietary", facets["diet"]) \
-        + group("lang", "Language", facets["lang"])
-    if not bar:
-        return ""
+    # --- keyword search box (preserves other filters via hidden inputs) ---
+    q_hidden = "".join(f"<input type='hidden' name='{k}' value='{html.escape(str(v))}'>"
+                       for k, v in current.items() if v and k != "q")
+    search = (f"<form method='get' class='fsearch'>{q_hidden}"
+              f"<input type='search' name='q' value='{html.escape(current.get('q') or '')}' "
+              f"placeholder='Search name or keyword…' aria-label='Search listings'>"
+              f"<button type='submit' aria-label='Search'>🔎</button></form>")
+
+    # --- quick toggles: Open now, 4★+ ---
+    open_active = bool(current.get("open"))
+    open_href = path + _filter_qs(current, open=None if open_active else "1")
+    rate_active = str(current.get("minr") or "") == "4"
+    rate_href = path + _filter_qs(current, minr=None if rate_active else "4")
+    quick = ("<div class='fgrp'>"
+             f"<a class='chip' href='{html.escape(open_href)}'"
+             + (f" style='{on}'" if open_active else "") + ">🕒 Open now</a>"
+             f"<a class='chip' href='{html.escape(rate_href)}'"
+             + (f" style='{on}'" if rate_active else "") + ">★ 4+ rated</a></div>")
+
+    facet_bar = (group("region", "Cuisine/Region", facets["region"])
+                 + group("diet", "Dietary", facets["diet"])
+                 + group("lang", "Language", facets["lang"]))
+
     hidden = "".join(f"<input type='hidden' name='{k}' value='{html.escape(str(v))}'>"
                      for k, v in current.items() if v and k != "sort")
     opts = "".join(
@@ -349,9 +516,10 @@ def _filter_bar(path: str, facets: dict, current: dict) -> str:
     sort = (f"<form method='get' class='fsort'>{hidden}"
             f"<label class='flabel'>Sort</label>"
             f"<select name='sort' onchange='this.form.submit()'>{opts}</select></form>")
-    clear = (f" <a class='chip' href='{html.escape(path)}'>✕ Clear</a>"
-             if any(current.get(k) for k in ("region", "lang", "diet")) else "")
-    return (f"<div class='fbar'>{bar}<div class='fgrp'>{sort}{clear}</div></div>")
+    has_active = any(current.get(k) for k in ("region", "lang", "diet", "q", "open") ) or rate_active
+    clear = (f" <a class='chip' href='{html.escape(path)}'>✕ Clear all</a>" if has_active else "")
+    return (f"<div class='fbar'>{search}{quick}{facet_bar}"
+            f"<div class='fgrp'>{sort}{clear}</div></div>")
 
 
 def _listing_cards(v: str, rows: list[dict], tr: dict, *, numbered: bool = True) -> tuple[str, list]:
@@ -364,6 +532,8 @@ def _listing_cards(v: str, rows: list[dict], tr: dict, *, numbered: bool = True)
         addr = (r.get("address_full") or "").strip() or loc
         feat = f" <span class='feat'>★ {html.escape(tr['featured'])}</span>" if r.get("is_featured") else ""
         feat += f" <span class='ver'>✓ {html.escape(tr['owner_verified'])}</span>" if r.get("is_claimed") else ""
+        if r.get("open_now") is True:
+            feat += " <span class='opennow'>● Open now</span>"
         links = " · ".join(
             x for x in (
                 (f"<a href='{html.escape(r['website'])}' rel='nofollow'>Website</a>" if r.get("website") else ""),
@@ -427,11 +597,14 @@ def browse_city(request: Request) -> HTMLResponse:
     tr = i18n.t(request)
     qp = request.query_params
     current = {"region": qp.get("region") or None, "lang": qp.get("lang") or None,
-               "diet": qp.get("diet") or None,
+               "diet": qp.get("diet") or None, "q": (qp.get("q") or "").strip() or None,
+               "open": "1" if qp.get("open") else None,
+               "minr": "4" if str(qp.get("minr") or "") == "4" else None,
                "sort": qp.get("sort") if qp.get("sort") in _SORTS else "best"}
-    filtered = any(current.get(k) for k in ("region", "lang", "diet"))
+    filtered = any(current.get(k) for k in ("region", "lang", "diet", "q", "open", "minr"))
     rows = _listings(v, state, city, region=current["region"], lang=current["lang"],
-                     diet=current["diet"], sort=current["sort"])
+                     diet=current["diet"], q=current["q"], open_now=bool(current["open"]),
+                     min_rating=4 if current["minr"] else None, sort=current["sort"])
     label = _label(v)
     loc = f"{city.title()}, {state.upper()}"
     h1 = f"Indian {label} in {loc}"
@@ -463,10 +636,24 @@ def browse_city(request: Request) -> HTMLResponse:
                          "name": h1, "numberOfItems": len(rows), "itemListElement": ld_items})
     best_link = (f" · <a href='/best/{v}/{_slug(state)}/{_slug(city)}'>🏆 Best-rated</a>"
                  if len(rows) >= 3 and not filtered else "")
+    # A human summary of what's applied, so the count is self-explanatory ("12 results matching 'dosa'…")
+    bits = []
+    if current.get("q"):
+        bits.append(f"matching “{html.escape(current['q'])}”")
+    if current.get("open"):
+        bits.append("open now")
+    if current.get("minr"):
+        bits.append("rated 4★+")
+    for k in ("region", "diet", "lang"):
+        if current.get(k):
+            bits.append(html.escape(current[k]))
+    summary = (" · " + ", ".join(bits)) if bits else ""
+    count_line = (f"<p class='rcount'><b>{len(rows)}</b> result{'s' if len(rows) != 1 else ''}{summary}"
+                  f" · <a href='/chat'>{html.escape(tr['ask_picks'])}</a>{best_link}</p>")
+    map_html = staticmap.render(rows, v, title=h1)
     body = (crumbs + _cathead(v) + f"<h1>{html.escape(h1)}</h1>"
-            f"<p class='muted'>{len(rows)} result{'s' if len(rows) != 1 else ''} · "
-            f"<a href='/chat'>{html.escape(tr['ask_picks'])}</a>{best_link}</p>"
-            f"{fbar}{cards}<p><a class='cta' href='/chat'>{html.escape(tr['ask_picks'])} →</a></p>")
+            f"{fbar}{count_line}{map_html}{cards}"
+            f"<p><a class='cta' href='/chat'>{html.escape(tr['ask_picks'])} →</a></p>")
     # A real listing photo is the most clickable share image; fall back to a tailored city card
     # (better than the generic home default) when no listing has one.
     og_img = (next((x.get("photo_url") for x in rows if x.get("photo_url")), None)
@@ -1091,6 +1278,7 @@ def mcp_well_known(request: Request) -> Response:
 
 routes = [
     Route("/browse", browse_root, methods=["GET"]),
+    Route("/find", find_page, methods=["GET"]),
     Route("/events", events_page, methods=["GET"]),
     Route("/festivals", festivals_page, methods=["GET"]),
     Route("/movies", movies_page, methods=["GET"]),

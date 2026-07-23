@@ -15,6 +15,35 @@ def esc(value) -> str:
     return html.escape(str(value)) if value not in (None, "") else ""
 
 
+def sparkline(values: list[int], *, width: int = 120, height: int = 30, color: str = _BRAND) -> str:
+    """A tiny inline-SVG sparkline (area under a line) from a series of ints. No external libraries,
+    so it renders under our CSP. Returns '' for an all-zero/empty series."""
+    if not values or max(values) == 0:
+        return ""
+    n = len(values)
+    hi = max(values)
+    step = width / max(n - 1, 1)
+    pad = 3
+    ih = height - pad * 2
+    pts = [(i * step, pad + ih - (v / hi) * ih) for i, v in enumerate(values)]
+    line = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+    area = f"0,{height} " + line + f" {width},{height}"
+    return (f"<svg viewBox='0 0 {width} {height}' width='{width}' height='{height}' "
+            f"preserveAspectRatio='none' role='img' aria-label='trend'>"
+            f"<polygon points='{area}' fill='{color}' opacity='0.12'/>"
+            f"<polyline points='{line}' fill='none' stroke='{color}' stroke-width='1.5' "
+            f"stroke-linejoin='round'/></svg>")
+
+
+def trend_badge(delta_pct: int) -> str:
+    """A ▲/▼ colored delta badge for a period-over-period percentage change."""
+    if delta_pct > 0:
+        return f"<span style='color:#0f8a4f;font-weight:600'>▲ {delta_pct}%</span>"
+    if delta_pct < 0:
+        return f"<span style='color:#c0392b;font-weight:600'>▼ {abs(delta_pct)}%</span>"
+    return "<span class='muted'>—</span>"
+
+
 # US states + DC + the common territories, as (code, name) — for a consistent state dropdown so the
 # stored value is always a clean 2-letter USPS code (city stays free-text).
 from ..pipeline.clean import _US_STATES as _ST  # full-name -> code

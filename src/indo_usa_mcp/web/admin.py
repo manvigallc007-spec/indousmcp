@@ -15,7 +15,7 @@ from ..events import pipeline as events
 from ..config import settings
 from ..pipeline import ingest, outreach
 from .auth import admin_enabled, login_admin, logout_admin, require_admin
-from .common import _page, admin_page, esc
+from .common import _page, admin_page, esc, sparkline, trend_badge
 
 _VKEYS = list(verticals.VERTICALS)
 
@@ -793,8 +793,6 @@ def traffic_page(request: Request) -> HTMLResponse:
         f"<td class='muted'>{esc(x['last'])}</td></tr>" for x in t["by_tool"])
     client_rows = "".join(
         f"<tr><td>{esc(x['client'])}</td><td>{x['n']}</td></tr>" for x in t["by_client"])
-    day_rows = "".join(f"<tr><td class='muted'>{x['day']}</td><td>{x['n']}</td></tr>"
-                       for x in t["by_day"])
     recent = analytics.recent_calls(40)
     rec_rows = "".join(
         f"<tr><td class='muted'>{esc(c['created_at'])}</td><td>{esc(c['tool'])}</td>"
@@ -802,25 +800,53 @@ def traffic_page(request: Request) -> HTMLResponse:
         f"<td>{c['result_count'] if c['result_count'] is not None else ''}</td></tr>" for c in recent)
     pv = analytics.pageview_summary(days=30)
     pv_top = "".join(f"<tr><td>{esc(p['path'])}</td><td>{p['n']}</td></tr>" for p in pv["top_paths"])
-    pv_day = "".join(f"<tr><td class='muted'>{p['day']}</td><td>{p['n']}</td></tr>" for p in pv["by_day"])
+    pv_spark = sparkline(analytics.pageviews_daily(30), width=280, height=44)
     pv_section = (
         "<h3>Site pageviews <span class='muted'>(first-party — counts even when GA is blocked)</span></h3>"
         f"<div class='cards'><div class='kpi act'><b>{pv['total']}</b><span>pageviews (30d)</span></div>"
-        f"<div class='kpi act'><b>{pv['today']}</b><span>today</span></div></div>"
+        f"<div class='kpi act'><b>{pv['today']}</b><span>today</span></div>"
+        + (f"<div class='kpi act' style='min-width:300px'>{pv_spark}"
+           "<span>daily pageviews (30d)</span></div>" if pv_spark else "") + "</div>"
         "<div style='display:flex;gap:28px;flex-wrap:wrap'>"
         "<div><b>Top pages (30d)</b><table><tr><th>Page</th><th>Views</th></tr>"
-        f"{pv_top or '<tr><td colspan=2 class=muted>No views yet.</td></tr>'}</table></div>"
-        f"<div><b>By day</b><table><tr><th>Day</th><th>Views</th></tr>{pv_day}</table></div></div>")
+        f"{pv_top or '<tr><td colspan=2 class=muted>No views yet.</td></tr>'}</table></div></div>")
 
-    body = (pv_section
+    # View → action funnel across all listings (a health signal + owner-value proof).
+    conv = analytics.conversion_summary(30)
+    conv_section = (
+        "<h3 style='margin-top:30px'>Listing engagement funnel <span class='muted'>(30d)</span></h3>"
+        "<div class='cards'>"
+        f"<div class='kpi'><b>{conv['view']}</b><span>page views</span></div>"
+        f"<div class='kpi'><b>{conv['taps']}</b><span>actions (call/site/directions)</span></div>"
+        f"<div class='kpi act'><b>{conv['ctr']}%</b><span>click-through</span></div>"
+        f"<div class='kpi'><b>{conv['call']}</b><span>calls</span></div>"
+        f"<div class='kpi'><b>{conv['website']}</b><span>website taps</span></div>"
+        f"<div class='kpi'><b>{conv['directions']}</b><span>directions</span></div></div>")
+
+    # "What to add next" teaser — the top unmet-demand searches (full list on the Misses page).
+    misses = analytics.top_misses(days=60, limit=6)
+    miss_rows = "".join(
+        f"<tr><td><b>{esc(m['query'])}</b></td>"
+        f"<td>{esc(', '.join(x for x in (m.get('city'), m.get('state')) if x))}</td>"
+        f"<td>{m['n']}</td></tr>" for m in misses)
+    miss_section = (
+        "<h3 style='margin-top:30px'>What to add next "
+        "<span class='muted'>· top zero-result searches (60d)</span></h3>"
+        + (f"<table><tr><th>Query / filter</th><th>Location</th><th>Misses</th></tr>{miss_rows}</table>"
+           "<p class='muted'><a href='/admin/misses'>Full unmet-demand list →</a></p>"
+           if miss_rows else "<p class='muted'>No unmet-demand searches recorded yet.</p>"))
+
+    calls_spark = sparkline(analytics.calls_daily(30), width=280, height=44)
+    body = (pv_section + conv_section + miss_section
             + "<h3 style='margin-top:30px'>Agent traffic (MCP tools)</h3>"
-            f"<div class='cards'>{cards}</div>"
+            f"<div class='cards'>{cards}"
+            + (f"<div class='kpi' style='min-width:300px'>{calls_spark}"
+               "<span>daily tool calls (30d)</span></div>" if calls_spark else "") + "</div>"
             "<p class='muted'>Every AI-agent call to an MCP tool is logged here. "
             "Client/agent names appear when the agent identifies itself.</p>"
             f"<h3>By tool (30d)</h3><table><tr><th>Tool</th><th>Calls</th><th></th>"
             f"<th>Last</th></tr>{tool_rows or '<tr><td colspan=4 class=muted>No calls yet.</td></tr>'}</table>"
             f"<h3>By agent/client</h3><table><tr><th>Client</th><th>Calls</th></tr>{client_rows}</table>"
-            f"<h3>By day</h3><table><tr><th>Day</th><th>Calls</th></tr>{day_rows}</table>"
             f"<h3>Recent calls</h3><table><tr><th>When</th><th>Tool</th><th>Agent</th>"
             f"<th>Args</th><th>Results</th></tr>{rec_rows}</table>")
 
