@@ -1165,6 +1165,20 @@ class NotificationAgent(Agent):
         return n
 
 
+class NewsAgent(Agent):
+    name = "news"
+    description = ("Refreshes the India/NRI news headlines shown on the homepage portal + /news from the "
+                   "free Google News RSS feeds. No API key; headlines link out to the source. No-op when "
+                   "NEWS_ENABLED=false.")
+    default_interval_s = 3600  # hourly
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from .. import news
+        if not news.enabled():
+            return {"skipped": "disabled"}
+        return news.fetch_and_store()
+
+
 ALL_AGENTS = [
     DiscoveryAgent(),
     ScraperAgent(),
@@ -1231,4 +1245,5 @@ ALL_AGENTS = [
     TelegramDigestAgent(),
     ConsumerDigestAgent(),
     NotificationAgent(),
+    NewsAgent(),
 ]

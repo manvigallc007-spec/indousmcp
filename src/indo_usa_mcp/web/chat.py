@@ -15,6 +15,7 @@ from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, St
 from starlette.routing import Route
 
 from .. import assistant, flyer, verticals
+from . import homeportal
 from ..config import settings
 from .auth import portal_email
 from .common import analytics_tag, partner_bar
@@ -227,10 +228,11 @@ a{color:var(--brand);text-decoration:none}
 .hint{max-width:820px;margin:9px auto 0;text-align:center;color:#98a2b3;font-size:12.5px}
 @media(max-width:680px){.welcome{margin-top:4vh}.welcome h1{font-size:25px}.welcome p{font-size:16px}
  #mic{display:none}.voicebtn{padding:0 14px}}
+__PORTALCSS__
 </style></head><body>
 <header class="topbar">
  <a class="brand" href="/"><img class="brandlogo" src="/logo" alt="__PLAT__"><span><b>__PLAT__</b><i>__PTAG__</i></span></a>
- <nav class="topnav"><a href="/today">☀ Today</a><a href="/questions">💬 Q&amp;A</a><a href="/browse">Browse</a><a href="/me">♥ Saved</a><a href="/for-business">For business</a></nav>
+ <nav class="topnav"><a href="/today">☀ Today</a><a href="/news">📰 News</a><a href="/questions">💬 Q&amp;A</a><a href="/browse">Browse</a><a href="/me">♥ Saved</a><a href="/for-business">For business</a></nav>
  <div class="actions">
   <select id="lang" class="langsel" onchange="setLang(this.value)" aria-label="Language">
    <option value="en">English</option><option value="hi">हिंदी</option><option value="te">తెలుగు</option>
@@ -255,11 +257,12 @@ __PARTNERBAR__
   <p class="voicetip">Hands-free voice — speak in English, हिंदी or తెలుగు</p>
   <a class="browsecat" href="/browse">🗂️ <span class="browselink-t">Browse by category</span></a>
   <p class="browselink" style="margin-top:4px"><a href="/for-business">🏪 <span>List your business free</span></a> · <a href="/about">About __PLAT__</a></p>
+  __PORTAL__
   <footer class="homefoot">
    <p class="disclaim">Free directory for the Indian-from-India community in the USA · information
     only — <a href="/terms">verify before relying</a>.</p>
    <nav class="footnav">
-    <a href="/about">About us</a> · <a href="/for-business">List your business</a> ·
+    <a href="/about">About us</a> · <a href="/news">News</a> · <a href="/for-business">List your business</a> ·
     <a href="/insights">Insights</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> ·
     <a href="/contact">Contact</a> · <a href="/faq">FAQ</a>
    </nav>
@@ -631,6 +634,24 @@ ta.focus();
 </script></body></html>"""
 
 
+_PORTAL_CACHE: dict[str, float | str] = {"html": "", "at": 0.0}
+_PORTAL_TTL = 180  # seconds — the homepage is the busiest page; the portal changes slowly
+
+
+def _portal_html() -> str:
+    """The daily-portal feed below the hero, cached briefly so the busiest page doesn't re-run ~12
+    queries per hit. Never breaks the homepage — any error yields nothing."""
+    now = time.time()
+    if _PORTAL_CACHE["html"] and now - float(_PORTAL_CACHE["at"]) < _PORTAL_TTL:
+        return str(_PORTAL_CACHE["html"])
+    try:
+        html_out = homeportal.render()
+    except Exception:
+        html_out = ""
+    _PORTAL_CACHE["html"], _PORTAL_CACHE["at"] = html_out, now
+    return html_out
+
+
 def chat_page(request: Request) -> HTMLResponse:
     if not assistant.enabled():
         return HTMLResponse("<h2>Chat is disabled.</h2>", status_code=503)
@@ -712,6 +733,8 @@ def chat_page(request: Request) -> HTMLResponse:
         "__TTS__": html.escape(settings.tts_provider),
         "__KEYWORDS__": html.escape(_KEYWORDS),
         "__GA__": analytics_tag(),
+        "__PORTAL__": _portal_html(),
+        "__PORTALCSS__": homeportal.CSS,
     }
     doc = _CHAT_HTML
     for k, v in repl.items():

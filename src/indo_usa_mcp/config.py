@@ -150,6 +150,10 @@ class Settings(BaseSettings):
     # Ask-the-community Q&A. Clean questions/answers auto-publish (same screen as reviews); flagged wait.
     # Dost posts an instant AI answer when the LLM is active. Set QA_ENABLED=false to hide the feature.
     qa_enabled: bool = True
+    # Latest India/NRI news headlines on the homepage portal + /news, aggregated from the free Google
+    # News RSS feeds (no API key). Headlines link out to the source; we never republish full articles.
+    # Set NEWS_ENABLED=false to hide the feature and stop the fetch agent.
+    news_enabled: bool = True
     # Google sign-in for the business-owner portal (optional; magic-link still works without it).
     # Create an OAuth 2.0 Web client at console.cloud.google.com -> APIs & Services -> Credentials.
     # Authorized redirect URI = <PUBLIC_WEB_URL>/portal/google/callback. Secrets via env only.

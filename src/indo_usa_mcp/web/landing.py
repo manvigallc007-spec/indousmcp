@@ -336,6 +336,43 @@ def find_page(request: Request) -> HTMLResponse:
                  body, canonical=f"{_base()}/find", noindex=True)
 
 
+_NEWS_CATS = [("", "All"), ("community", "Community"), ("immigration", "Immigration & visas"),
+              ("india-usa", "India–USA"), ("diaspora", "Diaspora"), ("business", "Business")]
+
+
+def news_page(request: Request) -> HTMLResponse:
+    """Latest India/NRI headlines aggregated from free Google News RSS. Headlines link out to the
+    source; we never republish article bodies."""
+    from .. import news
+    if not news.enabled():
+        return _page("News", "News is unavailable.", "<h1>News</h1><p class='muted'>Not available.</p>",
+                     status=404, noindex=True)
+    cat = (request.query_params.get("cat") or "").strip()
+    rows = news.latest(limit=60, category=cat or None)
+    tabs = "".join(
+        f"<a class='chip' href='/news{('?cat=' + c) if c else ''}'"
+        + (" style='background:#c1440e;color:#fff;border-color:#c1440e'" if cat == c else "")
+        + f">{html.escape(lbl)}</a>" for c, lbl in _NEWS_CATS)
+    items = ""
+    for a in rows:
+        when = a["published_at"].strftime("%b %d, %Y") if hasattr(a.get("published_at"), "strftime") else ""
+        meta = " · ".join(x for x in (html.escape(a.get("source") or ""), when) if x)
+        items += (f"<div class='lc'><h3><a href='{html.escape(a['url'])}' target='_blank' "
+                  f"rel='noopener nofollow'>{html.escape(a['title'])}</a></h3>"
+                  f"<div class='meta'>{meta}</div></div>")
+    body = ("<h1>📰 Latest news for Indians in the USA</h1>"
+            "<p class='muted'>Headlines relevant to Indians from India living in America — community, "
+            "immigration &amp; visas, India–USA relations and more. Tap a headline to read it at the "
+            "source.</p>"
+            f"<div class='chips'>{tabs}</div>"
+            + (items or "<p class='muted'>No headlines yet — check back shortly.</p>")
+            + "<p class='muted' style='margin-top:16px;font-size:12px'>Aggregated from public news feeds "
+            "(Google News). All articles belong to their respective publishers.</p>")
+    return _page(f"Latest India &amp; NRI news · {settings.platform_name}",
+                 "Latest news for Indians from India living in the USA — community, immigration, "
+                 "India–USA relations and business.", body, canonical=f"{_base()}/news")
+
+
 # ---------------------------------------------------------------- browse indexes
 def browse_root(request: Request) -> HTMLResponse:
     tr = i18n.t(request)
@@ -1278,6 +1315,7 @@ def mcp_well_known(request: Request) -> Response:
 
 routes = [
     Route("/browse", browse_root, methods=["GET"]),
+    Route("/news", news_page, methods=["GET"]),
     Route("/find", find_page, methods=["GET"]),
     Route("/events", events_page, methods=["GET"]),
     Route("/festivals", festivals_page, methods=["GET"]),
