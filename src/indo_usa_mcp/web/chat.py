@@ -232,7 +232,7 @@ __PORTALCSS__
 </style></head><body>
 <header class="topbar">
  <a class="brand" href="/"><img class="brandlogo" src="/logo" alt="__PLAT__"><span><b>__PLAT__</b><i>__PTAG__</i></span></a>
- <nav class="topnav"><a href="/today">☀ Today</a><a href="/news">📰 News</a><a href="/questions">💬 Q&amp;A</a><a href="/browse">Browse</a><a href="/me">♥ Saved</a><a href="/for-business">For business</a></nav>
+ <nav class="topnav"><a href="/today">☀ Today</a><a href="/articles">📰 News</a><a href="/questions">💬 Q&amp;A</a><a href="/browse">Browse</a><a href="/me">♥ Saved</a><a href="/for-business">For business</a></nav>
  <div class="actions">
   <select id="lang" class="langsel" onchange="setLang(this.value)" aria-label="Language">
    <option value="en">English</option><option value="hi">हिंदी</option><option value="te">తెలుగు</option>
@@ -262,7 +262,7 @@ __PARTNERBAR__
    <p class="disclaim">Free directory for the Indian-from-India community in the USA · information
     only — <a href="/terms">verify before relying</a>.</p>
    <nav class="footnav">
-    <a href="/about">About us</a> · <a href="/news">News</a> · <a href="/for-business">List your business</a> ·
+    <a href="/about">About us</a> · <a href="/articles">News roundups</a> · <a href="/news">Headlines</a> · <a href="/for-business">List your business</a> ·
     <a href="/insights">Insights</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> ·
     <a href="/contact">Contact</a> · <a href="/faq">FAQ</a>
    </nav>

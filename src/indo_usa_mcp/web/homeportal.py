@@ -146,6 +146,23 @@ def _questions() -> str:
         return ""
 
 
+def _articles() -> str:
+    """In-house AI roundups — featured above the raw headline feed so readers stay on-site."""
+    try:
+        from .. import articles
+        if not articles.enabled():
+            return ""
+        rows = articles.latest(limit=4)
+        inner = ""
+        for a in rows:
+            label = articles.CATEGORIES.get(a.get("category"), a.get("category") or "")
+            inner += _card(f"/article/{a['slug']}", a.get("title") or "",
+                           meta=_esc(a.get("dek") or ""), tag=label)
+        return _section("📰 Indian America — news roundups", "/articles", "All roundups", inner)
+    except Exception:
+        return ""
+
+
 def _news() -> str:
     """Latest India/NRI news headlines (filled once the news feed is populated)."""
     try:
@@ -180,7 +197,7 @@ def _deepdata() -> str:
 def render() -> str:
     """The full portal block. Empty string only if literally every section is empty."""
     plat = _esc(settings.platform_name)
-    body = (_today_card() + _news() + _events() + _movies() + _businesses()
+    body = (_today_card() + _articles() + _news() + _events() + _movies() + _businesses()
             + _deals() + _questions() + _deepdata())
     if not body.strip():
         return ""

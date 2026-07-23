@@ -1165,6 +1165,18 @@ class NotificationAgent(Agent):
         return n
 
 
+class ArticlesAgent(Agent):
+    name = "articles"
+    description = ("Writes short in-house roundups of recent India/NRI headlines (grounded + cited) so "
+                   "readers stay on-site. Needs the LLM active; at most a couple new pieces per run. "
+                   "No-op when ARTICLES_ENABLED=false or the LLM is off.")
+    default_interval_s = 21600  # every 6h
+
+    def run(self, **params: Any) -> dict[str, Any]:
+        from .. import articles
+        return articles.generate_due(max_new=params.get("max_new", 2))
+
+
 class NewsAgent(Agent):
     name = "news"
     description = ("Refreshes the India/NRI news headlines shown on the homepage portal + /news from the "
@@ -1246,4 +1258,5 @@ ALL_AGENTS = [
     ConsumerDigestAgent(),
     NotificationAgent(),
     NewsAgent(),
+    ArticlesAgent(),
 ]

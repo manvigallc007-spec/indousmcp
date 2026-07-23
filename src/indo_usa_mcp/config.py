@@ -154,6 +154,10 @@ class Settings(BaseSettings):
     # News RSS feeds (no API key). Headlines link out to the source; we never republish full articles.
     # Set NEWS_ENABLED=false to hide the feature and stop the fetch agent.
     news_enabled: bool = True
+    # In-house articles: short AI-written roundups of recent India/NRI headlines (grounded + cited),
+    # so readers stay on-site instead of linking straight out. Needs the LLM active (ArticlesAgent
+    # generates them). Set ARTICLES_ENABLED=false to hide the feature.
+    articles_enabled: bool = True
     # Google sign-in for the business-owner portal (optional; magic-link still works without it).
     # Create an OAuth 2.0 Web client at console.cloud.google.com -> APIs & Services -> Credentials.
     # Authorized redirect URI = <PUBLIC_WEB_URL>/portal/google/callback. Secrets via env only.

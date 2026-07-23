@@ -187,6 +187,8 @@ def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200,
  .rcount{{color:#4b5563;font-size:14px;margin:12px 0 6px}}
  .rcount b{{color:#1f2430}}
  .opennow{{color:#0f8a4f;font-weight:600;font-size:13px}}
+ .lead{{font-size:17px;color:#3a3f4b;margin:4px 0 14px}}
+ .srclist{{margin:8px 0 0;padding-left:20px}} .srclist li{{margin:4px 0;font-size:14px}}
  @media(max-width:640px){{.fbar{{position:static;gap:10px}} .fsearch{{flex:1 1 100%}}}}
  .shero{{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 20px;align-items:stretch}}
  .shero input{{border:1px solid #dcd9d4;border-radius:10px;padding:12px 14px;font:inherit;font-size:15px}}
@@ -371,6 +373,79 @@ def news_page(request: Request) -> HTMLResponse:
     return _page(f"Latest India &amp; NRI news · {settings.platform_name}",
                  "Latest news for Indians from India living in the USA — community, immigration, "
                  "India–USA relations and business.", body, canonical=f"{_base()}/news")
+
+
+def articles_page(request: Request) -> HTMLResponse:
+    """In-house AI-written roundups of recent India/NRI news — kept on-site, each grounded in + citing
+    the real headlines it summarizes."""
+    from .. import articles
+    if not articles.enabled():
+        return _page("Articles", "Unavailable.", "<h1>Articles</h1><p class='muted'>Not available.</p>",
+                     status=404, noindex=True)
+    cat = (request.query_params.get("cat") or "").strip()
+    rows = articles.latest(limit=40, category=cat or None)
+    tabs = "".join(
+        f"<a class='chip' href='/articles{('?cat=' + c) if c else ''}'"
+        + (" style='background:#c1440e;color:#fff;border-color:#c1440e'" if cat == c else "")
+        + f">{html.escape(lbl)}</a>"
+        for c, lbl in [("", "All")] + list(articles.CATEGORIES.items()))
+    items = ""
+    for a in rows:
+        when = a["created_at"].strftime("%b %d, %Y") if hasattr(a.get("created_at"), "strftime") else ""
+        label = articles.CATEGORIES.get(a.get("category"), a.get("category") or "")
+        items += (f"<div class='lc'><h3><a href='/article/{html.escape(a['slug'])}'>"
+                  f"{html.escape(a['title'])}</a></h3>"
+                  + (f"<p>{html.escape(a['dek'])}</p>" if a.get("dek") else "")
+                  + f"<div class='meta'>{html.escape(label)} · {when}</div></div>")
+    body = ("<h1>📰 Indian America — news roundups</h1>"
+            "<p class='muted'>Short, plain-English summaries of what's making news for Indians in the "
+            "USA — written by our AI from recent headlines, with sources linked on every piece.</p>"
+            f"<div class='chips'>{tabs}</div>"
+            + (items or "<p class='muted'>No roundups yet — check back soon. "
+                        "Meanwhile, see <a href='/news'>latest headlines →</a></p>"))
+    return _page(f"News roundups · {settings.platform_name}",
+                 "AI-written roundups of the latest news for Indians from India living in the USA, with "
+                 "sources cited.", body, canonical=f"{_base()}/articles")
+
+
+def article_page(request: Request) -> HTMLResponse:
+    from .. import articles
+    if not articles.enabled():
+        return _page("Articles", "Unavailable.", "<h1>Not available</h1>", status=404, noindex=True)
+    a = articles.get(request.path_params.get("slug", ""))
+    if not a:
+        return _page("Not found", "Unknown article.",
+                     "<h1>Not found</h1><p><a href='/articles'>All roundups →</a></p>",
+                     status=404, noindex=True)
+    when = a["created_at"].strftime("%B %d, %Y") if hasattr(a.get("created_at"), "strftime") else ""
+    label = articles.CATEGORIES.get(a.get("category"), a.get("category") or "")
+    paras = "".join(f"<p>{html.escape(p.strip())}</p>" for p in (a.get("body") or "").split("\n\n")
+                    if p.strip())
+    srcs = a.get("sources") or []
+    src_html = ""
+    if srcs:
+        lis = "".join(
+            f"<li><a href='{html.escape(s['url'])}' target='_blank' rel='noopener nofollow'>"
+            f"{html.escape(s.get('title') or s['url'])}</a>"
+            + (f" <span class='muted'>· {html.escape(s['source'])}</span>" if s.get("source") else "")
+            + "</li>" for s in srcs if s.get("url"))
+        src_html = f"<h3 style='margin-top:24px'>Sources</h3><ul class='srclist'>{lis}</ul>"
+    crumbs = ("<nav class='crumbs'><a href='/news'>News</a> › "
+              f"<a href='/articles'>Roundups</a> › {html.escape(label)}</nav>")
+    disclaimer = ("<p class='muted' style='font-size:12px;margin-top:18px;border-top:1px solid #eee;"
+                  "padding-top:10px'>This is an AI-written summary of the linked headlines, for "
+                  "convenience — not original reporting. Verify details at the sources before relying "
+                  "on them.</p>")
+    body = (crumbs + f"<h1>{html.escape(a['title'])}</h1>"
+            + (f"<p class='lead'>{html.escape(a['dek'])}</p>" if a.get("dek") else "")
+            + f"<p class='muted' style='font-size:13px'>{html.escape(label)} · {when} · by "
+            f"{html.escape(settings.assistant_name)} (AI)</p>"
+            + paras + src_html + disclaimer
+            + "<p style='margin-top:16px'><a href='/articles'>← All roundups</a> · "
+            "<a href='/news'>Latest headlines →</a></p>")
+    desc = (a.get("dek") or a["title"])[:180]
+    return _page(f"{a['title']} · {settings.platform_name}", desc, body,
+                 canonical=f"{_base()}/article/{a['slug']}")
 
 
 # ---------------------------------------------------------------- browse indexes
@@ -1316,6 +1391,8 @@ def mcp_well_known(request: Request) -> Response:
 routes = [
     Route("/browse", browse_root, methods=["GET"]),
     Route("/news", news_page, methods=["GET"]),
+    Route("/articles", articles_page, methods=["GET"]),
+    Route("/article/{slug}", article_page, methods=["GET"]),
     Route("/find", find_page, methods=["GET"]),
     Route("/events", events_page, methods=["GET"]),
     Route("/festivals", festivals_page, methods=["GET"]),
