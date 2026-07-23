@@ -18,7 +18,7 @@ from .. import inbox
 from ..config import settings
 from . import seo
 from .auth import verify_captcha
-from .common import partner_bar
+from .common import NAV_CSS, nav_html, partner_bar
 from .common import captcha_field
 
 # SEO keywords (Google) — Namaste America is the app brand; Dost is the assistant.
@@ -90,11 +90,10 @@ def _doc(path: str, title: str, desc: str, body: str, status: int = 200,
 <style>
 :root{{--brand:#e8772e;--accent:#0f9b8e;--ink:#25303a;--muted:#6b7280;--line:#efe9e1;--bg:#faf7f2}}
 body{{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);
- background:var(--bg);max-width:760px;margin:0 auto;padding:0 18px 48px;line-height:1.6}}
-header.top{{display:flex;align-items:center;gap:10px;padding:18px 0;border-bottom:1px solid var(--line)}}
-header.top .logo{{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:18px;
- background:linear-gradient(135deg,#ffd9a0,#ffb56b)}}
-header.top b{{font-size:16px}} a{{color:var(--brand);text-decoration:none}} a:hover{{text-decoration:underline}}
+ background:var(--bg);margin:0;padding:0;line-height:1.6}}
+.pgwrap{{max-width:760px;margin:0 auto;padding:0 18px 48px}}
+a{{color:var(--brand);text-decoration:none}} a:hover{{text-decoration:underline}}
+{NAV_CSS}
 h1{{font-size:26px;margin:26px 0 6px}} h2{{font-size:18px;margin:24px 0 6px}}
 .lead{{color:var(--muted);font-size:16px}} ul{{padding-left:20px}} li{{margin:4px 0}}
 .ok{{color:#137333}} .err{{color:#c5221f}}
@@ -103,11 +102,10 @@ h1{{font-size:26px;margin:26px 0 6px}} h2{{font-size:18px;margin:24px 0 6px}}
 footer{{margin-top:40px;border-top:1px solid var(--line);padding-top:18px;font-size:13px;color:var(--muted)}}
 footer a{{color:var(--accent)}} .flinks{{margin-bottom:8px}} .attr{{margin:6px 0}}
 </style></head><body>
-<header class="top"><a class="logo" href="/">🪷</a>
- <b><a href="/" style="color:var(--ink)">{html.escape(settings.platform_name)}</a></b></header>
+{nav_html()}
 {partner_bar()}
-<main>{body}</main>
-{footer_html()}
+<div class="pgwrap"><main>{body}</main>
+{footer_html()}</div>
 </body></html>"""
     return HTMLResponse(doc, status_code=status)
 

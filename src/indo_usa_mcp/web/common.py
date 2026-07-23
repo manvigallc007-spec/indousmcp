@@ -100,6 +100,64 @@ def partner_bar() -> str:
         f"{links}</div>")
 
 
+# ------------------------------------------------------------------ shared site header / nav
+# Single source of truth for the top menu so every page shell (landing, chat, owner card, about,
+# /explore, error pages) shows the SAME items. (href, label). The last item is styled as a CTA.
+NAV_ITEMS: list[tuple[str, str]] = [
+    ("/", "Home"),
+    ("/today", "☀ Today"),
+    ("/articles", "📰 News"),
+    ("/events", "📅 Events"),
+    ("/browse", "Browse"),
+    ("/questions", "💬 Q&A"),
+    ("/insights", "📊 Insights"),
+    ("/find", "🔎 Search"),
+    ("/me", "♥ Saved"),
+    ("/for-business", "List your business"),
+    ("/chat", "Ask Dost"),
+]
+
+
+def nav_html(active: str = "") -> str:
+    """The shared sticky site header: logo + the full menu. Horizontally scrollable on mobile so every
+    item stays reachable (never hidden). `active` is a path (e.g. '/browse') to highlight the current
+    item. Self-contained markup; pair with NAV_CSS in the page's <style>."""
+    plat = html.escape(settings.platform_name)
+    links = ""
+    for href, label in NAV_ITEMS:
+        cls = "nav-cta" if href == "/chat" else ""
+        if active and (active == href or (href != "/" and active.startswith(href))):
+            cls = (cls + " on").strip()
+        links += (f"<a href='{href}'" + (f" class='{cls}'" if cls else "")
+                  + (" aria-current='page'" if "on" in cls else "") + f">{html.escape(label)}</a>")
+    return (
+        "<header class='site-header'>"
+        f"<a class='site-brand' href='/'><img src='/logo' alt='{plat}'><span>{plat}</span></a>"
+        f"<nav class='site-nav' aria-label='Main'>{links}</nav>"
+        "</header>")
+
+
+# Self-contained (explicit hex, no CSS vars) so it renders identically inside every shell's own <style>.
+NAV_CSS = """
+ .site-header{display:flex;align-items:center;gap:14px;background:#fff;border-bottom:1px solid #ececec;
+   padding:10px 18px;position:sticky;top:0;z-index:50}
+ .site-brand{display:inline-flex;align-items:center;gap:9px;text-decoration:none;color:#1f2430;
+   font-weight:800;flex:0 0 auto}
+ .site-brand img{height:32px;width:auto;max-width:150px;border-radius:8px;display:block}
+ .site-brand span{font-size:16px;white-space:nowrap}
+ .site-nav{display:flex;align-items:center;gap:5px;overflow-x:auto;scrollbar-width:none;
+   -webkit-overflow-scrolling:touch;flex:1 1 auto}
+ .site-nav::-webkit-scrollbar{display:none}
+ .site-nav a{color:#3a3f4b;text-decoration:none;font-weight:600;font-size:14px;white-space:nowrap;
+   padding:7px 10px;border-radius:8px;flex:0 0 auto}
+ .site-nav a:hover{background:#f5f1ec;color:#c1440e}
+ .site-nav a.on{color:#c1440e}
+ .site-nav a.nav-cta{background:#c1440e;color:#fff;margin-left:4px}
+ .site-nav a.nav-cta:hover{background:#a5380b;color:#fff}
+ @media(max-width:760px){.site-brand span{display:none}}
+"""
+
+
 def share_html(path_or_url: str, title: str) -> str:
     """A small share bar (native share sheet with copy-link fallback + a WhatsApp button — the
     diaspora's dominant channel). `path_or_url` may be a site path; it's made absolute. Self-contained:
@@ -162,13 +220,14 @@ def _page(title: str, body: str, status: int = 200) -> HTMLResponse:
  .muted{{color:var(--muted);font-size:14px}} .ok{{color:#137333}} .err{{color:#c5221f}}
  table{{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0}}
  td,th{{padding:9px 6px;border-bottom:1px solid #f0ece5;text-align:left}}
+ body{{max-width:none;padding:0}}
+ .cardwrap{{max-width:520px;margin:0 auto;padding:26px 18px}}
+{NAV_CSS}
 </style></head><body>
-<a href="/" style="display:flex;align-items:center;gap:10px;text-decoration:none;margin-bottom:18px">
- <img src="/logo" alt="{html.escape(settings.platform_name)}" style="height:42px;width:auto;max-width:180px;border-radius:10px">
- <b style="color:#1a1a1a;font-size:18px">{html.escape(settings.platform_name)}</b></a>
-<div class="card">{body}</div>
+{nav_html()}
+<div class="cardwrap"><div class="card">{body}</div>
 <p class="muted" style="text-align:center;margin-top:20px"><a href="/">&#8592; Back to {html.escape(settings.platform_name)}</a></p>
-</body></html>"""
+</div></body></html>"""
     return HTMLResponse(doc, status_code=status)
 
 
@@ -268,6 +327,6 @@ def admin_page(title: str, body: str, active: str = "", status: int = 200) -> HT
 <header><div><a href="/" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none">
  <img src="/logo" alt="{html.escape(settings.platform_name)}" style="height:34px;width:auto;max-width:150px;border-radius:8px">
  <b style="font-size:18px;color:#1a1a1a">{html.escape(settings.platform_name)}</b></a><span class="muted"> admin</span></div>
- <nav>{nav} <a href='/admin/logout'>Logout</a></nav></header>
+ <nav>{nav} <a href='/' target='_blank' rel='noopener'>↗ View site</a> <a href='/admin/logout'>Logout</a></nav></header>
 <h2>{html.escape(title)}</h2>{body}</body></html>"""
     return HTMLResponse(doc, status_code=status)

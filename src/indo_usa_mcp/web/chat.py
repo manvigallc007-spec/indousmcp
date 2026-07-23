@@ -18,7 +18,7 @@ from .. import assistant, flyer, verticals
 from . import homeportal
 from ..config import settings
 from .auth import portal_email
-from .common import analytics_tag, partner_bar
+from .common import NAV_ITEMS, analytics_tag, partner_bar
 
 # --- tiny in-memory per-IP rate limiter (abuse guard; LLM calls cost CPU or money) ---
 _HITS: dict[str, list[float]] = {}
@@ -165,9 +165,11 @@ a{color:var(--brand);text-decoration:none}
 .browsecat:hover{background:var(--brand);color:#fff;text-decoration:none}
 .browselink{margin:18px 0 0;font-size:15px}.browselink a{color:var(--accent);font-weight:600}
 .welcome-contrib{margin-top:26px;color:var(--muted);font-size:15px}
-.topnav{display:flex;gap:18px;font-size:14px}.topnav a{color:var(--ink);font-weight:500}
+.topnav{display:flex;gap:16px;font-size:14px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;flex:1 1 auto;min-width:0}
+.topnav::-webkit-scrollbar{display:none}
+.topnav a{color:var(--ink);font-weight:500;white-space:nowrap}
 .topnav a:hover{color:var(--brand)}
-@media(max-width:880px){.topnav{display:none}}
+@media(max-width:880px){.topnav{gap:14px}}
 .trustrow{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:2px 0 20px}
 .tpill{background:#fff;border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:12.5px;color:#475467}
 .homefoot{margin:32px auto 4px;max-width:640px;border-top:1px solid var(--line);padding-top:16px;text-align:center}
@@ -232,7 +234,7 @@ __PORTALCSS__
 </style></head><body>
 <header class="topbar">
  <a class="brand" href="/"><img class="brandlogo" src="/logo" alt="__PLAT__"><span><b>__PLAT__</b><i>__PTAG__</i></span></a>
- <nav class="topnav"><a href="/today">☀ Today</a><a href="/articles">📰 News</a><a href="/questions">💬 Q&amp;A</a><a href="/browse">Browse</a><a href="/me">♥ Saved</a><a href="/for-business">For business</a></nav>
+ <nav class="topnav">__TOPNAV__</nav>
  <div class="actions">
   <select id="lang" class="langsel" onchange="setLang(this.value)" aria-label="Language">
    <option value="en">English</option><option value="hi">हिंदी</option><option value="te">తెలుగు</option>
@@ -735,6 +737,9 @@ def chat_page(request: Request) -> HTMLResponse:
         "__GA__": analytics_tag(),
         "__PORTAL__": _portal_html(),
         "__PORTALCSS__": homeportal.CSS,
+        "__TOPNAV__": "".join(
+            f'<a href="{h}">{html.escape(lbl)}</a>' for h, lbl in NAV_ITEMS
+            if h not in ("/", "/chat")),   # skip self-referential Home / Ask-Dost on the homepage
     }
     doc = _CHAT_HTML
     for k, v in repl.items():

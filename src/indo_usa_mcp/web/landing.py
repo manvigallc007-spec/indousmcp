@@ -21,7 +21,7 @@ from .. import db, hours, tags as tagsmod, verticals
 from ..config import settings
 from . import i18n, seo, staticmap
 from .chat import _CAT_BLURB, _CAT_COLOR, _CAT_ICON
-from .common import analytics_tag, partner_bar, share_html
+from .common import NAV_CSS, analytics_tag, nav_html, partner_bar, share_html
 
 _BRAND = "#c1440e"
 _FEATURED = "(is_featured AND (featured_until IS NULL OR featured_until > now()))"
@@ -211,9 +211,10 @@ def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200,
  .lc .ver{{color:#1565c0;font-weight:600}} .lc .rate{{color:#b45309;font-weight:600}}
  .cta{{background:{_BRAND};color:#fff;padding:11px 18px;border-radius:10px;display:inline-block;margin-top:8px}}
  nav.crumbs{{font-size:13px;margin-bottom:14px}}
+{NAV_CSS}
 {CATEGORY_CSS}
 </style></head><body>
-<header><a href="/" style="display:inline-flex;align-items:center;gap:9px"><img src="/logo" alt="{plat}" style="height:34px;width:auto;max-width:160px;border-radius:8px">{plat}</a> &nbsp;·&nbsp; <a href="/browse">Browse</a> &nbsp;·&nbsp; <a href="/chat">Ask {settings.assistant_name}</a></header>
+{nav_html()}
 {partner_bar()}
 <main>{body}</main></body></html>"""
     return HTMLResponse(doc, status_code=status)

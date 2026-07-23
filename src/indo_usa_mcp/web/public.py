@@ -22,7 +22,7 @@ from ..pipeline import compliance, ingest, outreach
 from . import i18n
 from .auth import verify_captcha
 from .landing import CATEGORY_CSS, category_grid
-from .common import _page, captcha_field, esc as _esc, partner_bar, state_select
+from .common import NAV_CSS, _page, captcha_field, esc as _esc, nav_html, partner_bar, state_select
 
 # Text fields shown on the owner edit form (label, restaurant field).
 _EDIT_FIELDS = [
@@ -254,16 +254,14 @@ a{color:var(--brand);text-decoration:none}
 .section{max-width:1000px;margin:0 auto;padding:34px 20px}
 .section h2{text-align:center;font-size:13px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0 0 18px}
 __CATCSS__
+__NAVCSS__
 .vals{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px}
 .val{text-align:center;padding:10px}.val .vi{font-size:26px}
 .val h3{margin:8px 0 4px;font-size:16px}.val p{color:var(--muted);font-size:14px;margin:0}
 footer{text-align:center;color:#9aa0a6;font-size:14px;padding:22px 20px 48px;border-top:1px solid var(--line);margin-top:14px}
 @media(max-width:600px){.hero h1{font-size:30px}.hero .sub{font-size:16px}.search .sp{display:none}.nav .signin{display:none}}
 </style></head><body>
-<header class="topbar">
- <a class="brand" href="/"><span class="logo">🪷</span><span><b>__PLAT__</b><i>__TAGLINE__</i></span></a>
- <nav class="nav"><a class="signin" href="/submit">Add your business</a><a class="btn" href="/chat">Ask __ANAME__</a></nav>
-</header>
+__NAV__
 __PARTNERBAR__
 <main>
  <section class="hero">
@@ -304,6 +302,7 @@ def home(request: Request) -> HTMLResponse:
         "__PLAT__": plat, "__ANAME__": aname,
         "__TAGLINE__": html.escape(settings.platform_tagline),
         "__SUB__": html.escape(desc), "__TILES__": category_grid(), "__CATCSS__": CATEGORY_CSS,
+        "__NAV__": nav_html(), "__NAVCSS__": NAV_CSS,
         "__PARTNERBAR__": partner_bar(),
         # Self-reference /explore (its OWN url) -- not "/" (the chatbot homepage). They're different
         # pages with different content; pointing this page's canonical/og:url at a different page's
