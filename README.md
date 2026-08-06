@@ -1,5 +1,7 @@
 # Indian–American Diaspora MCP Server
 
+[![MCP Queen operational grade](https://mcpqueen.com/badge/us.namasteamerica/namaste-america.svg)](https://mcpqueen.com/s/us.namasteamerica/namaste-america)
+
 Agent-first, agent-only data layer for the Indian-American diaspora. **Phase 1: Indian
 restaurants (USA).** This repo is the walking skeleton from the architecture blueprint:
 
