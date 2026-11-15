@@ -1552,6 +1552,33 @@ def photos_page(request: Request) -> HTMLResponse:
                   "target='_blank' rel='noopener'>View listing</a></div></div>")
         body = (f"<p class='muted'>{len(rows)} photo(s) awaiting review. Rejecting also deletes the "
                 "stored files.</p><div class='cards'>" + "".join(cards) + "</div>")
+
+    # Anything that skipped the queue has to be visible somewhere, or "trusted owner" would mean
+    # "unreviewed and unseen". Takedown is the same reject action, so the files go too.
+    live = photos_mod.recent_published(18)
+    if live:
+        tiles = []
+        for ph in live:
+            auto = str(ph.get("reviewed_by") or "").startswith("auto:")
+            tiles.append(
+                "<div class='kpi' style='min-width:200px;max-width:220px'>"
+                + photos_mod.img_html(ph, alt="", sizes="200px",
+                                      style="width:100%;height:110px;object-fit:cover;"
+                                            "border-radius:9px;margin-bottom:6px")
+                + f"<div class='muted' style='font-size:12px'>{esc(ph['vertical'])}"
+                  f" #{ph['listing_id']} · {esc(ph['owner_email'])}</div>"
+                + ("<div style='font-size:12px' class='warn'>⚡ auto-published</div>" if auto
+                   else "<div class='muted' style='font-size:12px'>reviewed</div>")
+                + f"<form class='inline' method='post' action='/admin/photos'>"
+                  f"<input type='hidden' name='id' value='{ph['id']}'>"
+                  "<input type='hidden' name='reason' value='taken down by admin'>"
+                  "<button class='btn gray' name='action' value='reject'>Take down</button>"
+                  "</form></div>")
+        body += ("<h3 style='margin-top:26px'>Recently live</h3>"
+                 "<p class='muted'>Photos from owners who have already had one approved go live "
+                 "without waiting. Taking one down also revokes that owner's trust, so their next "
+                 "upload is reviewed again.</p>"
+                 "<div class='cards'>" + "".join(tiles) + "</div>")
     return admin_page("Photos", body, active="Photos")
 
 

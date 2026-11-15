@@ -317,3 +317,113 @@ def test_enrichment_will_not_overwrite_an_owner_photo():
     assert photos.is_owner_photo("/uploads/photos/abc_800.webp")
     assert not photos.is_owner_photo("https://cdn.example.com/x.jpg")
     assert not photos.is_owner_photo(None)
+
+
+# ------------------------------------------------------------------ earned trust
+def test_the_first_photo_from_an_unknown_owner_is_always_reviewed(listing):
+    res = photos.ingest("restaurants", listing, "newcomer@e.com", _png(), "image/png")
+    assert res["status"] == "pending" and not res["auto_published"]
+    assert photos.owner_trust("newcomer@e.com")["reason"] == "no_approval_yet"
+
+
+def test_once_approved_an_owner_skips_the_queue(listing):
+    first = photos.ingest("restaurants", listing, "regular@e.com", _png(900, 700), "image/png")
+    photos.publish(first["id"])
+    assert photos.owner_trust("regular@e.com") == {
+        "trusted": True, "published": 1, "rejected": 0, "reason": "earned"}
+
+    second = photos.ingest("restaurants", listing, "regular@e.com", _png(900, 700, (2, 2, 2)),
+                           "image/png")
+    assert second["auto_published"] and second["status"] == "published"
+    row = photos.get(second["id"])
+    assert row["status"] == "published"
+    assert photos.for_listing("restaurants", listing)[0]["id"] in (first["id"], second["id"])
+
+
+def test_an_auto_published_photo_is_promoted_immediately(listing):
+    first = photos.ingest("restaurants", listing, "regular2@e.com", _png(900, 700), "image/png")
+    photos.publish(first["id"])
+    photos.remove(first["id"], "regular2@e.com")          # clears the promotion
+    second = photos.ingest("restaurants", listing, "regular2@e.com", _png(1800, 1200), "image/png")
+    assert second["auto_published"]
+    url = (verticals.get_record("restaurants", listing) or {}).get("photo_url")
+    assert url and photos.is_owner_photo(url)
+
+
+def test_trust_is_recorded_as_auto_in_the_audit_trail(listing):
+    first = photos.ingest("restaurants", listing, "audit@e.com", _png(900, 700), "image/png")
+    photos.publish(first["id"], "admin")
+    second = photos.ingest("restaurants", listing, "audit@e.com", _png(900, 700, (3, 3, 3)),
+                           "image/png")
+    live = {r["id"]: r for r in photos.recent_published(50)}
+    assert live[second["id"]]["reviewed_by"].startswith("auto:")
+    assert live[first["id"]]["reviewed_by"] == "admin"
+    assert second["id"] in {r["id"] for r in photos.recent_published(50, auto_only=True)}
+    assert first["id"] not in {r["id"] for r in photos.recent_published(50, auto_only=True)}
+
+
+def test_one_rejection_revokes_trust(listing):
+    ok = photos.ingest("restaurants", listing, "slip@e.com", _png(900, 700), "image/png")
+    photos.publish(ok["id"])
+    bad = photos.ingest("restaurants", listing, "slip@e.com", _png(900, 700, (4, 4, 4)),
+                        "image/png")
+    assert bad["auto_published"]                           # trusted at this point
+    photos.reject(bad["id"], "not this business", "admin")  # a takedown revokes it
+
+    t = photos.owner_trust("slip@e.com")
+    assert t["trusted"] is False and t["reason"] == "rejected_before"
+    again = photos.ingest("restaurants", listing, "slip@e.com", _png(900, 700, (5, 5, 5)),
+                          "image/png")
+    assert again["status"] == "pending"
+
+
+def test_trust_is_per_owner_not_per_listing(listing):
+    """An owner may run several listings; being vetted once is enough."""
+    other = verticals.create_record(
+        "restaurants", {"name": "ZZTEST Photo Cafe Two", "city": "Zzphoto", "state": "TX"},
+        source="test")["id"]
+    try:
+        first = photos.ingest("restaurants", listing, "multi@e.com", _png(900, 700), "image/png")
+        photos.publish(first["id"])
+        res = photos.ingest("restaurants", other, "multi@e.com", _png(900, 700), "image/png")
+        assert res["auto_published"]
+    finally:
+        db.execute("DELETE FROM listing_photos WHERE listing_id=%s", (other,))
+        db.execute("DELETE FROM restaurants WHERE id=%s", (other,))
+
+
+def test_trust_matching_ignores_email_case(listing):
+    first = photos.ingest("restaurants", listing, "Case@E.com", _png(900, 700), "image/png")
+    photos.publish(first["id"])
+    assert photos.owner_trust("case@e.com")["trusted"]
+    assert photos.ingest("restaurants", listing, "CASE@e.COM", _png(900, 700, (6, 6, 6)),
+                         "image/png")["auto_published"]
+
+
+def test_the_kill_switch_holds_everything(listing, monkeypatch):
+    first = photos.ingest("restaurants", listing, "killsw@e.com", _png(900, 700), "image/png")
+    photos.publish(first["id"])
+    assert photos.owner_trust("killsw@e.com")["trusted"]
+
+    monkeypatch.setattr(settings, "photo_auto_publish", False)
+    t = photos.owner_trust("killsw@e.com")
+    assert t["trusted"] is False and t["reason"] == "auto_publish_off"
+    assert photos.ingest("restaurants", listing, "killsw@e.com", _png(900, 700, (7, 7, 7)),
+                         "image/png")["status"] == "pending"
+
+
+def test_tidying_your_own_gallery_does_not_cost_you_trust(listing):
+    """Removing a photo is housekeeping, not misbehaviour — only a rejection revokes trust."""
+    first = photos.ingest("restaurants", listing, "tidy@e.com", _png(900, 700), "image/png")
+    photos.publish(first["id"])
+    photos.remove(first["id"], "tidy@e.com")
+    t = photos.owner_trust("tidy@e.com")
+    assert t["trusted"] and t["reason"] == "earned"
+
+
+def test_deleting_a_pending_photo_does_not_grant_trust(listing):
+    """A photo nobody ever approved must not count as an approval."""
+    res = photos.ingest("restaurants", listing, "sneaky@e.com", _png(900, 700), "image/png")
+    photos.remove(res["id"], "sneaky@e.com")
+    assert photos.owner_trust("sneaky@e.com") == {
+        "trusted": False, "published": 0, "rejected": 0, "reason": "no_approval_yet"}

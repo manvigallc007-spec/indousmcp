@@ -144,6 +144,11 @@ class Settings(BaseSettings):
     # Reuses the same captcha + per-IP rate-limit that protect the contact/submission forms.
     reviews_enabled: bool = True
     review_auto_publish: bool = True
+
+    # Admin -> Photos. An owner who has had a photo approved and has never had one rejected skips
+    # the queue on later uploads; the first photo from anyone unknown is always reviewed. Flip
+    # photo_auto_publish=False to hold EVERY photo for manual approval.
+    photo_auto_publish: bool = True
     review_min_chars: int = 0          # 0 = a star-only rating (no text) is allowed
     review_max_chars: int = 2000
     reviews_per_ip_per_day: int = 8    # across all listings (abuse guard)

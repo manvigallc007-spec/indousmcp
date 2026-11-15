@@ -64,6 +64,35 @@ def _dir() -> pathlib.Path:
     return d
 
 
+# ------------------------------------------------------------------------------- earned trust
+# The queue exists to catch a bad first photo from someone unknown. Once an owner has had one
+# approved, holding their later uploads is admin work for no safety gain -- so they skip it.
+#
+# Trust is per owner (they may run several listings), and it is REVOKED by a single rejection: an
+# owner who has posted something we refused goes back to being reviewed, permanently. That is
+# deliberately blunt, because the cost of re-reviewing is small and the cost of an unreviewed bad
+# photo on a public page is not.
+def owner_trust(owner_email: str) -> dict[str, Any]:
+    """Whether this owner's uploads skip review, and the counts behind that decision."""
+    row = db.query_one(
+        # 'ever approved', not 'still live': removing your own photo is normal housekeeping and
+        # must not cost you trust. reviewed_at is only set when a human or the trust rule
+        # approved it, so a pending photo the owner deleted does not count.
+        "SELECT count(*) FILTER (WHERE reviewed_at IS NOT NULL AND status <> 'rejected')"
+        "         AS published,"
+        "       count(*) FILTER (WHERE status='rejected') AS rejected "
+        "FROM listing_photos WHERE lower(owner_email)=lower(%s)",
+        ((owner_email or "").strip(),))
+    published = int((row or {}).get("published") or 0)
+    rejected = int((row or {}).get("rejected") or 0)
+    trusted = bool(settings.photo_auto_publish and published >= 1 and rejected == 0)
+    return {"trusted": trusted, "published": published, "rejected": rejected,
+            "reason": ("auto_publish_off" if not settings.photo_auto_publish
+                       else "rejected_before" if rejected
+                       else "no_approval_yet" if not published
+                       else "earned")}
+
+
 # --------------------------------------------------------------------------------------- ingest
 def _decode(data: bytes):
     """Return an upright RGB image, or raise ValueError if these bytes aren't a usable image.
@@ -164,17 +193,26 @@ def ingest(vertical: str, listing_id: int, owner_email: str, data: bytes, mime_t
         return {"ok": False, "error": "encode_failed"}
 
     widest = max(out)
+    trust = owner_trust(owner)
+    status = "published" if trust["trusted"] else "pending"
     row = db.query_one(
         "INSERT INTO listing_photos (vertical, listing_id, owner_email, path_sm, path_md, path_lg,"
-        " width, height, caption, sha256, bytes_stored, sort_order) "
-        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"
+        " width, height, caption, sha256, bytes_stored, status, reviewed_at, reviewed_by,"
+        " sort_order) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"
+        " CASE WHEN %s = 'published' THEN now() END, %s,"
         " COALESCE((SELECT max(sort_order)+1 FROM listing_photos"
         "           WHERE vertical=%s AND listing_id=%s), 0)) RETURNING id",
         (vertical, listing_id, owner,
          out.get(400) or out[widest], out.get(800) or out[widest], out.get(1600),
          min(widest, img.width), round(img.height * min(widest, img.width) / img.width),
-         (caption or "").strip()[:200] or None, digest, stored, vertical, listing_id))
-    return {"ok": True, "id": row["id"], "widths": sorted(out)}
+         (caption or "").strip()[:200] or None, digest, stored, status, status,
+         "auto:trusted-owner" if status == "published" else None,
+         vertical, listing_id))
+    if status == "published":
+        sync_primary(vertical, listing_id)
+    return {"ok": True, "id": row["id"], "widths": sorted(out), "status": status,
+            "auto_published": status == "published"}
 
 
 def _resample():
@@ -234,6 +272,19 @@ def pending_count() -> int:
 
 def get(photo_id: int) -> dict | None:
     return db.query_one(f"SELECT {_COLS}, sha256 FROM listing_photos WHERE id=%s", (photo_id,))
+
+
+def recent_published(limit: int = 24, *, auto_only: bool = False) -> list[dict]:
+    """Recently live photos, newest first — the audit trail for anything that skipped the queue.
+
+    Auto-publishing without somewhere to see the result would mean trusting owners with no way to
+    notice when that trust was misplaced.
+    """
+    sql = (f"SELECT {_COLS}, reviewed_by FROM listing_photos WHERE status='published'")
+    if auto_only:
+        # '%%' because psycopg parses a bare % in the SQL as one of its own placeholders.
+        sql += " AND reviewed_by LIKE 'auto:%%'"
+    return db.query(sql + " ORDER BY COALESCE(reviewed_at, created_at) DESC LIMIT %s", (limit,))
 
 
 # --------------------------------------------------------------------------------- moderation

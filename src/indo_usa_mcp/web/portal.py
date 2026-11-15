@@ -417,8 +417,12 @@ def listing_manage(request: Request) -> HTMLResponse:
               "<button type='submit'>Post</button></form>")
 
     # --- photos: the one contribution an owner can make that visibly improves their own listing
-    _pmsg = {"ok": ("<p class='ok'>Thanks — your photo is queued for review and will appear once "
-                    "approved.</p>")}.get(request.query_params.get("photo") or "", "")
+    _pmsg = {
+        "ok": ("<p class='ok'>Thanks — your photo is queued for review and will appear once "
+               "approved.</p>"),
+        "live": ("<p class='ok'>Thanks — your photo is live on your listing now. "
+                 "You can remove it any time.</p>"),
+    }.get(request.query_params.get("photo") or "", "")
     if not _pmsg and request.query_params.get("photo"):
         _pmsg = (f"<p class='err'>"
                  f"{esc(_PHOTO_ERR.get(request.query_params['photo'], 'That upload failed.'))}</p>")
@@ -445,9 +449,13 @@ def listing_manage(request: Request) -> HTMLResponse:
         "<label>Caption (optional)</label><input name='caption' maxlength='200' "
         "placeholder='e.g. Our weekend thali'>"
         "<button type='submit'>Upload photo</button>"
-        "<p class='muted' style='font-size:12.5px;margin-top:8px'>Photos are checked by our team "
-        "before they go live. Please upload only pictures you own. Location data is removed "
-        "automatically.</p></form>"
+        + ("<p class='muted' style='font-size:12.5px;margin-top:8px'>Your photos go live straight "
+           "away. Please upload only pictures you own — location data is removed automatically."
+           "</p></form>"
+           if photos_mod.owner_trust(portal_email(request))["trusted"] else
+           "<p class='muted' style='font-size:12.5px;margin-top:8px'>Your first photo is checked by "
+           "our team before it goes live; after that they appear straight away. Please upload only "
+           "pictures you own — location data is removed automatically.</p></form>")
         if _room > 0 else
         f"<p class='muted'>You've reached the limit of {photos_mod.MAX_PER_LISTING} photos. "
         "Remove one to add another.</p>")
@@ -574,7 +582,9 @@ async def photo_upload(request: Request) -> HTMLResponse:
     data = await upload.read()
     res = photos_mod.ingest(vertical, rec_id, portal_email(request), data,
                             upload.content_type or "", caption=(form.get("caption") or ""))
-    flag = "ok" if res.get("ok") else (res.get("error") or "failed")
+    # A trusted owner's photo is live immediately; say so rather than claiming it is "queued".
+    flag = ("live" if res.get("auto_published") else "ok") if res.get("ok") \
+        else (res.get("error") or "failed")
     return RedirectResponse(f"{back}?photo={flag}", status_code=303)
 
 
