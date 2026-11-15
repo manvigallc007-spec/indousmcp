@@ -438,6 +438,10 @@ def _cards(res: dict) -> list[dict]:
             "verified_ago": r.get("verified_ago"),
             "distance_miles": r.get("distance_miles"),
             "id": r.get("id"),
+            # coordinates travel with the card so the chat UI can mount an inline map from a reply
+            # (same data the listing page's map uses); they are already public on those pages.
+            "lat": float(r["lat"]) if r.get("lat") is not None else None,
+            "lng": float(r["lng"]) if r.get("lng") is not None else None,
             "features": _tags.for_display(r.get("tags")),
             "languages": r.get("languages") or [],
         })
@@ -1183,6 +1187,78 @@ def _h1b_reply(query: str, filters: dict | None) -> dict:
     where = f" in {st}" if st else ""
     return {"reply": f"Top H-1B visa sponsors{where}, by certified applications. 💼",
             "cards": cards, "provider": "h1b"}
+
+
+# --------------------------------------------------------------------------------- follow-ups
+# After an answer, offer the next move. Generated from the results themselves rather than by the
+# model: deterministic, instant, and free — it works identically when llm_provider is "search".
+#
+# A chip is either {"label", "send"} (ask a new question) or {"label", "action"} (change a filter
+# and re-run the same query, or open the compare table client-side).
+_MAX_FOLLOWUPS = 5
+
+# Tags worth offering as a narrowing step, in the order we would suggest them. Only tags actually
+# present on the results are offered, so we never promise a filter that returns nothing.
+_REFINE_TAGS = ("vegetarian", "vegan", "jain", "halal", "delivery", "takeout", "catering",
+                "outdoor-seating", "wheelchair-accessible", "parking")
+
+
+def _distinct(values) -> list:
+    seen, out = set(), []
+    for v in values:
+        if v and v not in seen:
+            seen.add(v)
+            out.append(v)
+    return out
+
+
+def followups(query: str, cards: list[dict], filters: dict | None = None,
+              geo: dict | None = None) -> list[dict]:
+    """Contextual next steps for the answer just given. Empty list when nothing useful applies."""
+    f = filters or {}
+    out: list[dict] = []
+    q = (query or "").strip()
+
+    if not cards:
+        # A miss is the most valuable moment to offer a wider net rather than a dead end.
+        if f.get("open_now"):
+            out.append({"label": "Include closed places", "action": "clear_open_now"})
+        if f.get("vertical"):
+            out.append({"label": "Search all categories", "action": "vertical:"})
+        out.append({"label": "🗂️ Browse by category", "send": "", "href": "/browse"})
+        return out[:_MAX_FOLLOWUPS]
+
+    # Narrow by what's actually open, but only when the data can answer it.
+    if not f.get("open_now") and any(c.get("open_now") is not None for c in cards):
+        out.append({"label": "● Open now", "action": "open_now"})
+
+    # Mixed result sets: let one category take over.
+    verts = _distinct(c.get("vertical") for c in cards)
+    if not f.get("vertical") and len(verts) > 1:
+        for v in verts[:2]:
+            label = v.replace("_", " ")
+            out.append({"label": f"Only {label}", "action": f"vertical:{v}"})
+
+    # Sort/narrow by quality when ratings exist.
+    if any((c.get("community_rating") or c.get("rating")) for c in cards) and q:
+        out.append({"label": "★ Top rated", "send": f"best rated {q}"})
+
+    # Offer a dietary/service refinement that the results genuinely support.
+    present = {t for c in cards for t in (c.get("features") or [])}
+    for tag in _REFINE_TAGS:
+        if len(out) >= _MAX_FOLLOWUPS - 1:
+            break
+        if tag in present and tag not in q.lower():
+            out.append({"label": tag.replace("-", " "), "send": f"{q} {tag}".strip()})
+
+    # Distance only helps if we do not already know where they are.
+    if not _point(geo) and q and len(out) < _MAX_FOLLOWUPS:
+        out.append({"label": "📍 Near me", "action": "near_me"})
+
+    if len(cards) >= 2 and len(out) < _MAX_FOLLOWUPS:
+        out.append({"label": f"⇄ Compare top {min(3, len(cards))}", "action": "compare"})
+
+    return out[:_MAX_FOLLOWUPS]
 
 
 def reply(messages: list[dict], geo: dict | None = None, filters: dict | None = None) -> dict:

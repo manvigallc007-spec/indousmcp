@@ -154,11 +154,18 @@ def test_listing_page_has_a_single_pin_map():
         db.execute("DELETE FROM restaurants WHERE id=%s", (rid,))
 
 
-def test_client_script_is_shipped_once_per_page():
+def test_client_is_a_cacheable_file_not_inlined_per_page():
+    """Inlining cost the homepage ~10KB on every load, including for visitors who never search."""
+    for path in ("/map.js", "/map.css"):
+        r = _client.get(path)
+        assert r.status_code == 200 and "max-age" in r.headers.get("cache-control", "")
+    assert "window.naMap=window.naMap||function" in _client.get("/map.js").text
+
     rid = _mk("ZZTEST Once Cafe")
     try:
         t = _client.get(f"/browse/restaurants/tx/{_CITY.lower()}").text
-        assert t.count("window.naMap=window.naMap||function") == 1
+        assert t.count('<script src="/map.js">') == 1
+        assert "window.naMap=window.naMap||function" not in t      # not inlined any more
     finally:
         db.execute("DELETE FROM restaurants WHERE id=%s", (rid,))
 
@@ -206,18 +213,35 @@ def test_in_view_tiles_are_not_lazy_loaded():
     assert "decoding='async'" in mapview.JS
 
 
-def test_client_is_defined_before_any_map_calls_it():
-    """Each map ships an inline naMap(...) call beside its own markup, so the definition must come
-    earlier in the document. It was originally emitted at the end of <body>, which meant every map
-    threw ReferenceError and rendered blank."""
+def test_client_loads_before_any_map_calls_it():
+    """Each map ships an inline naMap(...) call beside its own markup, so the client must have run
+    by then. It was originally emitted at the end of <body>: every map threw ReferenceError and
+    rendered blank while every markup assertion still passed."""
     rid = _mk("ZZTEST Order Cafe")
     try:
         for path in (f"/browse/restaurants/tx/{_CITY.lower()}", f"/listing/restaurants/{rid}"):
             t = _client.get(path).text
-            defn = t.find("window.naMap=window.naMap||function")
+            tag = t.find('<script src="/map.js">')
             call = t.find("naMap('m")
-            assert defn != -1 and call != -1, f"{path} has no map"
-            assert defn < call, f"{path} calls naMap before defining it"
+            assert tag != -1 and call != -1, f"{path} has no map"
+            assert tag < call, f"{path} calls naMap before loading the client"
+    finally:
+        db.execute("DELETE FROM restaurants WHERE id=%s", (rid,))
+
+
+def test_the_map_client_is_never_deferred():
+    """A plain <script src> blocks parsing until it has run, which is exactly what the inline
+    naMap(...) calls downstream depend on. Adding defer/async as an "optimisation" would bring back
+    the blank-map bug, so it is asserted rather than left to memory."""
+    rid = _mk("ZZTEST Defer Cafe")
+    try:
+        for path in ("/", f"/browse/restaurants/tx/{_CITY.lower()}", f"/listing/restaurants/{rid}"):
+            t = _client.get(path).text
+            i = t.find('src="/map.js"')
+            if i == -1:
+                continue
+            tag = t[t.rfind("<script", 0, i):t.find(">", i) + 1]
+            assert "defer" not in tag and "async" not in tag, f"{path}: {tag}"
     finally:
         db.execute("DELETE FROM restaurants WHERE id=%s", (rid,))
 

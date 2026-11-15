@@ -15,7 +15,7 @@ from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, St
 from starlette.routing import Route
 
 from .. import assistant, flyer, verticals
-from . import homeportal
+from . import homeportal, mapview
 from ..config import settings
 from .auth import portal_email
 from .common import NAV_ITEMS, analytics_tag, partner_bar, tabbar_html
@@ -95,6 +95,7 @@ _CHAT_HTML = """<!doctype html><html lang="en"><head>
 <meta name="theme-color" content="#e8772e" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#14110e" media="(prefers-color-scheme: dark)">
 __THEMEHEAD__
+__MAPHEAD__
 __GA__
 <script type="application/ld+json">__JSONLD__</script>
 <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}</script>
@@ -238,6 +239,20 @@ a{color:var(--brand);text-decoration:none}
 @media(max-width:760px){body{padding-bottom:0}}
 @media(max-width:680px){.welcome{margin-top:4vh}.welcome h1{font-size:25px}.welcome p{font-size:16px}
  #mic{display:none}.voicebtn{padding:0 14px}}
+.fups{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.fup{background:var(--panel);border:1px solid var(--line);color:var(--ink-3);border-radius:999px;
+ padding:8px 14px;font-size:13.5px;font-weight:600;cursor:pointer;transition:.15s;min-height:38px}
+.fup:hover{border-color:var(--accent);color:var(--accent-ink)}
+.fup.act{border-color:var(--accent);background:var(--accent-tint);color:var(--accent-ink)}
+.cmp{margin-top:12px;overflow-x:auto;border:1px solid var(--line);border-radius:var(--r-lg);
+ background:var(--panel)}
+.cmp table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:440px}
+.cmp th,.cmp td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-3);vertical-align:top}
+.cmp th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;
+ white-space:nowrap}
+.cmp td:first-child{font-weight:700;color:var(--ink)}
+.cmp .y{color:var(--ok);font-weight:600}.cmp .n{color:var(--muted)}
+.ansmap{margin-top:12px}
 __PORTALCSS__
 </style></head><body>
 <header class="topbar">
@@ -552,16 +567,99 @@ function addBot(){const m=el('div','msg bot');m.appendChild(el('div','avatar','�
   const content=el('div','content');const b=el('div','bubble');b.appendChild(typing());content.appendChild(b);
   content.appendChild(skeletons(2));
   m.appendChild(content);thread.appendChild(m);scroll();return content;}
-function fillBot(content,reply,cards,suggest,contribute){content.innerHTML='';content.appendChild(el('div','bubble',reply||'…'));
+function fillBot(content,reply,cards,suggest,contribute,mapData,fups){content.innerHTML='';content.appendChild(el('div','bubble',reply||'…'));
+  if(mapData&&mapData.cfg)content.appendChild(answerMap(mapData));
   if(cards&&cards.length){const w=el('div','cards');const N=6;
     cards.slice(0,N).forEach(c=>w.appendChild(card(c)));content.appendChild(w);
     if(cards.length>N){const b=el('button','morebtn','Show '+(cards.length-N)+' more');
       b.onclick=function(){cards.slice(N).forEach(c=>w.appendChild(card(c)));b.remove();scroll();};content.appendChild(b);}
     const vs=[...new Set(cards.map(c=>c.vertical).filter(Boolean))];syncChip(vs.length===1?vs[0]:'');}
+  if(fups&&fups.length)content.appendChild(followupRow(fups,cards,content));
   if(contribute){const a=el('button','addcta','➕ Add a place you know');
     a.onclick=function(){openContribute(contribute.vertical||'',contribute.city||'');};content.appendChild(a);}
   else if(suggest&&suggest.url){const a=el('a','addcta',suggest.label||'➕ Add to directory');a.href=suggest.url;a.target='_blank';a.rel='noopener';content.appendChild(a);}
   scroll();}
+// ---- generative UI: an answer renders components, not just prose + cards --------------------
+// An inline map of exactly these results, built from the server's mapview config -- so panning,
+// pin behaviour and the OSM tile-politeness rules are the same code as the listing pages use.
+function answerMap(m){
+  var d=el('div','ansmap');
+  var det=document.createElement('details');det.className='imap';
+  var sum=document.createElement('summary');
+  sum.innerHTML='🗺️ <span class="imap-lbl">Show these on a map</span>'
+    +'<span class="imap-n">'+m.count+' pin'+(m.count===1?'':'s')+'</span>';
+  det.appendChild(sum);
+  var host=document.createElement('div');host.innerHTML=m.box+(m.attr||'');
+  while(host.firstChild)det.appendChild(host.firstChild);
+  d.appendChild(det);
+  // naMap defers every tile fetch until the <details> is opened, so this stays free until asked for.
+  setTimeout(function(){try{naMap(m.id,m.cfg);}catch(e){}},0);
+  return d;
+}
+
+function followupRow(fups,cards,content){
+  var row=el('div','fups');
+  fups.forEach(function(f){
+    if(f.href){var a=el('a','fup',f.label);a.href=f.href;row.appendChild(a);return;}
+    var b=el('button','fup',f.label);
+    b.onclick=function(){
+      if(f.send){send(f.send,false);return;}
+      if(f.action==='compare'){showCompare(cards,content,b);return;}
+      applyRefinement(f.action,b);
+    };
+    row.appendChild(b);
+  });
+  return row;
+}
+
+// A refinement changes the active filter and re-runs the SAME question instead of asking a new one,
+// so "open now" costs one search rather than a round of conversation.
+function applyRefinement(action,btn){
+  if(!action)return;
+  if(action==='open_now'){filters.open_now=true;}
+  else if(action==='clear_open_now'){filters.open_now=false;}
+  else if(action.indexOf('vertical:')===0){var v=action.slice(9);filters.vertical=v||null;syncChip(v);}
+  else if(action==='near_me'){
+    if(!navigator.geolocation)return;
+    if(btn){btn.disabled=true;btn.textContent='Locating…';}
+    navigator.geolocation.getCurrentPosition(function(pos){
+      geo={lat:pos.coords.latitude,lng:pos.coords.longitude};rerun();
+    },function(){if(btn){btn.disabled=false;btn.textContent='📍 Near me';}},{timeout:8000});
+    return;
+  }
+  var ob=document.querySelector('.fchip.open');if(ob)ob.classList.toggle('on',filters.open_now);
+  rerun();
+}
+
+// Side by side on the attributes people actually decide on, built from the cards already in hand --
+// no extra request. Clicking again closes it.
+function showCompare(cards,content,btn){
+  var old=content.querySelector('.cmp');
+  if(old){old.remove();if(btn)btn.classList.remove('act');return;}
+  if(btn)btn.classList.add('act');
+  var picks=(cards||[]).slice(0,3);if(!picks.length)return;
+  var rows=[
+    ['Where',function(c){return [c.city,c.state].filter(Boolean).join(', ')||'—';}],
+    ['Rating',function(c){var r=c.community_rating||c.rating;return r?('★ '+r):'—';}],
+    ['Open now',function(c){return c.open_now===true?'<span class="y">● yes</span>'
+      :(c.open_now===false?'<span class="n">closed</span>':'<span class="n">—</span>');}],
+    ['Phone',function(c){return c.phone?('<a href="tel:'+cesc(c.phone)+'">'+cesc(c.phone)+'</a>'):'—';}],
+    ['Highlights',function(c){return cesc((c.features||[]).slice(0,3).join(', '))||'—';}],
+    ['',function(c){return '<a href="/listing/'+cesc(c.vertical)+'/'+encodeURIComponent(c.id)+'">Details →</a>';}]
+  ];
+  var h='<table><thead><tr><th>Compare</th>';
+  picks.forEach(function(c){h+='<th>'+cesc(c.name||'')+'</th>';});
+  h+='</tr></thead><tbody>';
+  rows.forEach(function(r){
+    h+='<tr><td>'+cesc(r[0])+'</td>';
+    picks.forEach(function(c){h+='<td>'+r[1](c)+'</td>';});
+    h+='</tr>';
+  });
+  h+='</tbody></table>';
+  var box=el('div','cmp');box.innerHTML=h;content.appendChild(box);scroll();
+}
+// Listing text is user/scraper data, so it is escaped before it ever reaches innerHTML.
+function cesc(s){var d=document.createElement('span');d.textContent=(s==null?'':s);return d.innerHTML;}
 function openContribute(vertical,city){
   hideWelcome();const content=addBot();content.innerHTML='';
   content.appendChild(el('div','bubble','Wonderful — share a place you love and I’ll send it to our team to verify and add. 🙏'));
@@ -588,7 +686,7 @@ function sendBlocking(content,isRerun){
   return fetch('/chat/api',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({messages:history,geo:geo,filters:filters,lang:lang})})
     .then(function(r){return r.json();})
-    .then(function(data){fillBot(content,data.reply,data.cards,data.suggest_add,data.contribute);
+    .then(function(data){fillBot(content,data.reply,data.cards,data.suggest_add,data.contribute,data.map,data.followups);
       speak(data.reply);if(!isRerun)history.push({role:'assistant',content:data.reply||''});})
     .catch(function(){fillBot(content,'Sorry, something went wrong. Please try again.',[]);});
 }
@@ -604,7 +702,7 @@ async function send(text,isRerun){
       return sendBlocking(content,isRerun);
     }
     const reader=r.body.getReader(),dec=new TextDecoder();
-    let buf='',acc='',cards=null,started=false,fell=false,bubble=null;
+    let buf='',acc='',cards=null,fin={},started=false,fell=false,bubble=null;
     while(true){
       const rd=await reader.read(); if(rd.done)break;
       buf+=dec.decode(rd.value,{stream:true});
@@ -618,12 +716,12 @@ async function send(text,isRerun){
           if(!started){content.innerHTML='';bubble=el('div','bubble');content.appendChild(bubble);started=true;}
           acc+=obj.delta;bubble.textContent=acc;scroll();
         }
-        if(obj.final){cards=(obj.final&&obj.final.cards)||null;}
+        if(obj.final){fin=obj.final||{};cards=fin.cards||null;}
       }
       if(fell)break;
     }
     if(fell||!started){return sendBlocking(content,isRerun);}
-    fillBot(content,acc,cards);speak(acc);
+    fillBot(content,acc,cards,fin.suggest_add,fin.contribute,fin.map,fin.followups);speak(acc);
     if(!isRerun)history.push({role:'assistant',content:acc});
   }catch(e){return sendBlocking(content,isRerun);}
 }
@@ -759,6 +857,7 @@ def chat_page(request: Request) -> HTMLResponse:
         "__SKIPLINK__": skip_link("#log"), "__TABBAR__": tabbar_html("/", static=True),
         "__PORTAL__": _portal_html(),
         "__PORTALCSS__": homeportal.CSS,
+        "__MAPHEAD__": mapview.head_tags(),
         "__TOPNAV__": "".join(
             f'<a href="{h}">{html.escape(lbl)}</a>' for h, lbl in NAV_ITEMS
             if h not in ("/", "/chat")),   # skip self-referential Home / Ask-Dost on the homepage
@@ -767,6 +866,32 @@ def chat_page(request: Request) -> HTMLResponse:
     for k, v in repl.items():
         doc = doc.replace(k, v)
     return HTMLResponse(doc)
+
+
+def _augment(result: dict, query: str = "", filters: dict | None = None,
+              geo: dict | None = None) -> dict:
+    """Add the generative-UI payload to a reply: an inline map config and contextual follow-ups.
+
+    Applied in ONE place so the streaming and blocking paths cannot drift. The map reuses
+    `mapview.config`/`box_html`, i.e. the same implementation the server-rendered pages use, so a
+    fix to panning or pin behaviour lands everywhere at once. Never raises into the response.
+    """
+    cards = result.get("cards") or []
+    try:
+        cfg = mapview.config(cards, (cards[0].get("vertical") if cards else "") or "restaurants")
+        if cfg:
+            mid = f"cm{int(time.time() * 1000) % 10**9}"
+            result["map"] = {"id": mid, "cfg": cfg,
+                             "box": mapview.box_html(mid, height=300, label="Map of these results"),
+                             "attr": mapview.ATTRIBUTION,
+                             "count": len(cfg["pins"])}
+    except Exception:
+        pass
+    try:
+        result["followups"] = assistant.followups(query, cards, filters, geo)
+    except Exception:
+        pass
+    return result
 
 
 async def chat_api(request: Request) -> JSONResponse:
@@ -802,6 +927,9 @@ async def chat_api(request: Request) -> JSONResponse:
         if isinstance(m, dict) and isinstance(m.get("content"), str):
             m["content"] = m["content"][:1000]
     result = assistant.reply(messages, geo=geo, filters=filters)
+    last_user = next((m["content"] for m in reversed(messages)
+                      if isinstance(m, dict) and m.get("role") == "user"), "")
+    _augment(result, last_user, filters, geo)
     # Log EVERY chat turn (search, knowledge, clarify, discovery...) so the admin Traffic page
     # reflects real usage — not just listing searches. Best-effort; never breaks the response.
     try:
@@ -876,6 +1004,9 @@ async def chat_stream(request: Request) -> "JSONResponse | StreamingResponse":
                     yield "data: " + json.dumps({"delta": val}) + "\n\n"
                 elif kind == "final":
                     cards = (val or {}).get("cards")
+                    uq = next((m["content"] for m in reversed(messages)
+                               if isinstance(m, dict) and m.get("role") == "user"), "")
+                    _augment(val or {}, uq, filters, geo)
                     yield "data: " + json.dumps({"final": val}) + "\n\n"
         finally:
             await task

@@ -24,6 +24,10 @@ from __future__ import annotations
 import html
 import json
 
+from starlette.requests import Request
+from starlette.responses import Response
+from starlette.routing import Route
+
 from . import staticmap
 
 _MIN_Z, _MAX_Z = 3, 18
@@ -55,20 +59,18 @@ def _points(rows: list[dict], vertical: str) -> list[dict]:
     return out
 
 
-def render(rows: list[dict], vertical: str, *, title: str = "", height: int = 380,
-           collapsed: bool = True) -> str:
-    """An interactive map of `rows` (the same dicts the listing cards use: id, name, lat, lng).
+def config(rows: list[dict], vertical: str) -> dict | None:
+    """The client-side map configuration for `rows`, or None when nothing has coordinates.
 
-    Returns "" when nothing has coordinates. Pair with `CSS` in the page's <style> and include
-    `staticmap.CSS` too, for the <noscript> fallback.
+    Split out of render() so the chat UI can mount a map from a JSON reply using the *same*
+    implementation the server-rendered pages use, rather than a second copy that drifts.
     """
     pts = _points(rows, vertical)
     if not pts:
-        return ""
-
+        return None
     lats = [p["lat"] for p in pts]
     lngs = [p["lng"] for p in pts]
-    cfg = {
+    return {
         "pins": pts,
         "tile": TILE_URL,
         "minZ": _MIN_Z,
@@ -77,17 +79,14 @@ def render(rows: list[dict], vertical: str, *, title: str = "", height: int = 38
         "bounds": [min(lats), min(lngs), max(lats), max(lngs)],
         "single": len(pts) == 1,
     }
-    # "</" would end the <script> element early; JSON has no other way out of it.
-    blob = json.dumps(cfg, ensure_ascii=False).replace("</", "<\\/")
-    cap = html.escape(title or "Map of results")
-    mid = f"m{abs(hash((cap, len(pts), pts[0]['id']))) % 10**8}"
 
+
+def box_html(mid: str, *, height: int = 380, label: str = "Map of results") -> str:
+    """The map viewport markup: tiles, pins, popup, controls. No <script>, no data — safe to inject
+    client-side, and the single definition of this chrome for both render paths."""
     return (
-        f"<details class='imap' {'' if collapsed else 'open'}>"
-        f"<summary>🗺️ <span class='imap-lbl'>Show map</span>"
-        f"<span class='imap-n'>{len(pts)} pin{'' if len(pts) == 1 else 's'}</span></summary>"
-        f"<div class='imap-box' id='{mid}' style='height:{int(height)}px'"
-        f" role='application' aria-label='{cap}'>"
+        f"<div class='imap-box' id='{html.escape(mid)}' style='height:{int(height)}px'"
+        f" role='application' aria-label='{html.escape(label)}'>"
         "<div class='imap-tiles' aria-hidden='true'></div>"
         "<div class='imap-pins'></div>"
         "<div class='imap-pop' hidden></div>"
@@ -98,13 +97,39 @@ def render(rows: list[dict], vertical: str, *, title: str = "", height: int = 38
         "<button type='button' class='imap-btn' data-act='me' aria-label='Centre on my location'>◎</button>"
         "</div>"
         "<div class='imap-hint'>Drag to pan · pinch or +/− to zoom · tap a pin</div>"
-        "</div>"
-        "<div class='imap-attr'>© <a href='https://www.openstreetmap.org/copyright' rel='nofollow'>"
-        "OpenStreetMap</a> contributors</div>"
-        f"<script>naMap('{mid}',{blob})</script>"
+        "</div>")
+
+
+ATTRIBUTION = ("<div class='imap-attr'>© <a href='https://www.openstreetmap.org/copyright' "
+               "rel='nofollow'>OpenStreetMap</a> contributors</div>")
+
+
+def render(rows: list[dict], vertical: str, *, title: str = "", height: int = 380,
+           collapsed: bool = True) -> str:
+    """An interactive map of `rows` (the same dicts the listing cards use: id, name, lat, lng).
+
+    Returns "" when nothing has coordinates. Pair with `CSS` in the page's <style> and include
+    `staticmap.CSS` too, for the <noscript> fallback.
+    """
+    cfg = config(rows, vertical)
+    if not cfg:
+        return ""
+    pins = cfg["pins"]
+    # "</" would end the <script> element early; JSON has no other way out of it.
+    blob = json.dumps(cfg, ensure_ascii=False).replace("</", r"<\/")
+    cap = title or "Map of results"
+    mid = f"m{abs(hash((cap, len(pins), pins[0]['id']))) % 10**8}"
+
+    return (
+        f"<details class='imap' {'' if collapsed else 'open'}>"
+        f"<summary>🗺️ <span class='imap-lbl'>Show map</span>"
+        f"<span class='imap-n'>{len(pins)} pin{'' if len(pins) == 1 else 's'}</span></summary>"
+        + box_html(mid, height=height, label=cap)
+        + ATTRIBUTION
+        + f"<script>naMap('{mid}',{blob})</script>"
         # No JS (or a failed script): the plain tile grid still shows, already open.
-        f"<noscript>{staticmap.render(rows, vertical, title=title)}</noscript>"
-        "</details>")
+        + f"<noscript>{staticmap.render(rows, vertical, title=title)}</noscript>"
+        + "</details>")
 
 
 # --------------------------------------------------------------------------------------- client
@@ -326,3 +351,32 @@ CSS = """
  @media (max-width:560px){.imap-hint{display:none}}
  @media (prefers-reduced-motion:reduce){.imap-t,.imap-pin{will-change:auto}}
 """
+
+
+# ----------------------------------------------------------------------------------- resources
+# The client and its styles are served as cacheable same-origin files rather than inlined into
+# every page: the homepage alone was carrying ~10KB of this on each load, including for visitors
+# who never run a search. Same approach as /theme.css, and still inside script-src 'self'.
+_MAX_AGE = 3600
+
+
+def head_tags() -> str:
+    """What a page needs in <head> to use maps. The script must come BEFORE any markup, because
+    each map inline-calls naMap() next to its own container."""
+    return '<link rel="stylesheet" href="/map.css"><script src="/map.js"></script>'
+
+
+def map_js(request: Request) -> Response:
+    return Response(JS, media_type="application/javascript",
+                    headers={"Cache-Control": f"public, max-age={_MAX_AGE}"})
+
+
+def map_css(request: Request) -> Response:
+    return Response(CSS, media_type="text/css",
+                    headers={"Cache-Control": f"public, max-age={_MAX_AGE}"})
+
+
+routes = [
+    Route("/map.js", map_js, methods=["GET"]),
+    Route("/map.css", map_css, methods=["GET"]),
+]

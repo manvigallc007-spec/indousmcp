@@ -178,7 +178,7 @@ def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200,
 <meta name="theme-color" content="#c1440e" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#14110e" media="(prefers-color-scheme: dark)">
 {head_tags()}
-<script>{mapview.JS}</script>
+{mapview.head_tags()}
 <script>if('serviceWorker' in navigator){{window.addEventListener('load',function(){{navigator.serviceWorker.register('/sw.js').catch(function(){{}})}})}}</script>
 {ld}
 <style>
@@ -222,7 +222,6 @@ def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200,
    padding:2px 9px;vertical-align:middle}}
  @media(max-width:640px){{.shero input,.shero button{{flex:1 1 100%}}}}
 {staticmap.CSS}
-{mapview.CSS}
  .lc{{background:var(--panel);border:1px solid var(--line);border-left:4px solid {_BRAND};border-radius:12px;
    padding:14px 16px;margin:10px 0;transition:.15s}}
  .lc:hover{{transform:translateY(-2px);box-shadow:0 10px 24px rgba(16,24,40,.08);border-color:var(--line)}}
@@ -1133,8 +1132,8 @@ def manifest(request: Request) -> Response:
 
 
 _SW_JS = """
-const C='na-shell-v8';
-const SHELL=['/','/browse','/events','/icon.svg','/theme.css','/manifest.webmanifest'];
+const C='na-shell-v9';
+const SHELL=['/','/browse','/events','/icon.svg','/theme.css','/map.css','/map.js','/manifest.webmanifest'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==C).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{
