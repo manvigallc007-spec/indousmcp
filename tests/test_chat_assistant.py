@@ -273,6 +273,11 @@ def no_results(monkeypatch):
     monkeypatch.setattr(assistant.verticals, "search_all", lambda *a, **k: {"count": 0, "results": []})
     monkeypatch.setattr(assistant.analytics, "log_impressions", lambda *a, **k: None)
     monkeypatch.setattr(assistant.analytics, "log_call", lambda *a, **k: None)
+    # "no results" has to mean the knowledge base too, or these tests only pass on a machine whose
+    # KB happens to be empty: loading the DOL H-1B data writes wage/occupation documents, and a
+    # general question then matches one and answers from `knowledge` instead of falling back to web.
+    from indo_usa_mcp import knowledge
+    monkeypatch.setattr(knowledge, "search", lambda *a, **k: [])
 
 
 def test_extract_location():

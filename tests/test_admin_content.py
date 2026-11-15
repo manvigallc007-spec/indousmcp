@@ -71,7 +71,10 @@ def test_employers_admin_flow(monkeypatch):
                        "('ZZTEST CONTENT CORP', 'ZZTest Content Corp', 5) RETURNING id")
     sid = row["id"]
     try:
-        assert "ZZTest Content Corp" in _client.get("/admin/employers").text
+        # Search rather than reading page 1: with real DOL data loaded there are thousands of
+        # sponsors and this row sorts onto page ~101.
+        assert "ZZTest Content Corp" in _client.get(
+            "/admin/employers", params={"q": "ZZTEST CONTENT"}).text
         detail = _client.get(f"/admin/employers/{sid}")
         assert detail.status_code == 200 and "Save edits" in detail.text
 
