@@ -20,6 +20,7 @@ from starlette.routing import Route
 
 from .. import accounts, db, owner_content, reviews as reviews_mod, tags as tagsmod, verticals
 from . import mapview
+from .. import photos as photos_mod
 from ..config import settings
 from . import i18n, seo
 from .auth import portal_email, verify_captcha
@@ -27,6 +28,7 @@ from .common import captcha_field, share_html
 from .landing import _FEATURED, _cathead, _label, _page
 
 _CSS = """<style>
+
 .lh{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:2px 0 4px}
 .lh .rate{color:var(--warn);font-weight:600}.lh .muted{font-size:14px}
 .lmeta{color:var(--ink-2);margin:6px 0}.lmeta a{font-weight:600}
@@ -297,7 +299,7 @@ def listing_page(request: Request) -> HTMLResponse:
         banner = "<div class='banner ok'>✓ Thanks — we'll review your suggestion.</div>"
 
     body = (
-        _CSS
+        _CSS.replace('<style>', '<style>' + photos_mod.CSS)
         + f"<nav class='crumbs'><a href='/browse'>{html.escape(tr['browse'])}</a> › "
         + f"<a href='/browse/{v}'>{html.escape(label)}</a> › {html.escape(r['name'])}</nav>"
         + _cathead(v)
@@ -311,6 +313,7 @@ def listing_page(request: Request) -> HTMLResponse:
         + (f"<img src='{html.escape(r['photo_url'])}' alt='{html.escape(r['name'])}' loading='lazy' "
            f"onerror='this.remove()' style='width:100%;max-height:300px;object-fit:cover;"
            f"border-radius:14px;margin:8px 0'>" if r.get("photo_url") else "")
+        + photos_mod.gallery_html(v, listing_id, r["name"])
         + (f"<div class='lh'>{ratings}</div>" if ratings else "")
         + (f"<p class='lmeta'>📍 {html.escape(addr)}</p>" if addr else "")
         + (f"<p class='lmeta'>{links}</p>" if links else "")

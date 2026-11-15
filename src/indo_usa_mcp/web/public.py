@@ -75,11 +75,14 @@ _UPLOAD_MIME = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "
 
 
 def uploaded_file(request: Request) -> Response:
-    """Serve a locally-stored upload (flyer images). Path-traversal safe: only a bare 'flyers/<hex>.ext'
-    shape (no '..', no absolute path, no subdirectory beyond 'flyers/') is ever resolved to disk."""
+    """Serve a locally-stored upload. Path-traversal safe: only a bare '<flyers|photos>/<name>.<ext>'
+    shape (no '..', no absolute path, no deeper subdirectory) is ever resolved to disk.
+
+    'photos/' holds owner-uploaded listing photos, which are always our own re-encoded WebP
+    derivatives -- never a file as uploaded -- so there is nothing user-supplied here to serve."""
     rel = (request.path_params.get("path") or "").strip()
     parts = rel.split("/")
-    if (len(parts) != 2 or parts[0] != "flyers" or not parts[1]
+    if (len(parts) != 2 or parts[0] not in ("flyers", "photos") or not parts[1]
             or ".." in rel or rel.startswith("/") or "\\" in rel):
         return Response(status_code=404)
     ext = parts[1].rsplit(".", 1)[-1].lower() if "." in parts[1] else ""

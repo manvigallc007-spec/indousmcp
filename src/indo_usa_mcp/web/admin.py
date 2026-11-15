@@ -8,8 +8,8 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Route
 
-from .. import (analytics, db, inbox, payments, quality, recommendations, reporting, reviews,
-                submissions, verticals)
+from .. import (analytics, db, inbox, payments, photos as photos_mod, quality, recommendations,
+                reporting, reviews, submissions, verticals)
 from ..agents import AGENTS, run_agent
 from ..events import pipeline as events
 from ..config import settings
@@ -1509,6 +1509,69 @@ def ops_page(request: Request) -> HTMLResponse:
     return admin_page("Operations", body, active="Operations")
 
 
+# ------------------------------------------------------------------------------ listing photos
+def photos_page(request: Request) -> HTMLResponse:
+    """Owner-uploaded photos awaiting review. Nothing here is public yet."""
+    if (resp := require_admin(request)):
+        return resp
+    rows = photos_mod.pending(80)
+    if not rows:
+        body = ("<p class='muted'>No photos waiting. Owner uploads appear here before they go "
+                "live on a listing.</p>")
+    else:
+        cards = []
+        for ph in rows:
+            rec = {}
+            try:
+                rec = verticals.get_record(ph["vertical"], ph["listing_id"]) or {}
+            except Exception:
+                pass
+            name = rec.get("name") or f"{ph['vertical']} #{ph['listing_id']}"
+            where = ", ".join(x for x in (rec.get("city"), rec.get("state")) if x)
+            cards.append(
+                "<div class='kpi' style='min-width:260px;max-width:300px'>"
+                + photos_mod.img_html(ph, alt=name, sizes="280px", lazy=True,
+                                      style="width:100%;height:170px;object-fit:cover;"
+                                            "border-radius:10px;margin-bottom:8px")
+                + f"<b style='font-size:15px'>{esc(name)}</b>"
+                + (f"<span class='muted'>{esc(where)}</span>" if where else "")
+                + f"<div class='muted' style='font-size:12.5px;margin:4px 0'>"
+                  f"{esc(ph['vertical'])} · by {esc(ph['owner_email'])}"
+                  f" · {esc(str(ph['created_at'])[:16])}</div>"
+                + (f"<div style='font-size:13px'>“{esc(ph['caption'])}”</div>"
+                   if ph.get("caption") else "")
+                + f"<div style='margin-top:9px;display:flex;gap:6px;flex-wrap:wrap'>"
+                  f"<form class='inline' method='post' action='/admin/photos'>"
+                  f"<input type='hidden' name='id' value='{ph['id']}'>"
+                  "<button name='action' value='publish'>Publish</button></form>"
+                  f"<form class='inline' method='post' action='/admin/photos'>"
+                  f"<input type='hidden' name='id' value='{ph['id']}'>"
+                  "<input name='reason' placeholder='reason (optional)' style='width:120px'>"
+                  "<button class='btn gray' name='action' value='reject'>Reject</button></form>"
+                  f"<a class='btn gray' href='/listing/{esc(ph['vertical'])}/{ph['listing_id']}' "
+                  "target='_blank' rel='noopener'>View listing</a></div></div>")
+        body = (f"<p class='muted'>{len(rows)} photo(s) awaiting review. Rejecting also deletes the "
+                "stored files.</p><div class='cards'>" + "".join(cards) + "</div>")
+    return admin_page("Photos", body, active="Photos")
+
+
+async def photos_action(request: Request) -> HTMLResponse:
+    if (resp := require_admin(request)):
+        return resp
+    form = await request.form()
+    try:
+        pid = int(form.get("id") or 0)
+    except ValueError:
+        pid = 0
+    if pid:
+        if (form.get("action") or "") == "publish":
+            photos_mod.publish(pid, "admin")
+        else:
+            photos_mod.reject(pid, form.get("reason") or "", "admin")
+    return RedirectResponse("/admin/photos", status_code=303)
+
+
+
 routes = [
     Route("/admin/login", login_get, methods=["GET"]),
     Route("/admin/login", login_post, methods=["POST"]),
@@ -1541,6 +1604,8 @@ routes = [
     Route("/admin/claims", claims, methods=["GET"]),
     Route("/admin/submissions", submissions_page, methods=["GET"]),
     Route("/admin/submissions", submissions_action, methods=["POST"]),
+    Route("/admin/photos", photos_page, methods=["GET"]),
+    Route("/admin/photos", photos_action, methods=["POST"]),
     Route("/admin/reviews", reviews_page, methods=["GET"]),
     Route("/admin/reviews", reviews_action, methods=["POST"]),
     Route("/admin/qa", qa_page, methods=["GET"]),

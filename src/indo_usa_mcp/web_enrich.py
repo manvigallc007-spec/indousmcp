@@ -206,7 +206,7 @@ def enrich_vertical(vertical: str, limit: int = 40, max_age_days: int = 90) -> d
     regenerates description + embedding. Stamps web_enriched_at on every attempt (even a
     dead site) so the agent rotates politely instead of re-hitting the same pages.
     """
-    from . import db, describe, embeddings, tags as tagmod, verticals
+    from . import db, describe, embeddings, photos, tags as tagmod, verticals
     from .pipeline.ingest import _adapt
 
     table = verticals._table(vertical)  # registry-controlled name (safe in f-string)
@@ -230,7 +230,10 @@ def enrich_vertical(vertical: str, limit: int = 40, max_age_days: int = 90) -> d
             colvals["rating"] = sig["rating"]
         if "rating_count" in sig:
             colvals["rating_count"] = sig["rating_count"]
-        if sig.get("photo_url"):
+        # An owner's approved photo outranks whatever we scraped off their website. Without this
+        # guard the next enrichment run would quietly replace it and the owner would watch their
+        # photo vanish with no explanation.
+        if sig.get("photo_url") and not photos.is_owner_photo(r.get("photo_url")):
             colvals["photo_url"] = sig["photo_url"][:500]
         if sig.get("socials"):
             colvals["socials"] = sig["socials"]

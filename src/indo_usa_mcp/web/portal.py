@@ -11,7 +11,7 @@ from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Route
 
 from .. import accounts, analytics, db, flyer, onboard, owner_content, payments, \
-    reviews as reviews_mod, submissions, verticals
+    photos as photos_mod, reviews as reviews_mod, submissions, verticals
 from ..config import settings
 from ..events import pipeline as events
 from ..pipeline import outreach
@@ -416,6 +416,47 @@ def listing_manage(request: Request) -> HTMLResponse:
               "<label>Expires (optional)</label><input name='expires_at' type='date'>"
               "<button type='submit'>Post</button></form>")
 
+    # --- photos: the one contribution an owner can make that visibly improves their own listing
+    _pmsg = {"ok": ("<p class='ok'>Thanks — your photo is queued for review and will appear once "
+                    "approved.</p>")}.get(request.query_params.get("photo") or "", "")
+    if not _pmsg and request.query_params.get("photo"):
+        _pmsg = (f"<p class='err'>"
+                 f"{esc(_PHOTO_ERR.get(request.query_params['photo'], 'That upload failed.'))}</p>")
+    _mine = photos_mod.for_listing(vertical, rec_id, status="")
+    _STATUS_NOTE = {"pending": "⏳ awaiting review", "published": "✓ live",
+                    "rejected": "✕ not approved"}
+    _shots = "".join(
+        "<figure class='pshot'>"
+        + photos_mod.img_html(ph, alt=rec["name"], sizes="180px",
+                              style="width:180px;height:120px;object-fit:cover;border-radius:10px")
+        + f"<figcaption class='muted'>{esc(_STATUS_NOTE.get(ph['status'], ph['status']))}"
+        + (f" · {esc(ph['reject_reason'])}" if ph.get("reject_reason") else "")
+        + "</figcaption>"
+        + (f"<form method='post' action='/portal/listing/{vertical}/{rec_id}/photo/{ph['id']}/delete'>"
+           "<button class='linkbtn'>Remove</button></form>" if ph["status"] != "rejected" else "")
+        + "</figure>" for ph in _mine)
+    _room = photos_mod.MAX_PER_LISTING - photos_mod.count_for_listing(vertical, rec_id)
+    _form = (
+        f"<form method='post' action='/portal/listing/{vertical}/{rec_id}/photo' "
+        "enctype='multipart/form-data'>"
+        "<label>Add a photo <span class='muted'>(JPG, PNG or WebP · "
+        f"up to {settings.max_upload_mb}MB)</span></label>"
+        "<input type='file' name='photo' accept='image/jpeg,image/png,image/webp' required>"
+        "<label>Caption (optional)</label><input name='caption' maxlength='200' "
+        "placeholder='e.g. Our weekend thali'>"
+        "<button type='submit'>Upload photo</button>"
+        "<p class='muted' style='font-size:12.5px;margin-top:8px'>Photos are checked by our team "
+        "before they go live. Please upload only pictures you own. Location data is removed "
+        "automatically.</p></form>"
+        if _room > 0 else
+        f"<p class='muted'>You've reached the limit of {photos_mod.MAX_PER_LISTING} photos. "
+        "Remove one to add another.</p>")
+    photos_html = (f"<h3 style='margin-top:22px'>Photos</h3>{_pmsg}"
+                   + (f"<div class='pgrid'>{_shots}</div>" if _shots else
+                      "<p class='muted'>No photos yet — a real photo makes a listing far more "
+                      "convincing.</p>")
+                   + _form)
+
     rblocks = []
     for r in revs:
         n = int(r["rating"])
@@ -480,7 +521,7 @@ def listing_manage(request: Request) -> HTMLResponse:
             f"<p class='muted'><a href='/portal/edit/{vertical}/{rec_id}'>Edit details</a> · "
             f"<a href='/listing/{vertical}/{rec_id}' target='_blank'>View public page</a> · "
             "<a href='/portal'>‹ your listings</a></p>"
-            + metrics + offers + reviews_html)
+            + metrics + photos_html + offers + reviews_html)
     return _page(f"Manage {rec['name']}", body)
 
 
@@ -503,6 +544,48 @@ async def offer_delete(request: Request) -> HTMLResponse:
         return resp
     owner_content.remove_post(int(request.path_params["post_id"]), portal_email(request))
     return RedirectResponse(f"/portal/listing/{vertical}/{rec_id}", status_code=303)
+
+
+# ----------------------------------------------------------------------------- listing photos
+_PHOTO_ERR = {
+    "unsupported_type": "Please upload a JPG, PNG or WebP image.",
+    "not_an_image": "That file isn't an image we can read.",
+    "file_too_large": "That file is too large.",
+    "image_too_large": "That image is too big — please upload a smaller one.",
+    "image_too_small": "That image is too small to show well (at least 200×200).",
+    "duplicate": "You've already uploaded that photo.",
+    "too_many": f"You can have up to {photos_mod.MAX_PER_LISTING} photos per listing.",
+    "empty": "No file was attached.",
+    "unavailable": "Photo uploads aren't available right now.",
+}
+
+
+async def photo_upload(request: Request) -> HTMLResponse:
+    """Owner uploads a photo of their own listing. It is stored pending admin review."""
+    vertical, rec_id = request.path_params["vertical"], int(request.path_params["id"])
+    rec, resp = _require_owner(request, vertical, rec_id)
+    if resp:
+        return resp
+    form = await request.form()
+    upload = form.get("photo")
+    back = f"/portal/listing/{vertical}/{rec_id}"
+    if upload is None or not getattr(upload, "filename", None):
+        return RedirectResponse(back + "?photo=empty", status_code=303)
+    data = await upload.read()
+    res = photos_mod.ingest(vertical, rec_id, portal_email(request), data,
+                            upload.content_type or "", caption=(form.get("caption") or ""))
+    flag = "ok" if res.get("ok") else (res.get("error") or "failed")
+    return RedirectResponse(f"{back}?photo={flag}", status_code=303)
+
+
+async def photo_delete(request: Request) -> HTMLResponse:
+    vertical, rec_id = request.path_params["vertical"], int(request.path_params["id"])
+    _rec, resp = _require_owner(request, vertical, rec_id)
+    if resp:
+        return resp
+    photos_mod.remove(int(request.path_params["photo_id"]), portal_email(request))
+    return RedirectResponse(f"/portal/listing/{vertical}/{rec_id}", status_code=303)
+
 
 
 async def review_reply(request: Request) -> HTMLResponse:
@@ -882,5 +965,8 @@ routes = [
     Route("/portal/listing/{vertical}/{id:int}/offer", offer_create, methods=["POST"]),
     Route("/portal/listing/{vertical}/{id:int}/offer/{post_id:int}/delete", offer_delete, methods=["POST"]),
     Route("/portal/listing/{vertical}/{id:int}/reply", review_reply, methods=["POST"]),
+    Route("/portal/listing/{vertical}/{id:int}/photo", photo_upload, methods=["POST"]),
+    Route("/portal/listing/{vertical}/{id:int}/photo/{photo_id:int}/delete",
+          photo_delete, methods=["POST"]),
     Route("/portal/logout", logout, methods=["GET"]),
 ]
