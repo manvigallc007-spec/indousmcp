@@ -16,7 +16,7 @@ from starlette.routing import Route
 
 from .. import inbox
 from ..config import settings
-from . import seo
+from . import i18n, seo
 from .auth import verify_captcha
 from .common import NAV_CSS, nav_html, partner_bar, tabbar_html
 from .common import captcha_field
@@ -44,7 +44,26 @@ def _org_jsonld() -> str:
                        "Indian culture"],
     }, ensure_ascii=False).replace("<", "\\u003c")
 
-# Footer links shown on every content page (and reusable elsewhere).
+# Footer links shown on every content page. (translation key, href) -- resolved per request, since
+# this footer appears on every content page and was the last English chrome left on a Hindi page.
+FOOTER_LINKS_I18N = [("nav_home", "/"), ("nav_ask", "/chat"), ("nav_browse", "/browse"),
+                     ("nav_insights", "/insights"), ("nav_list_business", "/for-business"),
+                     ("nav_about", "/about"), ("nav_privacy", "/privacy"), ("nav_terms", "/terms"),
+                     ("nav_contact", "/contact"), ("nav_faq", "/faq")]
+
+
+def footer_links() -> list[tuple[str, str]]:
+    """(label, href) in the visitor's language. "Ask Dost" keeps the assistant's name."""
+    out = []
+    for key, href in FOOTER_LINKS_I18N:
+        label = i18n.tr(key)
+        if key == "nav_ask":
+            label = f"{label} {settings.assistant_name}"
+        out.append((label, href))
+    return out
+
+
+# The English list, still used by anything that needs stable labels (sitemaps, tests).
 FOOTER_LINKS = [("Home", "/"), ("Ask " + settings.assistant_name, "/chat"), ("Browse", "/browse"),
                 ("Insights", "/insights"), ("List your business", "/for-business"), ("About", "/about"),
                 ("Privacy", "/privacy"), ("Terms", "/terms"), ("Contact", "/contact"), ("FAQ", "/faq")]
@@ -52,7 +71,7 @@ FOOTER_LINKS = [("Home", "/"), ("Ask " + settings.assistant_name, "/chat"), ("Br
 
 def footer_html() -> str:
     base = settings.public_web_url.rstrip("/")
-    links = " · ".join(f"<a href='{h}'>{html.escape(t)}</a>" for t, h in FOOTER_LINKS)
+    links = " · ".join(f"<a href='{h}'>{html.escape(t)}</a>" for t, h in footer_links())
     return (
         "<footer>"
         f"<div class='flinks'>{links}</div>"
@@ -71,7 +90,7 @@ def _doc(path: str, title: str, desc: str, body: str, status: int = 200,
     base = settings.public_web_url.rstrip("/")
     url, img = base + path, base + "/og.png"
     t, d = html.escape(title), html.escape(desc)
-    doc = f"""<!doctype html><html lang="en"><head>
+    doc = f"""<!doctype html><html lang="{i18n.html_lang()}"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{t} · {html.escape(settings.platform_name)}</title>
 <meta name="description" content="{d}">

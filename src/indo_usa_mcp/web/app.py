@@ -8,17 +8,19 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from ..config import settings
 from . import (admin, admin_content, api, chat, community_web, errors, landing, me, pages, portal,
-               mapview, public, qa_web, reviews, theme, today_web)
+               i18n, mapview, public, qa_web, reviews, theme, today_web)
 from .pageviews import PageviewMiddleware
 from .security import SecurityHeadersMiddleware
 
 routes = [*public.routes, *chat.routes, *landing.routes, *admin.routes, *admin_content.routes,
           *portal.routes, *me.routes, *today_web.routes, *qa_web.routes, *api.routes, *pages.routes,
-          *reviews.routes, *community_web.routes, *theme.routes, *mapview.routes,
+          *reviews.routes, *community_web.routes, *theme.routes, *mapview.routes, *i18n.routes,
           *errors.routes]
 
 middleware = [
     Middleware(SecurityHeadersMiddleware),
+    # Resolves the UI language once per request; every nav and shell reads it.
+    Middleware(i18n.LanguageMiddleware),
     Middleware(PageviewMiddleware),
     # SameSite=lax blocks the session cookie on cross-site POSTs (CSRF mitigation for authed
     # admin/portal actions); set SESSION_HTTPS_ONLY=true once served over HTTPS.

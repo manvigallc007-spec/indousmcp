@@ -213,7 +213,7 @@ def og_png(request: Request) -> Response:
                     headers={"Cache-Control": "public, max-age=86400"})
 
 
-_LANDING_HTML = """<!doctype html><html lang="en"><head>
+_LANDING_HTML = """<!doctype html><html lang="__LANG__"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__PLAT__ — Find Indian America</title>
 <meta name="description" content="__OGDESC__">
@@ -313,6 +313,7 @@ def home(request: Request) -> HTMLResponse:
         "__SUB__": html.escape(desc), "__TILES__": category_grid(), "__CATCSS__": CATEGORY_CSS,
         "__NAV__": nav_html(), "__NAVCSS__": NAV_CSS, "__THEMEHEAD__": head_tags(),
         "__SKIPLINK__": skip_link(), "__TABBAR__": tabbar_html("/explore"),
+        "__LANG__": i18n.html_lang(),
         "__PARTNERBAR__": partner_bar(),
         # Self-reference /explore (its OWN url) -- not "/" (the chatbot homepage). They're different
         # pages with different content; pointing this page's canonical/og:url at a different page's

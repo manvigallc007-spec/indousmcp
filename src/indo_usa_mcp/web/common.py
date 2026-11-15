@@ -7,6 +7,7 @@ import html
 from starlette.responses import HTMLResponse
 
 from ..config import settings
+from . import i18n
 from .theme import head_tags, skip_link, theme_toggle
 
 # Literal (not a token): this feeds inline-SVG `fill`/`stroke` attributes in sparkline(),
@@ -106,19 +107,39 @@ def partner_bar() -> str:
 # ------------------------------------------------------------------ shared site header / nav
 # Single source of truth for the top menu so every page shell (landing, chat, owner card, about,
 # /explore, error pages) shows the SAME items. (href, label). The last item is styled as a CTA.
-NAV_ITEMS: list[tuple[str, str]] = [
-    ("/", "Home"),
-    ("/today", "☀ Today"),
-    ("/articles", "📰 News"),
-    ("/events", "📅 Events"),
-    ("/browse", "Browse"),
-    ("/questions", "💬 Q&A"),
-    ("/insights", "📊 Insights"),
-    ("/find", "🔎 Search"),
-    ("/me", "♥ Saved"),
-    ("/for-business", "List your business"),
-    ("/chat", "Ask Dost"),
+# (href, icon, translation key). The label is resolved per request, so the whole menu follows the
+# visitor's language instead of being English everywhere outside the chat.
+NAV_ITEMS_I18N: list[tuple[str, str, str]] = [
+    ("/", "", "nav_home"),
+    ("/today", "☀", "nav_today"),
+    ("/articles", "📰", "nav_news"),
+    ("/events", "📅", "nav_events"),
+    ("/browse", "", "nav_browse"),
+    ("/questions", "💬", "nav_qa"),
+    ("/insights", "📊", "nav_insights"),
+    ("/find", "🔎", "nav_search"),
+    ("/me", "♥", "nav_saved"),
+    ("/for-business", "", "nav_list_business"),
 ]
+
+
+def nav_items(lang_code: str | None = None) -> list[tuple[str, str]]:
+    """(href, label) for the main menu, in the request's language, plus the assistant CTA."""
+    out = [(href, (f"{icon} " if icon else "") + i18n.tr(key, lang_code=lang_code))
+           for href, icon, key in NAV_ITEMS_I18N]
+    # The assistant is named, not translated -- "Dost" IS the name.
+    out.append(("/chat", f"{i18n.tr('nav_ask', lang_code=lang_code)} {settings.assistant_name}"))
+    return out
+
+
+# Kept for callers that only need the English list (sitemaps, tests, the chat page's own top nav).
+NAV_ITEMS: list[tuple[str, str]] = [
+    (href, (f"{icon} " if icon else "") + {
+        "nav_home": "Home", "nav_today": "Today", "nav_news": "News", "nav_events": "Events",
+        "nav_browse": "Browse", "nav_qa": "Q&A", "nav_insights": "Insights",
+        "nav_search": "Search", "nav_saved": "Saved", "nav_list_business": "List your business",
+    }[key]) for href, icon, key in NAV_ITEMS_I18N
+] + [("/chat", "Ask Dost")]
 
 
 def nav_html(active: str = "") -> str:
@@ -127,7 +148,7 @@ def nav_html(active: str = "") -> str:
     item. Self-contained markup; pair with NAV_CSS in the page's <style>."""
     plat = html.escape(settings.platform_name)
     links = ""
-    for href, label in NAV_ITEMS:
+    for href, label in nav_items():
         cls = "nav-cta" if href == "/chat" else ""
         if active and (active == href or (href != "/" and active.startswith(href))):
             cls = (cls + " on").strip()
@@ -137,6 +158,7 @@ def nav_html(active: str = "") -> str:
         "<header class='site-header'>"
         f"<a class='site-brand' href='/'><img src='/logo' alt='{plat}'><span>{plat}</span></a>"
         f"<nav class='site-nav' aria-label='Main'>{links}</nav>"
+        f"{i18n.switcher_html(active or '/')}"
         f"{theme_toggle()}"
         "</header>")
 
@@ -162,17 +184,20 @@ NAV_CSS = """
  .site-nav a.nav-cta:hover{background:var(--brand-strong-d);color:var(--on-brand)}
  @media(max-width:760px){.site-brand span{display:none}}
 """
+# The language switcher lives in the header, so its styles ship with the nav's.
+NAV_CSS += i18n.LANG_CSS
 
 
 # ------------------------------------------------------------------ mobile bottom tab bar
 # The five destinations that earn a permanent slot inside the thumb arc on a phone. Everything else
 # in NAV_ITEMS is reachable from the "More" sheet, so hiding the top strip on mobile loses nothing.
 # (icon, label, href) — labels stay short enough not to ellipsise at 360px.
+# (icon, translation key, href) -- labels resolve per request like the main menu.
 TAB_ITEMS: list[tuple[str, str, str]] = [
-    ("💬", "Ask", "/"),
-    ("🗂️", "Browse", "/browse"),
-    ("☀", "Today", "/today"),
-    ("📅", "Events", "/events"),
+    ("💬", "nav_ask", "/"),
+    ("🗂️", "nav_browse", "/browse"),
+    ("☀", "nav_today", "/today"),
+    ("📅", "nav_events", "/events"),
 ]
 
 # Items that already have a tab get skipped in the sheet; /chat is the same page as "/".
@@ -193,16 +218,19 @@ def tabbar_html(active: str = "", *, static: bool = False) -> str:
         f"<a href='{href}'{' class=on' if on(href) else ''}"
         + (" aria-current='page'" if on(href) else "")
         + f"><span class='tb-ic' aria-hidden='true'>{icon}</span>"
-          f"<span class='tb-lb'>{html.escape(label)}</span></a>"
-        for icon, label, href in TAB_ITEMS)
+          f"<span class='tb-lb'>{html.escape(i18n.tr(key))}</span></a>"
+        for icon, key, href in TAB_ITEMS)
 
     tabs += ("<a href='#' id='na-more' role='button' aria-expanded='false' aria-controls='na-sheet'"
              " onclick='naSheet(true);return false'>"
-             "<span class='tb-ic' aria-hidden='true'>☰</span><span class='tb-lb'>More</span></a>")
+             "<span class='tb-ic' aria-hidden='true'>☰</span>"
+             f"<span class='tb-lb'>{html.escape(i18n.tr('nav_more'))}</span></a>")
 
     rest = "".join(
         f"<a href='{href}'>{html.escape(label)}</a>"
-        for href, label in NAV_ITEMS if href not in _SHEET_SKIP)
+        for href, label in nav_items() if href not in _SHEET_SKIP)
+    # the sheet is also where a phone visitor changes language, since the header strip is hidden
+    rest += f"<div style='padding:8px 10px 2px'>{i18n.switcher_html()}</div>"
 
     cls = "tabbar is-static" if static else "tabbar"
     return (
@@ -259,7 +287,7 @@ def analytics_tag() -> str:
 
 def _page(title: str, body: str, status: int = 200) -> HTMLResponse:
     """Narrow card layout for public / owner-facing pages."""
-    doc = f"""<!doctype html><html lang="en"><head>
+    doc = f"""<!doctype html><html lang="{i18n.html_lang()}"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)}</title>
 {head_tags()}
@@ -353,7 +381,7 @@ def admin_page(title: str, body: str, active: str = "", status: int = 200) -> HT
         "<span class='navgrp'>" + (f"<span class='navsec'>{sec}</span>" if sec else "")
         + "".join(_link(lbl, href) for lbl, href in items) + "</span>"
         for sec, items in _ADMIN_NAV)
-    doc = f"""<!doctype html><html lang="en"><head>
+    doc = f"""<!doctype html><html lang="{i18n.html_lang()}"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)} · Admin</title>
 {head_tags()}

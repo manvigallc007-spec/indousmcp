@@ -253,6 +253,8 @@ def ai_plugin(request: Request) -> JSONResponse:
     return JSONResponse(man)
 
 
+# The API reference is English only (it documents English field names), so this one
+# genuinely is lang="en" rather than having missed the i18n pass.
 _DOCS = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>API · {plat}</title>

@@ -273,15 +273,20 @@ def head_tags() -> str:
 
 def theme_toggle() -> str:
     """The light/dark toggle button. Labelled for screen readers; icon swaps via CSS, not JS."""
-    return ("<button type='button' class='theme-toggle' onclick='naToggleTheme()' "
-            "title='Switch between light and dark' aria-label='Switch between light and dark'>"
+    from .i18n import tr
+
+    label = tr("theme_toggle")
+    return (f"<button type='button' class='theme-toggle' onclick='naToggleTheme()' "
+            f"title=\"{label}\" aria-label=\"{label}\">"
             "<span class='ti-light' aria-hidden='true'>☽</span>"
             "<span class='ti-dark' aria-hidden='true'>☀</span></button>")
 
 
 def skip_link(target: str = "#main") -> str:
     """A keyboard skip-link; pair with id='main' on the page's <main>/content wrapper."""
-    return f"<a class='skip-link' href='{target}'>Skip to content</a>"
+    from .i18n import tr
+
+    return f"<a class='skip-link' href='{target}'>{tr('skip_to_content')}</a>"
 
 
 # ----------------------------------------------------------------------------------------- route

@@ -164,7 +164,7 @@ def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200,
     # "follow" (not "nofollow") -- keep internal crawl paths (breadcrumbs/filter bar) open even on a
     # page whose own content is too thin to index, e.g. a browse_city view with zero listings.
     robots_meta = '<meta name="robots" content="noindex,follow">' if noindex else ""
-    doc = f"""<!doctype html><html lang="en"><head>
+    doc = f"""<!doctype html><html lang="{i18n.html_lang()}"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)}</title>
 <meta name="description" content="{html.escape(desc)}">

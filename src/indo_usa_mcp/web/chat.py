@@ -15,7 +15,7 @@ from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, St
 from starlette.routing import Route
 
 from .. import assistant, flyer, verticals
-from . import homeportal, mapview
+from . import homeportal, i18n, mapview
 from ..config import settings
 from .auth import portal_email
 from .common import NAV_ITEMS, analytics_tag, partner_bar, tabbar_html
@@ -69,7 +69,7 @@ _CAT_BLURB = {"restaurants": "Dosa, biryani, thali & more", "temples": "Hindu ·
 
 # Modern chat UI. Placeholders (__NAME__) are filled by .replace() so the CSS/JS braces
 # don't need f-string escaping.
-_CHAT_HTML = """<!doctype html><html lang="en"><head>
+_CHAT_HTML = """<!doctype html><html lang="__LANG__"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>__PLAT__ — __PTAG__</title>
@@ -854,7 +854,7 @@ def chat_page(request: Request) -> HTMLResponse:
         "__KEYWORDS__": html.escape(_KEYWORDS),
         "__GA__": analytics_tag(),
         "__THEMEHEAD__": head_tags(), "__THEMEBTN__": theme_toggle(),
-        "__SKIPLINK__": skip_link("#log"), "__TABBAR__": tabbar_html("/", static=True),
+        "__SKIPLINK__": skip_link("#log"), "__LANG__": i18n.html_lang(), "__TABBAR__": tabbar_html("/", static=True),
         "__PORTAL__": _portal_html(),
         "__PORTALCSS__": homeportal.CSS,
         "__MAPHEAD__": mapview.head_tags(),

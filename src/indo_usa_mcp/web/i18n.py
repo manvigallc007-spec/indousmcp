@@ -7,12 +7,55 @@ Telugu. Business data (names, addresses) always stays in its original language.
 
 from __future__ import annotations
 
+from contextvars import ContextVar
+
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
+from starlette.responses import RedirectResponse, Response
+from starlette.routing import Route
 
 LANGS = ("en", "hi", "te")
 
+# Shown in the switcher, in each language's own script -- a visitor who cannot read the current
+# language still has to be able to find their own.
+LANG_NAMES = {"en": "English", "hi": "हिंदी", "te": "తెలుగు"}
+
+COOKIE = "lang"
+_COOKIE_MAX_AGE = 31536000      # a year: the choice should outlive the session
+
+# Resolved once per request by LanguageMiddleware. A contextvar rather than a parameter because
+# none of the three page shells (common._page, landing._page, pages._page) takes a request, and
+# threading one through every handler that renders a nav would be a far larger change than this.
+_CURRENT: ContextVar[str] = ContextVar("ui_lang", default="en")
+
 # key -> {en, hi, te}. Keep keys ASCII; values are hand-translated (verified codepoints).
 _T: dict[str, dict[str, str]] = {
+    # --- shared chrome: the nav, the mobile tab bar, the footer. Every page shows these, so they
+    # are the strings that decide whether the site "feels" translated at all. Business data (names,
+    # addresses, descriptions) always stays in its original language.
+    "nav_home": {"en": "Home", "hi": "होम", "te": "హోమ్"},
+    "nav_today": {"en": "Today", "hi": "आज", "te": "ఈరోజు"},
+    "nav_news": {"en": "News", "hi": "समाचार", "te": "వార్తలు"},
+    "nav_events": {"en": "Events", "hi": "कार्यक्रम", "te": "కార్యక్రమాలు"},
+    "nav_browse": {"en": "Browse", "hi": "ब्राउज़ करें", "te": "బ్రౌజ్ చేయండి"},
+    "nav_qa": {"en": "Q&A", "hi": "प्रश्न-उत्तर", "te": "ప్రశ్న-జవాబు"},
+    "nav_insights": {"en": "Insights", "hi": "आंकड़े", "te": "విశ్లేషణలు"},
+    "nav_search": {"en": "Search", "hi": "खोजें", "te": "వెతకండి"},
+    "nav_saved": {"en": "Saved", "hi": "सहेजे गए", "te": "సేవ్ చేసినవి"},
+    "nav_list_business": {"en": "List your business", "hi": "अपना व्यवसाय जोड़ें",
+                          "te": "మీ వ్యాపారాన్ని జోడించండి"},
+    "nav_ask": {"en": "Ask", "hi": "पूछें", "te": "అడగండి"},
+    "nav_more": {"en": "More", "hi": "और", "te": "మరిన్ని"},
+    "nav_about": {"en": "About us", "hi": "हमारे बारे में", "te": "మా గురించి"},
+    "nav_privacy": {"en": "Privacy", "hi": "गोपनीयता", "te": "గోప్యత"},
+    "nav_terms": {"en": "Terms", "hi": "शर्तें", "te": "నిబంధనలు"},
+    "nav_contact": {"en": "Contact", "hi": "संपर्क", "te": "సంప్రదించండి"},
+    "nav_faq": {"en": "FAQ", "hi": "सामान्य प्रश्न", "te": "సాధారణ ప్రశ్నలు"},
+    "language": {"en": "Language", "hi": "भाषा", "te": "భాష"},
+    "skip_to_content": {"en": "Skip to content", "hi": "सामग्री पर जाएँ",
+                        "te": "కంటెంట్‌కు వెళ్లండి"},
+    "theme_toggle": {"en": "Switch between light and dark", "hi": "लाइट/डार्क बदलें",
+                     "te": "లైట్/డార్క్ మార్చండి"},
     # --- reviews ---
     "community_reviews": {"en": "Community reviews", "hi": "सामुदायिक समीक्षाएँ", "te": "కమ్యూనిటీ సమీక్షలు"},
     "write_review": {"en": "Write a review", "hi": "समीक्षा लिखें", "te": "సమీక్ష రాయండి"},
@@ -92,3 +135,85 @@ def t(request: Request) -> dict[str, str]:
     """A {key: translated-string} map for the request's language (falls back to English per key)."""
     lang = page_lang(request)
     return {k: v.get(lang, v["en"]) for k, v in _T.items()}
+
+
+def lang() -> str:
+    """The current request's UI language. 'en' outside a request (CLI, agents, tests)."""
+    return _CURRENT.get()
+
+
+def tr(key: str, *, lang_code: str | None = None) -> str:
+    """One translated string, falling back to English for a missing translation."""
+    entry = _T.get(key)
+    if not entry:
+        return key
+    return entry.get(lang_code or lang(), entry["en"])
+
+
+def html_lang() -> str:
+    """For <html lang="...">. Claiming English for Hindi text mispronounces it in screen readers
+    and tells search engines the wrong thing."""
+    return lang()
+
+
+class LanguageMiddleware(BaseHTTPMiddleware):
+    """Resolve the visitor's language once and expose it for the whole request."""
+
+    async def dispatch(self, request: Request, call_next):
+        token = _CURRENT.set(page_lang(request))
+        try:
+            return await call_next(request)
+        finally:
+            _CURRENT.reset(token)
+
+
+def _safe_next(raw: str | None) -> str:
+    """A same-site path to return to. Anything else becomes '/', so the switcher can't be used as
+    an open redirect ('//evil.com' and 'https://evil.com' both look like paths to a careless check)."""
+    nxt = (raw or "/").strip()
+    if not nxt.startswith("/") or nxt.startswith("//") or "\\" in nxt or ":" in nxt.split("/")[0]:
+        return "/"
+    return nxt[:300]
+
+
+def set_lang(request: Request) -> Response:
+    """GET /lang/<code>?next=/path -- switch language and come back.
+
+    A GET + cookie + redirect, so it works with no JavaScript: the previous switcher was a JS
+    <select> on the chat page only, which is why the rest of the site was stuck in English.
+    """
+    code = (request.path_params.get("code") or "").strip().lower()
+    nxt = _safe_next(request.query_params.get("next"))
+    resp = RedirectResponse(nxt, status_code=303)
+    if code in LANGS:
+        resp.set_cookie(COOKIE, code, max_age=_COOKIE_MAX_AGE, path="/", samesite="lax",
+                        httponly=False)   # the chat's JS reads it too
+    return resp
+
+
+def switcher_html(current_path: str = "/") -> str:
+    """The language switcher for the site header: plain links, no JavaScript."""
+    import html as _h
+
+    cur = lang()
+    nxt = _h.escape(_safe_next(current_path), quote=True)
+    links = "".join(
+        f"<a href='/lang/{code}?next={nxt}'"
+        + (" class='on' aria-current='true'" if code == cur else "")
+        + f" hreflang='{code}' lang='{code}'>{_h.escape(LANG_NAMES[code])}</a>"
+        for code in LANGS)
+    return (f"<div class='langsw' role='group' aria-label='{_h.escape(tr('language'))}'>"
+            f"{links}</div>")
+
+
+LANG_CSS = """
+ .langsw{display:inline-flex;gap:2px;flex:0 0 auto;border:1px solid var(--line);
+   border-radius:var(--r-pill);padding:2px;background:var(--panel)}
+ .langsw a{display:inline-block;padding:5px 9px;border-radius:var(--r-pill);font-size:12.5px;
+   font-weight:600;color:var(--muted);text-decoration:none;white-space:nowrap}
+ .langsw a:hover{color:var(--brand-strong)}
+ .langsw a.on{background:var(--brand-strong);color:var(--on-brand)}
+ @media(max-width:520px){.langsw a{padding:5px 7px;font-size:12px}}
+"""
+
+routes = [Route("/lang/{code}", set_lang, methods=["GET"])]

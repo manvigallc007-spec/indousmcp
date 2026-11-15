@@ -12,7 +12,7 @@ from ..config import settings
 from .theme import head_tags
 
 # Self-contained (no DB / heavy imports) so the 500 handler itself can never fail.
-_ERR_TMPL = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+_ERR_TMPL = """<!doctype html><html lang="{lang}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
 <title>{code} · {plat}</title><link rel="icon" type="image/svg+xml" href="/icon.svg">
 <meta name="theme-color" content="#e8772e" media="(prefers-color-scheme: light)">
@@ -37,15 +37,17 @@ a.btn{{display:inline-block;background:var(--brand-fill);color:var(--on-brand);b
 
 def _error_page(code: int, title: str, message: str) -> str:
     # Lazily pull the shared nav; never let it break the (esp. 500) error page.
+    lang = "en"
     try:
         from .common import NAV_CSS, nav_html, tabbar_html
-        nav, navcss, tabbar = nav_html(), NAV_CSS, tabbar_html()
+        from .i18n import html_lang
+        nav, navcss, tabbar, lang = nav_html(), NAV_CSS, tabbar_html(), html_lang()
     except Exception:
         nav, navcss, tabbar = "", "", ""
     return _ERR_TMPL.format(code=code, title=html.escape(title), message=html.escape(message),
                             plat=html.escape(settings.platform_name),
                             aname=html.escape(settings.assistant_name), nav=nav, navcss=navcss,
-                            themehead=head_tags(), tabbar=tabbar)
+                            themehead=head_tags(), tabbar=tabbar, lang=lang)
 
 
 def not_found(request: Request, exc: Exception) -> HTMLResponse:
