@@ -25,7 +25,8 @@ def test_filter_bar_marks_active():
                               {"region": "South Indian", "sort": "best"})
     assert "Cuisine/Region" in bar and "Dietary" in bar and "Language" in bar
     assert "South Indian" in bar and "Punjabi" in bar
-    assert "background:#c1440e" in bar             # the active chip is highlighted
+    # the active chip is highlighted with the design-system brand token (see web/theme.py)
+    assert "background:var(--brand-strong)" in bar
     assert "✕ Clear" in bar                        # clear link shown when a filter is active
 
 

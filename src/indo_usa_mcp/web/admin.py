@@ -718,8 +718,8 @@ def coverage_page(request: Request) -> HTMLResponse:
 
     def _cell(n: int) -> str:
         if not n:
-            return "<td style='background:#fdecec;color:#c5221f;text-align:center'>0</td>"
-        bg = "#fff7e6" if n < 5 else "#eaf7ee"
+            return "<td style='background:var(--err-tint);color:var(--err);text-align:center'>0</td>"
+        bg = "var(--warn-tint)" if n < 5 else "var(--ok-tint)"
         return f"<td style='background:{bg};text-align:center'>{n}</td>"
     head = "<th>Category</th>" + "".join(f"<th>{esc(s)}</th>" for s in top_states) + "<th>Total</th>"
     rows_html = ""
@@ -731,7 +731,7 @@ def coverage_page(request: Request) -> HTMLResponse:
             + f"<td><b>{sum(totals.values())}</b></td></tr>")
     thin = sorted(totals.items(), key=lambda kv: kv[1])[:3]
     body = (f"<p class='muted'>Active listings per category × state (top {len(top_states)} states by "
-            f"volume). <span style='background:#fdecec;color:#c5221f;padding:1px 6px'>red</span> = a "
+            f"volume). <span style='background:var(--err-tint);color:var(--err);padding:1px 6px'>red</span> = a "
             f"gap (0). Live total: <b>{sum(totals.values()):,}</b> across <b>{len(state_tot)}</b> "
             "states. Thinnest categories: "
             + ", ".join(f"{verticals.VERTICALS[v]['label']} ({n})" for v, n in thin) + ".</p>"
@@ -1090,13 +1090,13 @@ def reviews_page(request: Request) -> HTMLResponse:
             actions = act("reject", "Remove", True)
         else:
             actions = act("approve", "Restore")
-        rows += (f"<tr><td style='color:#f5a623;white-space:nowrap'>{_stars(x['rating'])}</td>"
+        rows += (f"<tr><td style='color:var(--star);white-space:nowrap'>{_stars(x['rating'])}</td>"
                  f"<td>{link}<br><span class='muted'>— {who} · {esc(str(x.get('created_at'))[:16])}</span>{flag}</td>"
                  f"<td>{text}</td><td>{actions}</td></tr>")
 
     def _tab(name: str) -> str:
         n = c.get(name, 0)
-        style = "font-weight:700;color:#c1440e" if name == show else "color:#475467"
+        style = "font-weight:700;color:var(--brand-strong)" if name == show else "color:var(--ink-2)"
         return f"<a href='/admin/reviews?show={name}' style='{style}'>{name.title()} ({n})</a>"
 
     tabs = " &nbsp;·&nbsp; ".join(_tab(t) for t in _REVIEW_TABS)
@@ -1354,7 +1354,7 @@ def messages_page(request: Request) -> HTMLResponse:
     recent = inbox.recent_replies(40)
 
     def _tab(key: str, label: str) -> str:
-        on = " style='background:var(--brand);color:#fff;border-color:var(--brand)'" if show == key else ""
+        on = " style='background:var(--brand-fill);color:var(--on-brand);border-color:var(--brand)'" if show == key else ""
         return f"<a class='btn gray'{on} href='/admin/messages?show={key}'>{esc(label)}</a>"
     tabs = ("<div style='display:flex;gap:6px;flex-wrap:wrap;margin:10px 0'>"
             + _tab("needs", f"Needs you ({len(pending)})") + _tab("replied", "Replied")

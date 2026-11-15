@@ -88,13 +88,13 @@ def render(rows: list[dict], vertical: str, *, title: str = "") -> str:
 
 CSS = """
  .mapwrap{margin:6px 0 16px}
- .mapwrap summary{cursor:pointer;font-weight:600;color:#c1440e;list-style:none;padding:6px 0}
+ .mapwrap summary{cursor:pointer;font-weight:600;color:var(--brand-strong);list-style:none;padding:6px 0}
  .mapwrap summary::-webkit-details-marker{display:none}
- .mapview{overflow:auto;border:1px solid #e2e0dd;border-radius:12px;max-width:100%}
- .mapinner{position:relative;background:#e8eef2}
- .mpin{position:absolute;transform:translate(-50%,-100%);background:#c1440e;color:#fff;font-size:11px;
+ .mapview{overflow:auto;border:1px solid var(--line);border-radius:12px;max-width:100%}
+ .mapinner{position:relative;background:var(--map-ground)}
+ .mpin{position:absolute;transform:translate(-50%,-100%);background:var(--brand-strong);color:#fff;font-size:11px;
    font-weight:700;min-width:20px;height:20px;line-height:20px;text-align:center;border-radius:11px;
    border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);padding:0 4px}
- .mpin:hover{background:#9a3409;z-index:5}
- .mapattr{font-size:11px;color:#98a2b3;margin-top:4px}
+ .mpin:hover{background:var(--brand-strong-d);z-index:5}
+ .mapattr{font-size:11px;color:var(--faint);margin-top:4px}
 """

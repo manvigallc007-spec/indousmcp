@@ -64,20 +64,20 @@ def _owned(email: str) -> list[dict]:
     return list(owned.values())
 
 
-_GBTN = ("<a href='/portal/google' style='display:block;text-align:center;background:#fff;"
+_GBTN = ("<a href='/portal/google' style='display:block;text-align:center;background:var(--panel);"
          "border:1px solid #dadce0;border-radius:8px;padding:11px;font-weight:600;color:#3c4043;"
          "text-decoration:none;margin-bottom:12px'>Sign in with Google</a>"
          "<p class='muted' style='text-align:center;margin:4px 0 12px'>— or —</p>")
 
 _TILE = ("display:inline-block;border:1px solid #e6e6e6;border-radius:12px;padding:12px 16px;"
-         "text-decoration:none;color:#1a1a1a;font-weight:600;background:#fff")
+         "text-decoration:none;color:var(--ink);font-weight:600;background:var(--panel)")
 
 
 def _engage_html() -> str:
     """Invite owners/visitors to ask, add, or request data (encourages engagement)."""
     a = esc(settings.assistant_name)
     return (
-        "<div style='border-top:1px solid #eee;margin-top:22px;padding-top:18px'>"
+        "<div style='border-top:1px solid var(--line);margin-top:22px;padding-top:18px'>"
         "<h3 style='margin:0 0 4px'>Get the most out of " + esc(settings.platform_name) + "</h3>"
         "<p class='muted' style='margin:0 0 12px'>Can't find what you need? Ask " + a + ", add it "
         "yourself, or tell us what you'd like to see — we'll work on adding it.</p>"
@@ -284,7 +284,7 @@ def google_callback(request: Request) -> HTMLResponse:
     return RedirectResponse("/portal", status_code=303)
 
 
-_ADD_BTN = ("<a href='/portal/add' style='display:inline-block;background:#e8772e;color:#fff;"
+_ADD_BTN = ("<a href='/portal/add' style='display:inline-block;background:var(--brand-fill);color:var(--on-brand);"
             "border-radius:9px;padding:11px 20px;font-weight:600;text-decoration:none'>"
             "➕ Add your business</a>")
 
@@ -313,7 +313,7 @@ def dashboard(request: Request) -> HTMLResponse:
     email = portal_email(request)
     if not email:
         return RedirectResponse("/portal/login", status_code=303)
-    banner = ("<div class='ok' style='background:#e7f6ec;border-radius:10px;padding:11px 14px;"
+    banner = ("<div class='ok' style='background:var(--ok-tint);border-radius:10px;padding:11px 14px;"
               "margin-bottom:14px'>✓ Submitted for review — it'll go live once approved.</div>"
               if request.query_params.get("added") else "")
     subs = _subs_html(email)
@@ -448,7 +448,7 @@ def listing_manage(request: Request) -> HTMLResponse:
 
     def _stat(label: str, val30: int, val7: int) -> str:
         return ("<div style='display:inline-block;min-width:110px;margin:4px 10px 4px 0;padding:10px 14px;"
-                "border:1px solid #ece6dd;border-radius:12px;text-align:center'>"
+                "border:1px solid var(--line);border-radius:12px;text-align:center'>"
                 f"<b style='font-size:22px;display:block;line-height:1.1'>{val30}</b>"
                 f"<span class='muted' style='font-size:12px'>{label}<br>{val7} last 7d</span></div>")
     # Headline: views with a period-over-period trend, and a click-through rate (taps ÷ views).
@@ -555,7 +555,7 @@ def add_get(request: Request) -> HTMLResponse:
                  "<form method='post' action='/portal/add'>"
                  f"<label>Category</label><select name='vertical'>{opts}</select>"
                  "<label>Business name</label><input name='name' required autofocus>"
-                 "<label>Website <span style='font-weight:400;color:#6b7280'>(optional — we'll auto-fill "
+                 "<label>Website <span style='font-weight:400;color:var(--muted)'>(optional — we'll auto-fill "
                  "the details for you)</span></label><input name='website' placeholder='https://'>"
                  f"<label>State</label>{state_select('state', required=True)}"
                  "<label>City</label><input name='city' required placeholder='e.g. Plano'>"
@@ -632,8 +632,8 @@ def _plan_picker() -> str:
     for o in payments.duration_options():
         rows += (f"<label style='display:block;margin:4px 0'><input type='radio' name='plan' "
                  f"value='{o['days']}'> ⭐ Featured — {esc(o['label'])}</label>")
-    return ("<fieldset style='border:1px solid #e2e0dd;border-radius:10px;padding:10px 14px;margin:14px 0'>"
-            "<legend style='font-size:13px;color:#6b7280'>Visibility (optional)</legend>"
+    return ("<fieldset style='border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:14px 0'>"
+            "<legend style='font-size:13px;color:var(--muted)'>Visibility (optional)</legend>"
             f"{rows}<p class='muted' style='font-size:12px;margin:6px 0 0'>Featured listings rank higher "
             "in browse &amp; search. Reviewed before going live, same as free.</p></fieldset>")
 
@@ -765,8 +765,8 @@ def flyer_review_get(request: Request) -> HTMLResponse:
             f"<label>Category</label><select name='vertical'>{opts}</select>"
             + _flyer_field("Name / event title", "name", ex.get("name") or "")
             + _flyer_field("Description", "description", ex.get("description") or "")
-            + "<fieldset style='border:1px solid #e2e0dd;border-radius:10px;padding:10px 14px;margin:14px 0'>"
-            "<legend style='font-size:13px;color:#6b7280'>Events only</legend>"
+            + "<fieldset style='border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:14px 0'>"
+            "<legend style='font-size:13px;color:var(--muted)'>Events only</legend>"
             + _flyer_field("Start date", "start_date", ex.get("start_date") or "", input_type="date")
             + _flyer_field("Start time", "start_time", ex.get("start_time") or "", input_type="time")
             + _flyer_field("End date", "end_date", ex.get("end_date") or "", input_type="date")

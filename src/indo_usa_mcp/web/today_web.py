@@ -39,7 +39,7 @@ def _render(feed: dict, *, signed_in: bool, has_city: bool) -> str:
     f = feed.get("festival")
     if f:
         parts.append(
-            "<div style='background:#fff3dc;border:1px solid #ffd9a0;border-radius:14px;padding:14px 16px'>"
+            "<div style='background:var(--warm-tint);border:1px solid var(--warm-1);border-radius:14px;padding:14px 16px'>"
             f"<div style='font-size:16px'>{_esc(f.get('emoji'))} <b>{_esc(f['name'])}</b> is "
             f"{_esc(f['when'])}</div>"
             + (f"<div class='muted'>{_esc(f.get('greeting'))}</div>" if f.get("greeting") else "")
@@ -116,13 +116,13 @@ def _render(feed: dict, *, signed_in: bool, has_city: bool) -> str:
     # Retention CTA — capture a city so we can personalize + send a daily digest
     if not signed_in:
         parts.append(
-            "<div style='background:#e7f6f4;border:1px solid #b8e6df;border-radius:14px;padding:16px;margin-top:20px'>"
+            "<div style='background:var(--accent-tint);border:1px solid var(--accent-tint);border-radius:14px;padding:16px;margin-top:20px'>"
             "<b>Make this yours.</b> <span class='muted'>Sign in and save your city to get a personalized "
             "feed + an optional daily digest of what's happening near you.</span>"
             "<p style='margin:10px 0 0'><a class='cta' href='/portal/login'>Sign in / create account →</a></p></div>")
     elif not has_city:
         parts.append(
-            "<div style='background:#e7f6f4;border:1px solid #b8e6df;border-radius:14px;padding:16px;margin-top:20px'>"
+            "<div style='background:var(--accent-tint);border:1px solid var(--accent-tint);border-radius:14px;padding:16px;margin-top:20px'>"
             "<b>Set your city</b> <span class='muted'>to personalize this feed and your digest.</span>"
             "<p style='margin:10px 0 0'><a class='cta' href='/me'>Update your preferences →</a></p></div>")
 

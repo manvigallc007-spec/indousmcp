@@ -7,7 +7,10 @@ import html
 from starlette.responses import HTMLResponse
 
 from ..config import settings
+from .theme import head_tags, skip_link, theme_toggle
 
+# Literal (not a token): this feeds inline-SVG `fill`/`stroke` attributes in sparkline(),
+# and standalone SVG responses can't resolve a page-level custom property.
 _BRAND = "#c1440e"
 
 
@@ -91,11 +94,11 @@ _PARTNER_APPS = [
 def partner_bar() -> str:
     links = "".join(
         f"<a href='{url}' target='_blank' rel='noopener' "
-        "style='color:#b4530f;font-weight:600;text-decoration:none;margin:0 10px;white-space:nowrap'>"
+        "style='color:var(--brand-ink);font-weight:600;text-decoration:none;margin:0 10px;white-space:nowrap'>"
         f"{emoji} {html.escape(name)}</a>" for url, emoji, name in _PARTNER_APPS)
     return (
-        "<div style='background:#fff3dc;border-bottom:1px solid #ffd9a0;padding:8px 16px;"
-        "text-align:center;font-size:13px;color:#8a6a40'>"
+        "<div style='background:var(--warm-tint);border-bottom:1px solid var(--warm-line);padding:8px 16px;"
+        "text-align:center;font-size:13px;color:var(--warm-ink)'>"
         "<span style='margin-right:6px'>✨ From our family of apps:</span>"
         f"{links}</div>")
 
@@ -134,28 +137,91 @@ def nav_html(active: str = "") -> str:
         "<header class='site-header'>"
         f"<a class='site-brand' href='/'><img src='/logo' alt='{plat}'><span>{plat}</span></a>"
         f"<nav class='site-nav' aria-label='Main'>{links}</nav>"
+        f"{theme_toggle()}"
         "</header>")
 
 
 # Self-contained (explicit hex, no CSS vars) so it renders identically inside every shell's own <style>.
 NAV_CSS = """
- .site-header{display:flex;align-items:center;gap:14px;background:#fff;border-bottom:1px solid #ececec;
-   padding:10px 18px;position:sticky;top:0;z-index:50}
- .site-brand{display:inline-flex;align-items:center;gap:9px;text-decoration:none;color:#1f2430;
+ .site-header{display:flex;align-items:center;gap:14px;background:var(--panel);
+   border-bottom:1px solid var(--line);padding:10px 18px;position:sticky;top:0;z-index:50}
+ .site-brand{display:inline-flex;align-items:center;gap:9px;text-decoration:none;color:var(--ink);
    font-weight:800;flex:0 0 auto}
- .site-brand img{height:32px;width:auto;max-width:150px;border-radius:8px;display:block}
+ .site-brand img{height:32px;width:auto;max-width:150px;border-radius:var(--r-sm);display:block}
  .site-brand span{font-size:16px;white-space:nowrap}
+ /* min-width:0 matters: without it this flex item refuses to shrink below its content width at
+    mid widths and pushes the theme toggle off the right edge of the header. */
  .site-nav{display:flex;align-items:center;gap:5px;overflow-x:auto;scrollbar-width:none;
-   -webkit-overflow-scrolling:touch;flex:1 1 auto}
+   -webkit-overflow-scrolling:touch;flex:1 1 auto;min-width:0}
  .site-nav::-webkit-scrollbar{display:none}
- .site-nav a{color:#3a3f4b;text-decoration:none;font-weight:600;font-size:14px;white-space:nowrap;
-   padding:7px 10px;border-radius:8px;flex:0 0 auto}
- .site-nav a:hover{background:#f5f1ec;color:#c1440e}
- .site-nav a.on{color:#c1440e}
- .site-nav a.nav-cta{background:#c1440e;color:#fff;margin-left:4px}
- .site-nav a.nav-cta:hover{background:#a5380b;color:#fff}
+ .site-nav a{color:var(--ink-3);text-decoration:none;font-weight:600;font-size:14px;white-space:nowrap;
+   padding:7px 10px;border-radius:var(--r-sm);flex:0 0 auto}
+ .site-nav a:hover{background:var(--panel-2);color:var(--brand-strong)}
+ .site-nav a.on{color:var(--brand-strong)}
+ .site-nav a.nav-cta{background:var(--brand-strong);color:var(--on-brand);margin-left:4px}
+ .site-nav a.nav-cta:hover{background:var(--brand-strong-d);color:var(--on-brand)}
  @media(max-width:760px){.site-brand span{display:none}}
 """
+
+
+# ------------------------------------------------------------------ mobile bottom tab bar
+# The five destinations that earn a permanent slot inside the thumb arc on a phone. Everything else
+# in NAV_ITEMS is reachable from the "More" sheet, so hiding the top strip on mobile loses nothing.
+# (icon, label, href) — labels stay short enough not to ellipsise at 360px.
+TAB_ITEMS: list[tuple[str, str, str]] = [
+    ("💬", "Ask", "/"),
+    ("🗂️", "Browse", "/browse"),
+    ("☀", "Today", "/today"),
+    ("📅", "Events", "/events"),
+]
+
+# Items that already have a tab get skipped in the sheet; /chat is the same page as "/".
+_SHEET_SKIP = {href for _, _, href in TAB_ITEMS} | {"/chat"}
+
+
+def tabbar_html(active: str = "", *, static: bool = False) -> str:
+    """The mobile bottom navigation plus its "More" sheet. Hidden above 760px by the design system,
+    so it is safe to include in every public shell.
+
+    `static` places the bar in normal flow instead of fixing it to the viewport — used on the chat
+    page, whose composer already occupies the bottom edge of a full-height flex column.
+    """
+    def on(href: str) -> bool:
+        return active == href if href == "/" else bool(active) and active.startswith(href)
+
+    tabs = "".join(
+        f"<a href='{href}'{' class=on' if on(href) else ''}"
+        + (" aria-current='page'" if on(href) else "")
+        + f"><span class='tb-ic' aria-hidden='true'>{icon}</span>"
+          f"<span class='tb-lb'>{html.escape(label)}</span></a>"
+        for icon, label, href in TAB_ITEMS)
+
+    tabs += ("<a href='#' id='na-more' role='button' aria-expanded='false' aria-controls='na-sheet'"
+             " onclick='naSheet(true);return false'>"
+             "<span class='tb-ic' aria-hidden='true'>☰</span><span class='tb-lb'>More</span></a>")
+
+    rest = "".join(
+        f"<a href='{href}'>{html.escape(label)}</a>"
+        for href, label in NAV_ITEMS if href not in _SHEET_SKIP)
+
+    cls = "tabbar is-static" if static else "tabbar"
+    return (
+        f"<nav class='{cls}' aria-label='Primary'>{tabs}</nav>"
+        "<div class='navsheet' id='na-sheet' hidden onclick='if(event.target===this)naSheet(false)'>"
+        "<div class='navsheet-panel' role='dialog' aria-modal='true' aria-label='More pages'>"
+        "<div class='navsheet-grip' aria-hidden='true'></div>"
+        f"{rest}"
+        "<button type='button' class='navsheet-close' onclick='naSheet(false)'>Close</button>"
+        "</div></div>"
+        # Idempotent so it is harmless in shells that include several nav fragments. Returns focus
+        # to the trigger on close and closes on Escape.
+        "<script>window.naSheet=window.naSheet||function(open){"
+        "var s=document.getElementById('na-sheet'),b=document.getElementById('na-more');"
+        "if(!s)return;s.hidden=!open;if(b)b.setAttribute('aria-expanded',open?'true':'false');"
+        "document.body.style.overflow=open?'hidden':'';"
+        "if(open){var f=s.querySelector('a,button');if(f)f.focus();}else if(b){b.focus();}};"
+        "document.addEventListener('keydown',function(e){if(e.key==='Escape')window.naSheet(false);});"
+        "</script>")
 
 
 def share_html(path_or_url: str, title: str) -> str:
@@ -166,8 +232,8 @@ def share_html(path_or_url: str, title: str) -> str:
     u, t = html.escape(url, quote=True), html.escape(title, quote=True)
     import urllib.parse
     wa = "https://wa.me/?text=" + urllib.parse.quote(f"{title} {url}")
-    btn = ("display:inline-block;border:1px solid #d9d5cf;background:#fff;border-radius:999px;"
-           "padding:5px 13px;font-size:13px;font-weight:600;color:#3a4654;text-decoration:none;cursor:pointer")
+    btn = ("display:inline-block;border:1px solid var(--line-2);background:var(--panel);border-radius:999px;"
+           "padding:5px 13px;font-size:13px;font-weight:600;color:var(--ink-3);text-decoration:none;cursor:pointer")
     return (
         "<span class='sharebar' style='display:inline-flex;gap:8px;flex-wrap:wrap;align-items:center'>"
         f"<button type='button' style='{btn}' data-u=\"{u}\" data-t=\"{t}\" onclick='naShare(this)'>↗ Share</button>"
@@ -196,38 +262,38 @@ def _page(title: str, body: str, status: int = 200) -> HTMLResponse:
     doc = f"""<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)}</title>
+{head_tags()}
 {analytics_tag()}
 <style>
- :root{{--brand:#e8772e;--brand-d:#cf6212;--accent:#0f9b8e;--ink:#222b33;--muted:#667085;--line:#ece6dd}}
- *{{box-sizing:border-box}}
- body{{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;max-width:520px;
-   margin:0 auto;min-height:100vh;padding:38px 18px;color:var(--ink);line-height:1.55;
-   background:linear-gradient(180deg,#fff7ef 0,#faf8f4 260px)}}
- .card{{background:#fff;border:1px solid var(--line);border-radius:18px;padding:30px 28px;
-   box-shadow:0 14px 44px rgba(16,24,40,.09);border-top:4px solid var(--brand)}}
+ body{{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+   margin:0 auto;min-height:100vh;color:var(--ink);line-height:1.55;
+   background:linear-gradient(180deg,var(--brand-tint) 0,var(--bg) 260px);max-width:none;padding:0}}
+ .card{{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-xl);padding:30px 28px;
+   box-shadow:var(--shadow-4);border-top:4px solid var(--brand)}}
  h2{{margin:0 0 8px;font-size:24px;letter-spacing:-.01em}} h3{{margin:20px 0 8px;font-size:18px}}
  p{{margin:0 0 14px}}
- label{{display:block;font-size:13.5px;font-weight:600;color:#3a4654;margin-top:6px}}
- input{{width:100%;padding:12px 13px;margin:6px 0 14px;border:1.5px solid #e3ddd3;border-radius:11px;
-   font-size:15px;background:#fff;transition:.15s}}
- input:focus{{outline:0;border-color:var(--brand);box-shadow:0 0 0 4px #e8772e22}}
- button{{background:linear-gradient(135deg,var(--brand),var(--brand-d));color:#fff;border:0;
-   padding:13px 22px;border-radius:11px;font-size:15px;font-weight:600;cursor:pointer;width:100%;
-   transition:.15s;box-shadow:0 6px 16px #e8772e33}}
+ label{{display:block;font-size:13.5px;font-weight:600;color:var(--ink-3);margin-top:6px}}
+ input{{width:100%;padding:12px 13px;margin:6px 0 14px;border:1.5px solid var(--line-2);
+   border-radius:var(--r-md);font-size:15px;background:var(--panel);color:var(--ink);transition:.15s}}
+ input:focus{{outline:0;border-color:var(--brand);box-shadow:0 0 0 4px var(--ring)}}
+ button{{background:linear-gradient(135deg,var(--brand-fill),var(--brand-strong-d));color:var(--on-brand);border:0;
+   padding:13px 22px;border-radius:var(--r-md);font-size:15px;font-weight:600;cursor:pointer;width:100%;
+   transition:.15s;box-shadow:var(--shadow-3)}}
  button:hover{{filter:brightness(1.05);transform:translateY(-1px)}}
- a{{color:var(--brand);text-decoration:none}} a:hover{{text-decoration:underline}}
+ a{{color:var(--brand-strong);text-decoration:none}} a:hover{{text-decoration:underline}}
  table a{{font-weight:600}}
- .muted{{color:var(--muted);font-size:14px}} .ok{{color:#137333}} .err{{color:#c5221f}}
+ .muted{{color:var(--muted);font-size:14px}} .ok{{color:var(--ok)}} .err{{color:var(--err)}}
  table{{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0}}
- td,th{{padding:9px 6px;border-bottom:1px solid #f0ece5;text-align:left}}
- body{{max-width:none;padding:0}}
+ td,th{{padding:9px 6px;border-bottom:1px solid var(--line-3);text-align:left}}
  .cardwrap{{max-width:520px;margin:0 auto;padding:26px 18px}}
 {NAV_CSS}
 </style></head><body>
+{skip_link()}
 {nav_html()}
-<div class="cardwrap"><div class="card">{body}</div>
+<div class="cardwrap" id="main"><div class="card">{body}</div>
 <p class="muted" style="text-align:center;margin-top:20px"><a href="/">&#8592; Back to {html.escape(settings.platform_name)}</a></p>
-</div></body></html>"""
+</div>
+{tabbar_html()}</body></html>"""
     return HTMLResponse(doc, status_code=status)
 
 
@@ -289,44 +355,47 @@ def admin_page(title: str, body: str, active: str = "", status: int = 200) -> HT
     doc = f"""<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)} · Admin</title>
+{head_tags()}
 <style>
- :root{{--brand:#e8772e;--brand-d:#cf6212;--accent:#0f9b8e;--ink:#222b33;--muted:#667085;--line:#ece6dd}}
- *{{box-sizing:border-box}}
  body{{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;max-width:1140px;
-   margin:0 auto;padding:0 18px 64px;color:var(--ink);line-height:1.5;background:#faf8f4}}
+   margin:0 auto;padding:0 18px 64px;color:var(--ink);line-height:1.5;background:var(--bg)}}
  header{{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;
-   background:#fff;border-bottom:1px solid var(--line);padding:12px 18px;margin:0 -18px 22px;
+   background:var(--panel);border-bottom:1px solid var(--line);padding:12px 18px;margin:0 -18px 22px;
    position:sticky;top:0;z-index:5}}
  nav{{display:flex;flex-wrap:wrap;align-items:center;gap:2px}}
  .navgrp{{display:inline-flex;align-items:center;gap:2px;padding:2px 4px;border-radius:9px}}
  .navgrp+.navgrp{{border-left:1px solid var(--line);margin-left:4px;padding-left:8px}}
- .navsec{{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#a9b1bd;margin-right:3px}}
- nav a{{text-decoration:none;color:#475467;font-size:13.5px;padding:6px 9px;border-radius:8px}}
- nav a:hover{{background:#f3efe9}} nav a.on{{color:#fff;background:var(--brand)}}
- .badge{{display:inline-block;background:#e5484d;color:#fff;font-size:11px;font-weight:700;
-   border-radius:999px;padding:1px 7px;margin-left:5px;vertical-align:middle}}
- nav a.on .badge{{background:#fff;color:var(--brand)}}
+ .navsec{{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin-right:3px}}
+ nav a{{text-decoration:none;color:var(--ink-2);font-size:13.5px;padding:6px 9px;border-radius:var(--r-sm)}}
+ nav a:hover{{background:var(--panel-2)}} nav a.on{{color:var(--on-brand);background:var(--brand-fill)}}
+ .badge{{display:inline-block;background:var(--err);color:var(--on-status);font-size:11px;font-weight:700;
+   border-radius:var(--r-pill);padding:1px 7px;margin-left:5px;vertical-align:middle}}
+ nav a.on .badge{{background:var(--panel);color:var(--brand)}}
  h2{{margin:4px 0 8px;font-size:24px;letter-spacing:-.01em}} h3{{margin:26px 0 10px;font-size:17px}}
  table{{border-collapse:collapse;width:100%;font-size:14px;margin:8px 0}}
- th,td{{text-align:left;padding:9px 10px;border-bottom:1px solid #f0ece5;vertical-align:top}}
+ th,td{{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-3);vertical-align:top}}
  th{{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}}
  .cards{{display:flex;flex-wrap:wrap;gap:12px;margin:14px 0}}
- .kpi{{background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px 18px;min-width:160px;
-   box-shadow:0 4px 14px rgba(16,24,40,.05)}}
+ .kpi{{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:15px 18px;
+   min-width:160px;box-shadow:var(--shadow-2)}}
  .kpi b{{font-size:26px;display:block;line-height:1.1;color:var(--ink)}} .kpi span{{color:var(--muted);font-size:13px}}
- .kpi.act{{border-left:4px solid var(--brand)}} a.kpi{{text-decoration:none}} a.kpi:hover{{box-shadow:0 8px 22px rgba(16,24,40,.10)}}
- a{{color:var(--brand)}} .muted{{color:var(--muted);font-size:13px}} .ok{{color:#137333}} .err{{color:#c5221f}}
- .warn{{color:#b06000}}
- button,.btn{{background:var(--brand);color:#fff;border:0;padding:8px 14px;border-radius:9px;
+ .kpi.act{{border-left:4px solid var(--brand)}} a.kpi{{text-decoration:none}} a.kpi:hover{{box-shadow:var(--shadow-3)}}
+ a{{color:var(--brand)}} .muted{{color:var(--muted);font-size:13px}} .ok{{color:var(--ok)}} .err{{color:var(--err)}}
+ .warn{{color:var(--warn)}}
+ button,.btn{{background:var(--brand-fill);color:var(--on-brand);border:0;padding:8px 14px;border-radius:9px;
    font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block;transition:.12s}}
  button:hover,.btn:hover{{filter:brightness(1.05)}}
- .btn.gray{{background:#6b7280}} input,select,textarea{{padding:9px;border:1.5px solid #e3ddd3;border-radius:9px;font-size:14px}}
+ .btn.gray{{background:var(--muted)}}
+ input,select,textarea{{padding:9px;border:1.5px solid var(--line-2);border-radius:9px;font-size:14px;
+   background:var(--panel);color:var(--ink)}}
  form.inline{{display:inline}}
  .bar{{background:var(--brand);height:10px;border-radius:5px;display:inline-block}}
 </style></head><body>
+{skip_link()}
 <header><div><a href="/" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none">
  <img src="/logo" alt="{html.escape(settings.platform_name)}" style="height:34px;width:auto;max-width:150px;border-radius:8px">
- <b style="font-size:18px;color:#1a1a1a">{html.escape(settings.platform_name)}</b></a><span class="muted"> admin</span></div>
- <nav>{nav} <a href='/' target='_blank' rel='noopener'>↗ View site</a> <a href='/admin/logout'>Logout</a></nav></header>
-<h2>{html.escape(title)}</h2>{body}</body></html>"""
+ <b style="font-size:18px;color:var(--ink)">{html.escape(settings.platform_name)}</b></a><span class="muted"> admin</span></div>
+ <nav>{nav} <a href='/' target='_blank' rel='noopener'>↗ View site</a> <a href='/admin/logout'>Logout</a>
+ {theme_toggle()}</nav></header>
+<main id="main"><h2>{html.escape(title)}</h2>{body}</main></body></html>"""
     return HTMLResponse(doc, status_code=status)

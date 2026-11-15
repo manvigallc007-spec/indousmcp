@@ -209,22 +209,22 @@ def render() -> str:
 CSS = """
  .homeportal{width:min(1040px,94vw);margin:40px auto 0;text-align:left;position:relative;
    left:50%;transform:translateX(-50%)}
- .ph-head{font-size:15px;font-weight:700;color:#3a3f4b;margin:0 0 6px;padding-top:22px;
-   border-top:1px solid #eee}
+ .ph-head{font-size:15px;font-weight:700;color:var(--ink-3);margin:0 0 6px;padding-top:22px;
+   border-top:1px solid var(--line)}
  .ph-head .muted{font-weight:400}
  .psec{margin:22px 0}
  .psec-h{display:flex;align-items:baseline;justify-content:space-between;margin:0 0 10px}
  .psec-h h2{font-size:18px;margin:0}
  .psec-h a{font-size:13px;font-weight:600}
  .pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:12px}
- .pcard{display:flex;flex-direction:column;background:#fff;border:1px solid #ececec;border-radius:12px;
+ .pcard{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:12px;
    overflow:hidden;text-decoration:none;color:inherit;transition:.15s}
  .pcard:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(16,24,40,.09)}
- .pc-thumb{width:100%;height:120px;object-fit:cover;background:#f3efe9}
+ .pc-thumb{width:100%;height:120px;object-fit:cover;background:var(--panel-2)}
  .pc-body{padding:11px 13px}
  .pcard h3{font-size:15px;margin:2px 0 0;line-height:1.3}
- .pc-meta{color:#6b7280;font-size:12.5px;margin-top:5px}
- .pc-tag{font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#c1440e}
+ .pc-meta{color:var(--muted);font-size:12.5px;margin-top:5px}
+ .pc-tag{font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--brand-strong)}
  .pwide{grid-column:1/-1}
  .pwide h3{font-size:17px;font-weight:600}
  .pc-deep h3{font-size:15.5px}

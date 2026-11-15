@@ -19,6 +19,7 @@ from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Route
 
 from .. import accounts, db, owner_content, reviews as reviews_mod, tags as tagsmod, verticals
+from . import mapview
 from ..config import settings
 from . import i18n, seo
 from .auth import portal_email, verify_captcha
@@ -27,29 +28,29 @@ from .landing import _FEATURED, _cathead, _label, _page
 
 _CSS = """<style>
 .lh{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:2px 0 4px}
-.lh .rate{color:#b45309;font-weight:600}.lh .muted{font-size:14px}
-.lmeta{color:#4b5563;margin:6px 0}.lmeta a{font-weight:600}
-.banner{background:#fff;border:1px solid #cfe6e0;border-left:4px solid #0f9b8e;border-radius:10px;
- padding:12px 14px;margin:12px 0;font-weight:600}.banner.ok{border-left-color:#137333;color:#137333}
-.langs{color:#0f766e;font-weight:600;margin:8px 0}
+.lh .rate{color:var(--warn);font-weight:600}.lh .muted{font-size:14px}
+.lmeta{color:var(--ink-2);margin:6px 0}.lmeta a{font-weight:600}
+.banner{background:var(--panel);border:1px solid var(--accent-tint);border-left:4px solid var(--accent);border-radius:10px;
+ padding:12px 14px;margin:12px 0;font-weight:600}.banner.ok{border-left-color:var(--ok);color:var(--ok)}
+.langs{color:var(--accent-ink);font-weight:600;margin:8px 0}
 .feats{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
-.fchip{background:#f3efe9;border:1px solid #e7e0d6;border-radius:999px;padding:4px 11px;font-size:13px;color:#5b6470}
-.rev{background:#fff;border:1px solid #ececec;border-radius:12px;padding:13px 15px;margin:10px 0}
-.rev .rstars{color:#f5a623;font-size:17px;letter-spacing:1px}
-.rev .rbody{margin:5px 0;color:#26303a}.rev .meta{color:#6b7280;font-size:13px}
-.ownerreply{margin:8px 0 0;padding:8px 11px;background:#f3f8f6;border-left:3px solid #0f9b8e;border-radius:8px;font-size:14px;color:#26303a}
-.rform{background:#fff;border:1px solid #ececec;border-radius:14px;padding:16px 18px;margin:14px 0}
-.rform label{display:block;font-weight:600;font-size:14px;margin:12px 0 4px;color:#3a4654}
-.rform textarea,.rform input[type=text]{width:100%;padding:11px 12px;border:1.5px solid #e3ddd3;
- border-radius:11px;font:inherit;font-size:15px;background:#fff}
-.rform textarea:focus,.rform input[type=text]:focus{outline:0;border-color:#e8772e;box-shadow:0 0 0 4px #e8772e22}
+.fchip{background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:4px 11px;font-size:13px;color:var(--ink-2)}
+.rev{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 15px;margin:10px 0}
+.rev .rstars{color:var(--star);font-size:17px;letter-spacing:1px}
+.rev .rbody{margin:5px 0;color:var(--ink)}.rev .meta{color:var(--muted);font-size:13px}
+.ownerreply{margin:8px 0 0;padding:8px 11px;background:var(--accent-tint);border-left:3px solid var(--accent);border-radius:8px;font-size:14px;color:var(--ink)}
+.rform{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:14px 0}
+.rform label{display:block;font-weight:600;font-size:14px;margin:12px 0 4px;color:var(--ink-3)}
+.rform textarea,.rform input[type=text]{width:100%;padding:11px 12px;border:1.5px solid var(--line-2);
+ border-radius:11px;font:inherit;font-size:15px;background:var(--panel)}
+.rform textarea:focus,.rform input[type=text]:focus{outline:0;border-color:var(--brand);box-shadow:0 0 0 4px var(--ring)}
 .rform .hp{position:absolute;left:-9999px}
-.rform button{margin-top:14px;background:#c1440e;color:#fff;border:0;padding:12px 22px;border-radius:11px;
+.rform button{margin-top:14px;background:var(--brand-strong);color:var(--panel);border:0;padding:12px 22px;border-radius:11px;
  font-size:15px;font-weight:600;cursor:pointer}.rform button:hover{filter:brightness(1.05)}
 .stars{display:inline-flex;flex-direction:row-reverse;border:0;padding:0;margin:4px 0;gap:3px}
 .stars input{position:absolute;left:-9999px}
-.stars label{font-size:32px;color:#d8d8d8;cursor:pointer;line-height:1}
-.stars input:checked~label,.stars label:hover,.stars label:hover~label{color:#f5a623}
+.stars label{font-size:32px;color:var(--line);cursor:pointer;line-height:1}
+.stars input:checked~label,.stars label:hover,.stars label:hover~label{color:var(--star)}
 </style>"""
 
 
@@ -85,7 +86,7 @@ def _trust_html(r: dict) -> str:
 def _suggest_form(vertical: str, listing_id: int) -> str:
     return (
         f"<details id='suggest' style='margin-top:24px'>"
-        f"<summary style='cursor:pointer;font-weight:600;color:#c1440e'>✎ Suggest an edit</summary>"
+        f"<summary style='cursor:pointer;font-weight:600;color:var(--brand-strong)'>✎ Suggest an edit</summary>"
         f"<form class='rform' method='post' action='/listing/{vertical}/{listing_id}/suggest'>"
         "<p class='muted' style='margin:6px 0 4px'>Spot something wrong or missing — wrong phone, "
         "closed, moved, hours? Tell us and we'll review it.</p>"
@@ -93,7 +94,7 @@ def _suggest_form(vertical: str, listing_id: int) -> str:
         "<label>What should we fix?</label>"
         "<textarea name='body' rows='3' maxlength='2000' required "
         "placeholder='e.g. The phone number is wrong; new hours are 11am-9pm.'></textarea>"
-        "<label>Your email <span style='font-weight:400;color:#6b7280'>(optional, if we need to follow up)</span></label>"
+        "<label>Your email <span style='font-weight:400;color:var(--muted)'>(optional, if we need to follow up)</span></label>"
         "<input type='text' name='email' maxlength='200' placeholder='you@example.com'>"
         f"{captcha_field()}"
         "<button type='submit'>Send suggestion</button></form></details>")
@@ -152,9 +153,9 @@ def _form_html(vertical: str, listing_id: int, tr: dict) -> str:
         "<input class='hp' type='text' name='website' tabindex='-1' autocomplete='off' aria-hidden='true'>"
         f"<label>{html.escape(tr['your_rating'])}</label>"
         f"<fieldset class='stars'>{stars}</fieldset>"
-        f"<label>{html.escape(tr['your_review'])} <span style='font-weight:400;color:#6b7280'>({opt})</span></label>"
+        f"<label>{html.escape(tr['your_review'])} <span style='font-weight:400;color:var(--muted)'>({opt})</span></label>"
         f"<textarea name='body' rows='4' maxlength='2000' placeholder='{html.escape(tr['review_placeholder'])}'></textarea>"
-        f"<label>{html.escape(tr['your_name'])} <span style='font-weight:400;color:#6b7280'>({opt})</span></label>"
+        f"<label>{html.escape(tr['your_name'])} <span style='font-weight:400;color:var(--muted)'>({opt})</span></label>"
         "<input type='text' name='name' maxlength='120' placeholder='Anonymous'>"
         f"{captcha_field()}"
         f"<button type='submit'>{html.escape(tr['submit_review'])}</button>"
@@ -189,7 +190,7 @@ def _jsonld(vertical: str, r: dict, items: list[dict]) -> str:
 
 
 _SAVE_CSS = ("display:inline-block;border:1.5px solid #e57373;border-radius:999px;padding:5px 14px;"
-             "font-size:14px;font-weight:600;text-decoration:none;cursor:pointer;background:#fff;color:#c5221f")
+             "font-size:14px;font-weight:600;text-decoration:none;cursor:pointer;background:var(--panel);color:var(--err)")
 
 
 _SENTIMENT_LABEL = {"positive": "😊 Mostly positive", "mixed": "😐 Mixed reviews",
@@ -221,7 +222,7 @@ def _offers_html(v: str, listing_id: int) -> str:
         f"<div style='margin:4px 0'>{'🏷️' if p['kind'] == 'offer' else '📣'} "
         f"<b>{html.escape(p['title'])}</b>"
         + (f" — {html.escape(p['body'])}" if p.get("body") else "") + "</div>" for p in posts)
-    return ("<div style='background:#fff3dc;border:1px solid #ffd9a0;border-radius:12px;"
+    return ("<div style='background:var(--warm-tint);border:1px solid var(--warm-1);border-radius:12px;"
             f"padding:12px 14px;margin:10px 0'>{rows}</div>")
 
 
@@ -237,7 +238,7 @@ def _save_button(request: Request, v: str, listing_id: int) -> str:
               f"<input type='hidden' name='next' value='{html.escape(back)}'>")
     if accounts.is_saved(email, v, listing_id):
         return (f"<form method='post' action='/me/unsave' style='display:inline'>{hidden}"
-                f"<button style='{_SAVE_CSS};background:#c5221f;color:#fff'>♥ Saved</button></form>")
+                f"<button style='{_SAVE_CSS};background:var(--err);color:var(--panel)'>♥ Saved</button></form>")
     return (f"<form method='post' action='/me/save' style='display:inline'>{hidden}"
             f"<button style='{_SAVE_CSS}'>♡ Save</button></form>")
 
@@ -313,6 +314,8 @@ def listing_page(request: Request) -> HTMLResponse:
         + (f"<div class='lh'>{ratings}</div>" if ratings else "")
         + (f"<p class='lmeta'>📍 {html.escape(addr)}</p>" if addr else "")
         + (f"<p class='lmeta'>{links}</p>" if links else "")
+        + mapview.render([r | {"vertical": v}], v, title=f"Map of {r['name']}",
+                         height=300, collapsed=False)
         + _trust_html(r)
         + (f"<p>{html.escape(ai.get('description') or r.get('description') or '')}</p>"
            if (ai.get("description") or r.get("description")) else "")
@@ -344,7 +347,7 @@ def listing_page(request: Request) -> HTMLResponse:
 
 def _err(vertical: str, listing_id: int, msg: str) -> HTMLResponse:
     return _page("Review", msg,
-                 f"<h1 class='err' style='color:#c5221f'>{html.escape(msg)}</h1>"
+                 f"<h1 class='err' style='color:var(--err)'>{html.escape(msg)}</h1>"
                  f"<p><a href='/listing/{vertical}/{listing_id}'>&#8592; Back to the listing</a></p>",
                  status=400)
 

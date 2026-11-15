@@ -18,11 +18,13 @@ _STATIC_DIR = pathlib.Path(__file__).resolve().parent / "static"
 
 from .. import db, payments, submissions, verticals
 from ..config import settings
+from .theme import head_tags, skip_link
 from ..pipeline import compliance, ingest, outreach
 from . import i18n
 from .auth import verify_captcha
 from .landing import CATEGORY_CSS, category_grid
-from .common import NAV_CSS, _page, captcha_field, esc as _esc, nav_html, partner_bar, state_select
+from .common import (NAV_CSS, _page, captcha_field, esc as _esc, nav_html, partner_bar,
+                     state_select, tabbar_html)
 
 # Text fields shown on the owner edit form (label, restaurant field).
 _EDIT_FIELDS = [
@@ -224,12 +226,14 @@ _LANDING_HTML = """<!doctype html><html lang="en"><head>
 <meta property="og:site_name" content="__PLAT__">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="__OGIMG__">
+__THEMEHEAD__
 <link rel="canonical" href="__OGURL__">
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
 <link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#c1440e">
 <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}</script>
 <style>
-:root{--brand:#c1440e;--brand-d:#a2380b;--bg:#f6f4f1;--panel:#fff;--ink:#1f2430;--muted:#6b7280;--line:#ececec}
+/* Tokens come from /theme.css; this page brands itself with the deeper terracotta. */
+:root{--brand:var(--brand-strong);--brand-d:var(--brand-strong-d)}
 *{box-sizing:border-box}
 body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);
  background:var(--bg);line-height:1.55}
@@ -237,20 +241,20 @@ a{color:var(--brand);text-decoration:none}
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 22px;max-width:1080px;margin:0 auto}
 .brand{display:flex;align-items:center;gap:11px;color:var(--ink)}
 .brand .logo{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;
- background:linear-gradient(135deg,#ffd9a0,#ffb56b);font-size:20px}
+ background:linear-gradient(135deg,var(--warm-1),var(--warm-2));font-size:20px}
 .brand b{font-size:17px;display:block;line-height:1.1}.brand i{font-style:normal;font-size:12px;color:var(--muted)}
 .nav{display:flex;align-items:center;gap:16px;font-size:14px}
-.nav .btn{background:var(--brand);color:#fff;padding:9px 16px;border-radius:10px;font-weight:600}
-.nav .btn:hover{background:var(--brand-d)}
+.nav .btn{background:var(--brand-fill);color:var(--on-brand);padding:9px 16px;border-radius:10px;font-weight:600}
+.nav .btn:hover{background:var(--brand-strong-d)}
 .hero{max-width:760px;margin:0 auto;text-align:center;padding:46px 20px 8px}
 .hero h1{font-size:40px;line-height:1.1;margin:0 0 14px;letter-spacing:-.02em}
 .hero .sub{color:var(--muted);font-size:19px;margin:0 auto 28px;max-width:620px}
-.search{display:flex;align-items:center;gap:10px;max-width:600px;margin:0 auto;background:#fff;
- border:1px solid #ddd;border-radius:16px;padding:8px 8px 8px 16px;box-shadow:0 6px 22px rgba(0,0,0,.06);text-align:left}
+.search{display:flex;align-items:center;gap:10px;max-width:600px;margin:0 auto;background:var(--panel);
+ border:1px solid var(--line);border-radius:16px;padding:8px 8px 8px 16px;box-shadow:0 6px 22px rgba(0,0,0,.06);text-align:left}
 .search:hover{border-color:var(--brand)}.search .si{font-size:18px}
-.search .sp{flex:1;color:#9aa0a6;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.search .sb{background:var(--brand);color:#fff;padding:10px 16px;border-radius:11px;font-weight:600;font-size:14px;white-space:nowrap}
-.poweredby{color:#9aa0a6;font-size:12px;margin-top:14px}
+.search .sp{flex:1;color:var(--faint);font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.search .sb{background:var(--brand-fill);color:var(--on-brand);padding:10px 16px;border-radius:11px;font-weight:600;font-size:14px;white-space:nowrap}
+.poweredby{color:var(--faint);font-size:12px;margin-top:14px}
 .section{max-width:1000px;margin:0 auto;padding:34px 20px}
 .section h2{text-align:center;font-size:13px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0 0 18px}
 __CATCSS__
@@ -258,12 +262,13 @@ __NAVCSS__
 .vals{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px}
 .val{text-align:center;padding:10px}.val .vi{font-size:26px}
 .val h3{margin:8px 0 4px;font-size:16px}.val p{color:var(--muted);font-size:14px;margin:0}
-footer{text-align:center;color:#9aa0a6;font-size:14px;padding:22px 20px 48px;border-top:1px solid var(--line);margin-top:14px}
+footer{text-align:center;color:var(--faint);font-size:14px;padding:22px 20px 48px;border-top:1px solid var(--line);margin-top:14px}
 @media(max-width:600px){.hero h1{font-size:30px}.hero .sub{font-size:16px}.search .sp{display:none}.nav .signin{display:none}}
 </style></head><body>
+__SKIPLINK__
 __NAV__
 __PARTNERBAR__
-<main>
+<main id="main">
  <section class="hero">
   <h1>Find Indian America with __ANAME__</h1>
   <p class="sub">__SUB__</p>
@@ -289,6 +294,7 @@ __PARTNERBAR__
 </main>
 <footer>Own a business? <a href="/submit">Add your listing</a> or <a href="/portal/login">sign in</a> to manage it.
 <br><a href="/about">About</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/contact">Contact</a> · <a href="/faq">FAQ</a> · __PLAT__</footer>
+__TABBAR__
 </body></html>"""
 
 
@@ -302,7 +308,8 @@ def home(request: Request) -> HTMLResponse:
         "__PLAT__": plat, "__ANAME__": aname,
         "__TAGLINE__": html.escape(settings.platform_tagline),
         "__SUB__": html.escape(desc), "__TILES__": category_grid(), "__CATCSS__": CATEGORY_CSS,
-        "__NAV__": nav_html(), "__NAVCSS__": NAV_CSS,
+        "__NAV__": nav_html(), "__NAVCSS__": NAV_CSS, "__THEMEHEAD__": head_tags(),
+        "__SKIPLINK__": skip_link(), "__TABBAR__": tabbar_html("/explore"),
         "__PARTNERBAR__": partner_bar(),
         # Self-reference /explore (its OWN url) -- not "/" (the chatbot homepage). They're different
         # pages with different content; pointing this page's canonical/og:url at a different page's
@@ -416,7 +423,7 @@ def submit_get(request: Request) -> HTMLResponse:
         f"<label>{_esc(tr['phone'])}</label><input name='phone' type='tel'>"
         f"<label>{_esc(tr['your_email'])} *</label><input name='email' type='email' required>"
         f"<label>{_esc(tr['website'])}</label><input name='website' placeholder='https://'>"
-        f"<label>{_esc(tr['languages_spoken'])} <span style='font-weight:400;color:#6b7280'>"
+        f"<label>{_esc(tr['languages_spoken'])} <span style='font-weight:400;color:var(--muted)'>"
         f"({_esc(tr['comma_separated'])})</span></label>"
         "<input name='languages' placeholder='Telugu, Hindi, English'>"
         f"<label>{_esc(tr['anything_else'])}</label>"

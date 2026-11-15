@@ -19,35 +19,38 @@ from starlette.routing import Route
 
 from .. import db, hours, tags as tagsmod, verticals
 from ..config import settings
-from . import i18n, seo, staticmap
+from . import i18n, mapview, seo, staticmap
 from .chat import _CAT_BLURB, _CAT_COLOR, _CAT_ICON
-from .common import NAV_CSS, analytics_tag, nav_html, partner_bar, share_html
+from .common import NAV_CSS, analytics_tag, nav_html, partner_bar, share_html, tabbar_html
+from .theme import head_tags, skip_link
 
-_BRAND = "#c1440e"
+# Interpolated into this module's CSS only (never into an SVG presentation attribute), so it
+# can be the design-system token rather than a literal — see web/theme.py.
+_BRAND = "var(--brand-strong)"
 _FEATURED = "(is_featured AND (featured_until IS NULL OR featured_until > now()))"
 
 # Shared CSS for the category identity (rich cards + category header band). Reused on the
 # home page and every browse page so categories look consistent everywhere.
 CATEGORY_CSS = """
 .catgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(225px,1fr));gap:12px;margin:16px 0}
-.catcard{display:flex;align-items:center;gap:13px;background:#fff;border:1px solid #ececec;
- border-top:3px solid var(--c);border-radius:14px;padding:15px;color:#1f2430;transition:.15s}
+.catcard{display:flex;align-items:center;gap:13px;background:var(--panel);border:1px solid var(--line);
+ border-top:3px solid var(--c);border-radius:14px;padding:15px;color:var(--ink);transition:.15s}
 .catcard:hover{border-color:var(--c);border-top-color:var(--c);transform:translateY(-2px);
  box-shadow:0 10px 24px rgba(0,0,0,.09)}
 .catcard .cc-ic{width:48px;height:48px;border-radius:13px;display:grid;place-items:center;font-size:25px;
- background:#f4f2f0;background:linear-gradient(135deg,color-mix(in srgb,var(--c) 26%,#fff),
- color-mix(in srgb,var(--c) 9%,#fff));flex:0 0 auto}
+ background:#f4f2f0;background:linear-gradient(135deg,color-mix(in srgb,var(--c) 26%,var(--panel)),
+ color-mix(in srgb,var(--c) 9%,var(--panel)));flex:0 0 auto}
 .catcard .cc-tx{display:flex;flex-direction:column;line-height:1.3;min-width:0}
 .catcard .cc-tx b{font-size:15px} .catcard .cc-n{color:var(--c);font-size:12px;font-weight:700}
-.catcard .cc-bl{color:#6b7280;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cathead{display:flex;align-items:center;gap:14px;border:1px solid #ececec;border-left:5px solid var(--c);
- background:color-mix(in srgb,var(--c) 8%,#fff);border-radius:14px;padding:14px 16px;margin:6px 0 18px}
-.cathead .ch-ic{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;font-size:25px;background:#fff}
+.catcard .cc-bl{color:var(--muted);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cathead{display:flex;align-items:center;gap:14px;border:1px solid var(--line);border-left:5px solid var(--c);
+ background:color-mix(in srgb,var(--c) 8%,var(--panel));border-radius:14px;padding:14px 16px;margin:6px 0 18px}
+.cathead .ch-ic{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;font-size:25px;background:var(--panel)}
 .cathead b{font-size:21px;line-height:1.15}
-.bhero{background:linear-gradient(135deg,#fff4ea,#ffe7d3);border:1px solid #f2e2d0;border-radius:20px;
+.bhero{background:linear-gradient(135deg,var(--brand-tint),var(--brand-tint-2));border:1px solid var(--warm-line);border-radius:20px;
  padding:30px 26px;margin:4px 0 6px;text-align:center}
 .bhero h1{margin:0 0 6px;font-size:29px;letter-spacing:-.01em}
-.bhero p{margin:0 auto;max-width:560px;color:#8a745e;font-size:15.5px}
+.bhero p{margin:0 auto;max-width:560px;color:var(--warm-ink);font-size:15.5px}
 """
 
 
@@ -79,7 +82,7 @@ def _extra_categories() -> list[str]:
         nm = len(movies.list_in_theaters(limit=200))
     except Exception:
         nm = 0
-    tiles.append(_tile(_CAT_ICON.get("movies", "🎬"), _CAT_COLOR.get("movies", "#7b1fa2"),
+    tiles.append(_tile(_CAT_ICON.get("movies", "🎬"), _CAT_COLOR.get("movies", "var(--cat-movies)"),
                        "Movies", "/movies", f"{nm} now playing" if nm else "In theaters",
                        "Indian films now in US theaters"))
     try:
@@ -87,7 +90,7 @@ def _extra_categories() -> list[str]:
         ne = h1b.count()
     except Exception:
         ne = 0
-    tiles.append(_tile(_CAT_ICON.get("employers", "💼"), _CAT_COLOR.get("employers", "#455a64"),
+    tiles.append(_tile(_CAT_ICON.get("employers", "💼"), _CAT_COLOR.get("employers", "var(--cat-employers)"),
                        "H-1B Sponsors", "/employers", f"{ne:,} employers" if ne else "Visa sponsors",
                        "US employers that sponsor visas"))
     return tiles
@@ -96,7 +99,7 @@ def _extra_categories() -> list[str]:
 def category_grid() -> str:
     """Rich category tiles (icon + name + live count + blurb) — used on home and /browse."""
     counts = _counts()
-    cells = [_tile(_CAT_ICON.get(v, "•"), _CAT_COLOR.get(v, "#777"), cfg["label"],
+    cells = [_tile(_CAT_ICON.get(v, "•"), _CAT_COLOR.get(v, "var(--faint)"), cfg["label"],
                    "/events" if v == "events" else f"/browse/{v}",
                    f"{counts.get(v, 0)} listing{'s' if counts.get(v, 0) != 1 else ''}",
                    _CAT_BLURB.get(v, ""))
@@ -106,7 +109,7 @@ def category_grid() -> str:
 
 
 def _cathead(v: str) -> str:
-    return (f"<div class='cathead' style='--c:{_CAT_COLOR.get(v, '#777')}'>"
+    return (f"<div class='cathead' style='--c:{_CAT_COLOR.get(v, 'var(--faint)')}'>"
             f"<span class='ch-ic'>{_CAT_ICON.get(v, '•')}</span>"
             f"<span><b>{html.escape(_label(v))}</b><br>"
             f"<span class='muted'>{html.escape(_CAT_BLURB.get(v, ''))}</span></span></div>")
@@ -124,6 +127,17 @@ def _base() -> str:
     return settings.public_web_url.rstrip("/")
 
 
+
+def _active_path(canonical: str) -> str:
+    """The site path from a canonical URL ('https://host/browse/restaurants' -> '/browse/...'), used
+    to mark the current nav item. Returns '' when there is no canonical to read."""
+    if not canonical:
+        return ""
+    rest = canonical.split("://", 1)[-1]
+    slash = rest.find("/")
+    return rest[slash:] if slash >= 0 else "/"
+
+
 def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200,
           canonical: str = "", image: str = "", noindex: bool = False) -> HTMLResponse:
     plat = html.escape(settings.platform_name)
@@ -132,6 +146,9 @@ def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200,
           if jsonld else "")
     can = (f'<link rel="canonical" href="{html.escape(canonical)}">'
            f'<meta property="og:url" content="{html.escape(canonical)}">' if canonical else "")
+    # Which nav item/tab to mark as current. Derived from the canonical URL the callers already
+    # pass, so adding the highlight needed no change at ~20 call sites.
+    active = _active_path(canonical)
     # Every page gets a share card: a tailored /og.png when the caller passes none. Declare
     # 1200x630 dimensions only for our generated cards (a real listing photo has other dimensions).
     if not image:
@@ -157,66 +174,73 @@ def _page(title: str, desc: str, body: str, jsonld: str = "", status: int = 200,
 <meta property="og:type" content="website">{img_meta}
 {analytics_tag()}
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
-<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#c1440e">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#c1440e" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14110e" media="(prefers-color-scheme: dark)">
+{head_tags()}
+<script>{mapview.JS}</script>
 <script>if('serviceWorker' in navigator){{window.addEventListener('load',function(){{navigator.serviceWorker.register('/sw.js').catch(function(){{}})}})}}</script>
 {ld}
 <style>
  *{{box-sizing:border-box}}
  body{{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
-   color:#1f2430;background:#f6f4f1;line-height:1.55}}
- header{{background:#fff;border-bottom:1px solid #ececec;padding:13px 20px}}
- header a{{color:#1f2430;text-decoration:none;font-weight:700}}
+   color:var(--ink);background:var(--bg);line-height:1.55}}
+ header{{background:var(--panel);border-bottom:1px solid var(--line);padding:13px 20px}}
+ header a{{color:var(--ink);text-decoration:none;font-weight:700}}
  main{{max-width:900px;margin:0 auto;padding:26px 20px 50px}}
- h1{{font-size:27px;margin:0 0 6px}} .muted{{color:#6b7280}}
+ h1{{font-size:27px;margin:0 0 6px}} .muted{{color:var(--muted)}}
  a{{color:{_BRAND};text-decoration:none}}
  .chips{{display:flex;flex-wrap:wrap;gap:9px;margin:16px 0}}
- .chip{{background:#fff;border:1px solid #e2e0dd;border-radius:999px;padding:8px 13px;font-size:14px}}
- .fbar{{background:#fff;border:1px solid #ececec;border-radius:14px;padding:12px 14px;margin:14px 0;
+ .chip{{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:8px 13px;font-size:14px}}
+ .fbar{{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:14px 0;
    display:flex;flex-wrap:wrap;gap:12px;align-items:center;position:sticky;top:8px;z-index:20;
    box-shadow:0 2px 10px rgba(16,24,40,.05)}}
  .fgrp{{display:flex;flex-wrap:wrap;gap:7px;align-items:center}}
- .flabel{{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#98a2b3;font-weight:700;margin-right:2px}}
+ .flabel{{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);font-weight:700;margin-right:2px}}
  .fbar .chip{{padding:5px 11px;font-size:13px;cursor:pointer}}
  .fsearch{{display:flex;align-items:center;gap:0;margin:0;flex:1 1 220px;min-width:180px}}
- .fsearch input{{flex:1;border:1px solid #e2e0dd;border-radius:9px 0 0 9px;border-right:0;
+ .fsearch input{{flex:1;border:1px solid var(--line);border-radius:9px 0 0 9px;border-right:0;
    padding:8px 12px;font:inherit;font-size:14px;min-width:0}}
- .fsearch button{{border:1px solid #e2e0dd;border-radius:0 9px 9px 0;background:#faf7f3;
+ .fsearch button{{border:1px solid var(--line);border-radius:0 9px 9px 0;background:var(--bg);
    padding:8px 12px;cursor:pointer;font-size:15px}}
  .fsort{{display:inline-flex;align-items:center;gap:6px;margin:0}}
- .fsort select{{border:1px solid #e2e0dd;border-radius:8px;padding:6px 9px;font:inherit;font-size:13px;background:#fff}}
- .rcount{{color:#4b5563;font-size:14px;margin:12px 0 6px}}
- .rcount b{{color:#1f2430}}
- .opennow{{color:#0f8a4f;font-weight:600;font-size:13px}}
- .lead{{font-size:17px;color:#3a3f4b;margin:4px 0 14px}}
+ .fsort select{{border:1px solid var(--line);border-radius:8px;padding:6px 9px;font:inherit;font-size:13px;background:var(--panel)}}
+ .rcount{{color:var(--ink-2);font-size:14px;margin:12px 0 6px}}
+ .rcount b{{color:var(--ink)}}
+ .opennow{{color:var(--ok);font-weight:600;font-size:13px}}
+ .lead{{font-size:17px;color:var(--ink-3);margin:4px 0 14px}}
  .srclist{{margin:8px 0 0;padding-left:20px}} .srclist li{{margin:4px 0;font-size:14px}}
  @media(max-width:640px){{.fbar{{position:static;gap:10px}} .fsearch{{flex:1 1 100%}}}}
  .shero{{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 20px;align-items:stretch}}
- .shero input{{border:1px solid #dcd9d4;border-radius:10px;padding:12px 14px;font:inherit;font-size:15px}}
+ .shero input{{border:1px solid var(--line);border-radius:10px;padding:12px 14px;font:inherit;font-size:15px}}
  .shero input[name=q]{{flex:2 1 260px;min-width:0}}
  .shero-city{{flex:1 1 140px;min-width:0}}
  .shero button{{border:0;border-radius:10px;padding:12px 18px;font:inherit;font-size:15px;font-weight:600;
-   cursor:pointer;background:{_BRAND};color:#fff}}
- .shero-near{{background:#fff !important;color:{_BRAND} !important;border:1px solid #dcd9d4 !important}}
- .vtag{{font-size:12px;font-weight:600;color:#7a6a58;background:#f3efe9;border-radius:999px;
+   cursor:pointer;background:{_BRAND};color:var(--panel)}}
+ .shero-near{{background:var(--panel) !important;color:{_BRAND} !important;border:1px solid var(--line) !important}}
+ .vtag{{font-size:12px;font-weight:600;color:var(--muted);background:var(--panel-2);border-radius:999px;
    padding:2px 9px;vertical-align:middle}}
  @media(max-width:640px){{.shero input,.shero button{{flex:1 1 100%}}}}
 {staticmap.CSS}
- .lc{{background:#fff;border:1px solid #ececec;border-left:4px solid {_BRAND};border-radius:12px;
+{mapview.CSS}
+ .lc{{background:var(--panel);border:1px solid var(--line);border-left:4px solid {_BRAND};border-radius:12px;
    padding:14px 16px;margin:10px 0;transition:.15s}}
- .lc:hover{{transform:translateY(-2px);box-shadow:0 10px 24px rgba(16,24,40,.08);border-color:#e0dcd5}}
- .lc h3{{margin:0 0 4px;font-size:17px}} .lc p{{margin:5px 0;color:#4b5563;font-size:14px}}
- .lc .meta{{color:#6b7280;font-size:13px}} .lc .feat{{color:#b45309;font-weight:600}}
+ .lc:hover{{transform:translateY(-2px);box-shadow:0 10px 24px rgba(16,24,40,.08);border-color:var(--line)}}
+ .lc h3{{margin:0 0 4px;font-size:17px}} .lc p{{margin:5px 0;color:var(--ink-2);font-size:14px}}
+ .lc .meta{{color:var(--muted);font-size:13px}} .lc .feat{{color:var(--warn);font-weight:600}}
  .feats{{display:flex;flex-wrap:wrap;gap:5px;margin:7px 0 2px}}
- .fchip{{background:#f3efe9;border:1px solid #e7e0d6;border-radius:999px;padding:2px 9px;font-size:12px;color:#5b6470}}
- .lc .ver{{color:#1565c0;font-weight:600}} .lc .rate{{color:#b45309;font-weight:600}}
- .cta{{background:{_BRAND};color:#fff;padding:11px 18px;border-radius:10px;display:inline-block;margin-top:8px}}
+ .fchip{{background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:2px 9px;font-size:12px;color:var(--ink-2)}}
+ .lc .ver{{color:var(--info);font-weight:600}} .lc .rate{{color:var(--warn);font-weight:600}}
+ .cta{{background:{_BRAND};color:var(--panel);padding:11px 18px;border-radius:10px;display:inline-block;margin-top:8px}}
  nav.crumbs{{font-size:13px;margin-bottom:14px}}
 {NAV_CSS}
 {CATEGORY_CSS}
 </style></head><body>
-{nav_html()}
+{skip_link()}
+{nav_html(active)}
 {partner_bar()}
-<main>{body}</main></body></html>"""
+<main id="main">{body}</main>
+{tabbar_html(active)}</body></html>"""
     return HTMLResponse(doc, status_code=status)
 
 
@@ -328,7 +352,7 @@ def find_page(request: Request) -> HTMLResponse:
                  if rows else "<p class='muted'>No matches. Try a broader keyword or "
                               "<a href='/browse'>browse by category</a>.</p>")
         # Mixed-vertical rows each carry their own `vertical`; the map links each pin correctly.
-        count += staticmap.render(rows, "restaurants", title=heading) if rows else ""
+        count += mapview.render(rows, "restaurants", title=heading) if rows else ""
         cards = _mixed_cards(rows)
     else:
         count, cards = "", f"{category_grid()}"
@@ -354,7 +378,7 @@ def news_page(request: Request) -> HTMLResponse:
     rows = news.latest(limit=60, category=cat or None)
     tabs = "".join(
         f"<a class='chip' href='/news{('?cat=' + c) if c else ''}'"
-        + (" style='background:#c1440e;color:#fff;border-color:#c1440e'" if cat == c else "")
+        + (" style='background:var(--brand-strong);color:var(--panel);border-color:var(--brand-strong)'" if cat == c else "")
         + f">{html.escape(lbl)}</a>" for c, lbl in _NEWS_CATS)
     items = ""
     for a in rows:
@@ -387,7 +411,7 @@ def articles_page(request: Request) -> HTMLResponse:
     rows = articles.latest(limit=40, category=cat or None)
     tabs = "".join(
         f"<a class='chip' href='/articles{('?cat=' + c) if c else ''}'"
-        + (" style='background:#c1440e;color:#fff;border-color:#c1440e'" if cat == c else "")
+        + (" style='background:var(--brand-strong);color:var(--panel);border-color:var(--brand-strong)'" if cat == c else "")
         + f">{html.escape(lbl)}</a>"
         for c, lbl in [("", "All")] + list(articles.CATEGORIES.items()))
     items = ""
@@ -433,7 +457,7 @@ def article_page(request: Request) -> HTMLResponse:
         src_html = f"<h3 style='margin-top:24px'>Sources</h3><ul class='srclist'>{lis}</ul>"
     crumbs = ("<nav class='crumbs'><a href='/news'>News</a> › "
               f"<a href='/articles'>Roundups</a> › {html.escape(label)}</nav>")
-    disclaimer = ("<p class='muted' style='font-size:12px;margin-top:18px;border-top:1px solid #eee;"
+    disclaimer = ("<p class='muted' style='font-size:12px;margin-top:18px;border-top:1px solid var(--line);"
                   "padding-top:10px'>This is an AI-written summary of the linked headlines, for "
                   "convenience — not original reporting. Verify details at the sources before relying "
                   "on them.</p>")
@@ -585,7 +609,7 @@ _FILTER_KEYS = ("region", "lang", "diet", "q", "open", "minr", "sort")
 def _filter_bar(path: str, facets: dict, current: dict) -> str:
     """A search box + quick toggles (Open now, 4★+) + facet chips (region/language/dietary) + a sort
     dropdown. Each control preserves the other active filters; clicking an active chip clears it."""
-    on = "background:#c1440e;color:#fff;border-color:#c1440e"
+    on = "background:var(--brand-strong);color:var(--panel);border-color:var(--brand-strong)"
 
     def group(key: str, label: str, values: list) -> str:
         if not values:
@@ -664,7 +688,7 @@ def _listing_cards(v: str, rows: list[dict], tr: dict, *, numbered: bool = True)
         feats = tagsmod.for_display(r.get("tags"), limit=8)
         feats_html = ("<div class='feats'>" + "".join(
             f"<span class='fchip'>{html.escape(x)}</span>" for x in feats) + "</div>") if feats else ""
-        langs_html = (f"<div class='meta' style='color:#0f766e;font-weight:600'>🗣 {html.escape(tr['speaks'])}: "
+        langs_html = (f"<div class='meta' style='color:var(--accent-ink);font-weight:600'>🗣 {html.escape(tr['speaks'])}: "
                       f"{html.escape(', '.join(r['languages']))}</div>") if r.get("languages") else ""
         rank = f"{i}. " if numbered else ""
         thumb = (f"<img src='{html.escape(r['photo_url'])}' alt='{html.escape(r['name'])}' "
@@ -763,7 +787,7 @@ def browse_city(request: Request) -> HTMLResponse:
     summary = (" · " + ", ".join(bits)) if bits else ""
     count_line = (f"<p class='rcount'><b>{len(rows)}</b> result{'s' if len(rows) != 1 else ''}{summary}"
                   f" · <a href='/chat'>{html.escape(tr['ask_picks'])}</a>{best_link}</p>")
-    map_html = staticmap.render(rows, v, title=h1)
+    map_html = mapview.render(rows, v, title=h1)
     body = (crumbs + _cathead(v) + f"<h1>{html.escape(h1)}</h1>"
             f"{fbar}{count_line}{map_html}{cards}"
             f"<p><a class='cta' href='/chat'>{html.escape(tr['ask_picks'])} →</a></p>")
@@ -846,14 +870,14 @@ def best_city(request: Request) -> HTMLResponse:
 
 _MOVIES_CSS = """<style>
 .movies{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;margin-top:16px}
-.movie{background:#fff;border:1px solid #ececec;border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
-.movie img,.movie .noposter{width:100%;aspect-ratio:2/3;object-fit:cover;background:#f3efe9;display:grid;place-items:center;font-size:44px}
+.movie{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.movie img,.movie .noposter{width:100%;aspect-ratio:2/3;object-fit:cover;background:var(--panel-2);display:grid;place-items:center;font-size:44px}
 .mbody{padding:11px 12px;display:flex;flex-direction:column;gap:6px;flex:1}
 .mbody h3{margin:0;font-size:15px;line-height:1.25}
-.mbody .mmeta{color:#6b7280;font-size:12.5px}
-.mbody p{margin:0;font-size:12.5px;color:#4b5563;flex:1}
-.mbody .mcta{margin-top:6px;background:#c1440e;color:#fff;text-align:center;padding:8px;border-radius:9px;font-size:13px;font-weight:600}
-.mbody .mcta:hover{background:#a83a0c}
+.mbody .mmeta{color:var(--muted);font-size:12.5px}
+.mbody p{margin:0;font-size:12.5px;color:var(--ink-2);flex:1}
+.mbody .mcta{margin-top:6px;background:var(--brand-strong);color:var(--panel);text-align:center;padding:8px;border-radius:9px;font-size:13px;font-weight:600}
+.mbody .mcta:hover{background:var(--brand-strong-d)}
 </style>"""
 
 
@@ -862,7 +886,7 @@ def movies_page(request: Request) -> HTMLResponse:
     from .. import movies
     lang = request.query_params.get("lang") or None
     rows = movies.list_in_theaters(language=lang)
-    on = "background:#c1440e;color:#fff;border-color:#c1440e"
+    on = "background:var(--brand-strong);color:var(--panel);border-color:var(--brand-strong)"
     chips = (f"<a class='chip' href='/movies'" + ("" if lang else f" style='{on}'") + ">All</a>")
     for L in movies.languages_in_theaters():
         active = bool(lang) and lang.lower() == L.lower()
@@ -906,9 +930,9 @@ def employers_page(request: Request) -> HTMLResponse:
     rows = h1b.search_sponsors(q=q, state=state, limit=60)
     form = (f"<form method='get' style='display:flex;gap:8px;flex-wrap:wrap;margin:14px 0'>"
             f"<input name='q' value='{html.escape(q or '')}' placeholder='Employer (e.g. Infosys)' "
-            f"style='flex:1 1 220px;padding:9px 12px;border:1px solid #e2e0dd;border-radius:9px'>"
+            f"style='flex:1 1 220px;padding:9px 12px;border:1px solid var(--line);border-radius:9px'>"
             f"<input name='state' value='{html.escape(state or '')}' placeholder='State (e.g. TX)' "
-            f"maxlength='2' style='width:90px;padding:9px 12px;border:1px solid #e2e0dd;border-radius:9px'>"
+            f"maxlength='2' style='width:90px;padding:9px 12px;border:1px solid var(--line);border-radius:9px'>"
             f"<button class='cta' type='submit'>Search</button></form>")
     if rows:
         items = ""
@@ -1101,7 +1125,7 @@ def manifest(request: Request) -> Response:
         "name": settings.platform_name, "short_name": settings.platform_name[:12],
         "description": settings.platform_tagline,
         "start_url": "/", "scope": "/", "display": "standalone",
-        "background_color": "#f6f4f1", "theme_color": "#c1440e",
+        "background_color": "var(--bg)", "theme_color": "var(--brand-strong)",
         "icons": [{"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml",
                    "purpose": "any maskable"}],
     }
@@ -1109,8 +1133,8 @@ def manifest(request: Request) -> Response:
 
 
 _SW_JS = """
-const C='na-shell-v7';
-const SHELL=['/','/browse','/events','/icon.svg','/manifest.webmanifest'];
+const C='na-shell-v8';
+const SHELL=['/','/browse','/events','/icon.svg','/theme.css','/manifest.webmanifest'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==C).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{
@@ -1154,8 +1178,8 @@ def insights(request: Request) -> HTMLResponse:
                 "check back soon. Meanwhile, <a href='/chat'>Ask Dost</a> or "
                 "<a href='/browse'>browse the directory</a>.</p>")
         return _page(title, desc, body, canonical=f"{_base()}/insights")
-    th = "padding:8px 12px;border-bottom:2px solid #e7c3b6;text-align:left"
-    td = "padding:7px 12px;border-bottom:1px solid #efe9e1"
+    th = "padding:8px 12px;border-bottom:2px solid var(--warm-line);text-align:left"
+    td = "padding:7px 12px;border-bottom:1px solid var(--panel-3)"
     tdr = td + ";text-align:right"
 
     def _rows(items):
@@ -1171,9 +1195,9 @@ def insights(request: Request) -> HTMLResponse:
         if not r or r.get("value") is None:
             return ""
         v = fmt(r["value"])
-        return (f"<div style='flex:1 1 150px;background:#fbf6ef;border:1px solid #efe1d2;"
+        return (f"<div style='flex:1 1 150px;background:var(--brand-tint);border:1px solid var(--warm-line);"
                 f"border-radius:12px;padding:14px 16px'><div style='font-size:24px;font-weight:700;"
-                f"color:#b4530f'>{v}</div><div class='muted' style='font-size:13px'>"
+                f"color:var(--brand-ink)'>{v}</div><div class='muted' style='font-size:13px'>"
                 f"{html.escape(r['label'])}</div></div>")
     cards = "".join([
         _stat("median_household_income", lambda v: f"${v:,.0f}"),
@@ -1194,7 +1218,7 @@ def insights(request: Request) -> HTMLResponse:
     langs_html = ""
     if langs:
         chips = "".join(
-            f"<span style='display:inline-block;background:#eef6f4;border:1px solid #cfe6e0;"
+            f"<span style='display:inline-block;background:var(--accent-tint);border:1px solid var(--accent-tint);"
             f"border-radius:999px;padding:5px 12px;margin:0 6px 8px 0;font-size:14px'>"
             f"{html.escape(r['label'])} <b>{int(r['value']):,}</b></span>"
             for r in langs if r["value"])
@@ -1284,7 +1308,7 @@ def for_business(request: Request) -> HTMLResponse:
             "(MCP), Google, AI answer engines, and people across the USA.")
 
     def card(icon: str, head: str, text: str) -> str:
-        return (f"<div style='flex:1 1 220px;background:#fff;border:1px solid #ececec;border-radius:14px;"
+        return (f"<div style='flex:1 1 220px;background:var(--panel);border:1px solid var(--line);border-radius:14px;"
                 f"padding:16px 18px'><div style='font-size:26px'>{icon}</div>"
                 f"<b style='display:block;margin:6px 0 4px'>{head}</b>"
                 f"<span class='muted' style='font-size:14px'>{text}</span></div>")
@@ -1300,9 +1324,9 @@ def for_business(request: Request) -> HTMLResponse:
              "be one of them."),
     ])
     cta = ("<div style='display:flex;flex-wrap:wrap;gap:12px;margin:18px 0'>"
-           "<a href='/portal/login' style='background:#c1440e;color:#fff;padding:12px 22px;"
+           "<a href='/portal/login' style='background:var(--brand-strong);color:var(--panel);padding:12px 22px;"
            "border-radius:10px;font-weight:600;display:inline-block'>Register your business →</a>"
-           "<a href='/submit' style='background:#0f9b8e;color:#fff;padding:12px 22px;border-radius:10px;"
+           "<a href='/submit' style='background:var(--accent-fill);color:var(--on-accent);padding:12px 22px;border-radius:10px;"
            "font-weight:600;display:inline-block'>Add a listing now</a></div>")
     ncats = len(verticals.VERTICALS)
     body = (

@@ -18,8 +18,9 @@ from .. import inbox
 from ..config import settings
 from . import seo
 from .auth import verify_captcha
-from .common import NAV_CSS, nav_html, partner_bar
+from .common import NAV_CSS, nav_html, partner_bar, tabbar_html
 from .common import captcha_field
+from .theme import head_tags, skip_link
 
 # SEO keywords (Google) — Namaste America is the app brand; Dost is the assistant.
 _KEYWORDS = ("Namaste America, Indian America, Indian-American directory, Indian restaurants near me, "
@@ -84,11 +85,13 @@ def _doc(path: str, title: str, desc: str, body: str, status: int = 200,
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{t}"><meta name="twitter:description" content="{d}">
 <meta name="twitter:image" content="{html.escape(img)}">
+{head_tags()}
 <meta name="keywords" content="{html.escape(_KEYWORDS)}">
 <script type="application/ld+json">{_org_jsonld()}</script>{extra_jsonld}
 <link rel="icon" type="image/svg+xml" href="/icon.svg"><meta name="theme-color" content="#e8772e">
 <style>
-:root{{--brand:#e8772e;--accent:#0f9b8e;--ink:#25303a;--muted:#6b7280;--line:#efe9e1;--bg:#faf7f2}}
+/* Tokens come from /theme.css; this page keeps one deliberate override. */
+ :root{{--line:var(--panel-3)}}
 body{{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);
  background:var(--bg);margin:0;padding:0;line-height:1.6}}
 .pgwrap{{max-width:760px;margin:0 auto;padding:0 18px 48px}}
@@ -96,28 +99,29 @@ a{{color:var(--brand);text-decoration:none}} a:hover{{text-decoration:underline}
 {NAV_CSS}
 h1{{font-size:26px;margin:26px 0 6px}} h2{{font-size:18px;margin:24px 0 6px}}
 .lead{{color:var(--muted);font-size:16px}} ul{{padding-left:20px}} li{{margin:4px 0}}
-.ok{{color:#137333}} .err{{color:#c5221f}}
-.cta{{display:inline-block;background:var(--brand);color:#fff;border-radius:10px;padding:10px 16px;
+.ok{{color:var(--ok)}} .err{{color:var(--err)}}
+.cta{{display:inline-block;background:var(--brand-fill);color:var(--on-brand);border-radius:10px;padding:10px 16px;
  font-weight:600;margin-top:8px}} .cta:hover{{text-decoration:none}}
 footer{{margin-top:40px;border-top:1px solid var(--line);padding-top:18px;font-size:13px;color:var(--muted)}}
 footer a{{color:var(--accent)}} .flinks{{margin-bottom:8px}} .attr{{margin:6px 0}}
 </style></head><body>
+{skip_link()}
 {nav_html()}
 {partner_bar()}
-<div class="pgwrap"><main>{body}</main>
+<div class="pgwrap"><main id="main">{body}</main>
 {footer_html()}</div>
-</body></html>"""
+{tabbar_html()}</body></html>"""
     return HTMLResponse(doc, status_code=status)
 
 
 _ABOUT_CSS = """<style>
 .hero{text-align:center;padding:6px 0 2px}.hero h1{font-size:32px;margin:14px 0 8px}
 .tagrow{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:12px 0}
-.pill{background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;color:#475467}
+.pill{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;color:var(--ink-2)}
 .ctarow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:18px 0}
-.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:10px 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:10px 0}
 .card ul{margin:6px 0}.feat{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin:12px 0}
-.feat .f{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px}
+.feat .f{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
 .feat .f b{display:block;margin-bottom:4px;color:var(--ink)}.feat .f span{font-size:14px;color:var(--muted)}
 </style>"""
 
@@ -336,12 +340,12 @@ def terms(request: Request) -> HTMLResponse:
 
 
 _CONTACT_CSS = """<style>
-.cform label{display:block;font-weight:600;font-size:14px;margin:12px 0 4px;color:#3a4654}
-.cform input,.cform textarea{width:100%;padding:11px 12px;border:1.5px solid #e3ddd3;border-radius:11px;
- font:inherit;font-size:15px;background:#fff}
-.cform input:focus,.cform textarea:focus{outline:0;border-color:var(--brand);box-shadow:0 0 0 4px #e8772e22}
+.cform label{display:block;font-weight:600;font-size:14px;margin:12px 0 4px;color:var(--ink-3)}
+.cform input,.cform textarea{width:100%;padding:11px 12px;border:1.5px solid var(--line-2);border-radius:11px;
+ font:inherit;font-size:15px;background:var(--panel)}
+.cform input:focus,.cform textarea:focus{outline:0;border-color:var(--brand);box-shadow:0 0 0 4px var(--ring)}
 .cform .hp{position:absolute;left:-9999px}
-.cform button{margin-top:16px;background:var(--brand);color:#fff;border:0;padding:13px 24px;border-radius:11px;
+.cform button{margin-top:16px;background:var(--brand-fill);color:var(--on-brand);border:0;padding:13px 24px;border-radius:11px;
  font-size:15px;font-weight:600;cursor:pointer}.cform button:hover{filter:brightness(1.05)}
 </style>"""
 
@@ -355,7 +359,7 @@ def contact(request: Request) -> HTMLResponse:
 <form class="cform" method="post" action="/contact" autocomplete="on">
  <input class="hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
  <label>Your name</label><input name="name" maxlength="120">
- <label>Your email <span style="font-weight:400;color:#6b7280">(so we can reply)</span></label>
+ <label>Your email <span style="font-weight:400;color:var(--muted)">(so we can reply)</span></label>
  <input name="email" type="email" required maxlength="200">
  <label>Subject</label><input name="subject" maxlength="200">
  <label>Message</label><textarea name="body" rows="6" required maxlength="5000"></textarea>

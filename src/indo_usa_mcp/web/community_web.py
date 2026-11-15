@@ -42,7 +42,7 @@ def leaderboard_page(request: Request) -> HTMLResponse:
     form = (
         "<form method='get' style='margin:10px 0 18px;display:flex;gap:8px;flex-wrap:wrap'>"
         f"<input name='city' value='{_esc(city or '')}' placeholder='City (e.g. Plano)' "
-        "style='padding:8px;border:1px solid #ccc;border-radius:8px'>"
+        "style='padding:8px;border:1px solid var(--line);border-radius:8px'>"
         f"{state_select('state', state or '')}"
         "<button class='cta' type='submit'>Filter</button>"
         "<a href='/leaderboard' style='align-self:center'>Reset</a></form>")

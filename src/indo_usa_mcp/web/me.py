@@ -89,7 +89,7 @@ def me_home(request: Request) -> HTMLResponse:
     contrib = ""
     if st["tier"]:
         contrib = (
-            "<div style='background:#fff7ef;border:1px solid #ffe0c2;border-radius:14px;padding:14px 16px;margin:12px 0'>"
+            "<div style='background:var(--brand-tint);border:1px solid var(--brand-tint-2);border-radius:14px;padding:14px 16px;margin:12px 0'>"
             f"<b>{esc(st['tier'])}</b> · {st['points']} pts "
             f"<span class='muted'>· you've helped others find "
             f"{st['added'] + st['flyers']} place{'s' if (st['added'] + st['flyers']) != 1 else ''}</span>"
@@ -100,7 +100,7 @@ def me_home(request: Request) -> HTMLResponse:
             f"<div style='margin-top:8px'><a href='/u/{esc(accounts.ensure_referral_code(email))}'>"
             "View your public profile</a> · <a href='/leaderboard'>Leaderboard</a></div></div>")
     else:
-        contrib = ("<div style='background:#fff7ef;border:1px solid #ffe0c2;border-radius:14px;padding:14px 16px;margin:12px 0'>"
+        contrib = ("<div style='background:var(--brand-tint);border:1px solid var(--brand-tint-2);border-radius:14px;padding:14px 16px;margin:12px 0'>"
                    "<b>🌱 Start contributing</b> <span class='muted'>— add a place or write a review to help "
                    "the community and earn contributor status.</span> "
                    "<a href='/submit'>Add a place →</a></div>")
@@ -109,8 +109,8 @@ def me_home(request: Request) -> HTMLResponse:
     if settings.web_push_enabled:
         push_block = (
             "<div style='margin:10px 0'>"
-            "<button id='pushbtn' type='button' style='display:inline-block;border:1px solid #b8e6df;"
-            "background:#e7f6f4;color:#0c7e74;border-radius:999px;padding:6px 15px;font-size:13px;"
+            "<button id='pushbtn' type='button' style='display:inline-block;border:1px solid var(--accent-tint);"
+            "background:var(--accent-tint);color:var(--accent-d);border-radius:999px;padding:6px 15px;font-size:13px;"
             "font-weight:600;cursor:pointer'>🔔 Enable notifications</button> "
             "<span id='pushmsg' class='muted' style='font-size:13px'></span></div>"
             "<script>(function(){var KEY=" + json.dumps(settings.vapid_public_key) + ";"
@@ -132,7 +132,7 @@ def me_home(request: Request) -> HTMLResponse:
     invite = f"{settings.public_web_url.rstrip('/')}/portal/register?ref={code}"
     joined = accounts.referral_count(email)
     referral = (
-        "<div style='background:#e7f6f4;border:1px solid #b8e6df;border-radius:14px;padding:14px 16px;margin:12px 0'>"
+        "<div style='background:var(--accent-tint);border:1px solid var(--accent-tint);border-radius:14px;padding:14px 16px;margin:12px 0'>"
         "<b>🎁 Invite friends</b> <span class='muted'>— share Namaste America with your community"
         + (f"; <b>{joined}</b> joined via you so far" if joined else "") + ".</span>"
         f"<div style='margin:8px 0 0'>{share_html(invite, 'Join me on Namaste America — the guide to Indian America')}</div></div>")
@@ -140,7 +140,7 @@ def me_home(request: Request) -> HTMLResponse:
     body = (f"<h2>Welcome{', ' + esc(prof.get('display_name')) if prof.get('display_name') else ''}! 🙏</h2>"
             f"<p class='muted'>{esc(email)} · <a href='/portal'>your business listings</a> · "
             "<a href='/portal/logout'>sign out</a></p>"
-            + (f"<div class='ok' style='background:#e7f6ec;border-radius:10px;padding:10px 13px;margin:10px 0'>✓ Saved.</div>"
+            + (f"<div class='ok' style='background:var(--ok-tint);border-radius:10px;padding:10px 13px;margin:10px 0'>✓ Saved.</div>"
                if request.query_params.get("ok") else "")
             + contrib + referral + push_block + saved_block + follow_block + prefs)
     return _page("Your account", body)

@@ -94,7 +94,7 @@ async def ask_post(request: Request) -> HTMLResponse:
 
 
 def _answer_html(a: dict, signed_in: bool) -> str:
-    who = (f"<b style='color:#0f9b8e'>✨ {_dost_name()}</b>" if a["is_ai"] else "<b>Community</b>")
+    who = (f"<b style='color:var(--accent)'>✨ {_dost_name()}</b>" if a["is_ai"] else "<b>Community</b>")
     vote = ""
     if signed_in and not a["is_ai"]:
         vote = (f"<form method='post' action='/answer/{a['id']}/vote' style='display:inline'>"

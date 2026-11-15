@@ -135,7 +135,10 @@ def test_chat_page_is_dost_branded_with_meaning_and_jsonld():
     assert "friend" in t.lower()               # meaning is explained for non-Hindi speakers
     assert 'name="keywords"' in t              # SEO keywords for Google
     assert "WebApplication" in t and "SearchAction" in t   # chatbot SEO/indexing
-    assert "#e8772e" in t and "#0f9b8e" in t   # warm saffron + teal palette
+    # The palette now lives in the shared design system (web/theme.py -> /theme.css), not inline.
+    assert '<link rel="stylesheet" href="/theme.css">' in t
+    css = TestClient(app).get("/theme.css").text
+    assert "--brand:" in css and "--accent:#0f9b8e" in css   # warm saffron + teal palette
     assert "__" not in t                       # all template placeholders resolved
 
 

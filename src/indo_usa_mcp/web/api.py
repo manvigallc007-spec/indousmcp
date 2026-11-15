@@ -21,6 +21,7 @@ from starlette.routing import Route
 
 from .. import analytics, metering, verticals
 from ..config import settings
+from .theme import head_tags
 
 _HITS: dict[str, list[float]] = {}
 
@@ -255,11 +256,12 @@ def ai_plugin(request: Request) -> JSONResponse:
 _DOCS = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>API · {plat}</title>
-<style>body{{font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1f2430;
+{themehead}
+<style>body{{font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);
 max-width:760px;margin:0 auto;padding:32px 20px}}code,pre{{font-family:ui-monospace,Menlo,Consolas,monospace}}
-pre{{background:#f6f4f1;border:1px solid #ececec;border-radius:10px;padding:14px;overflow:auto}}
-h1{{margin:0 0 4px}}.muted{{color:#6b7280}}table{{border-collapse:collapse;width:100%;margin:8px 0}}
-td,th{{border:1px solid #ececec;padding:6px 10px;text-align:left;font-size:14px}}a{{color:#c1440e}}</style>
+pre{{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:14px;overflow:auto}}
+h1{{margin:0 0 4px}}.muted{{color:var(--muted)}}table{{border-collapse:collapse;width:100%;margin:8px 0}}
+td,th{{border:1px solid var(--line);padding:6px 10px;text-align:left;font-size:14px}}a{{color:var(--brand-strong)}}</style>
 </head><body>
 <h1>{plat} — Public Search API</h1>
 <p class="muted">Read-only JSON over the live directory. No auth. Rate limit: {rate}/min per IP.
@@ -292,6 +294,7 @@ def docs(request: Request) -> HTMLResponse:
     base = settings.public_web_url.rstrip("/")
     return HTMLResponse(_DOCS.format(
         plat=settings.platform_name, rate=settings.api_rate_per_min, base=base,
+        themehead=head_tags(),
         verts=", ".join(verticals.VERTICALS)))
 
 
